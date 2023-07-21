@@ -1,0 +1,95 @@
+name: Publish Release
+
+on:
+  workflow_call:
+    inputs:
+      name:
+        required: true
+        type: string
+      debug:
+        required: false
+        type: boolean
+        default: false
+      enabled:
+        required: false
+        type: boolean
+        default: false
+jobs:
+  publish_release:
+    if: ${{ inputs.enabled }}
+    name: Publish Release
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [ 'go' ]
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.19
+
+    - name: 'Get Latest Tag'
+      id: get-latest-tag
+      uses: actions-ecosystem/action-get-latest-tag@v1
+      
+    - name: Output
+      shell: bash
+      id: tag_output
+      run: |
+        NEW_TAG_NAME=$(echo ${{ steps.get-latest-tag.outputs.tag }} | sed 's/v//g')
+        echo $NEW_TAG_NAME
+        echo "TAG_NAME=$NEW_TAG_NAME" >> $GITHUB_ENV
+
+    - name: Download linux build
+      uses: actions/download-artifact@v1
+      with:
+        name: ${{ inputs.name }}_linux_x64
+
+    - name: Download windows build
+      uses: actions/download-artifact@v1
+      with:
+        name: ${{ inputs.name }}_win_x64
+
+    - name: Branch name
+      id: branch_name
+      run: |
+        echo ::set-output name=SOURCE_NAME::${GITHUB_REF#refs/*/}
+        echo ::set-output name=SOURCE_BRANCH::${GITHUB_REF#refs/heads/}
+        echo ::set-output name=SOURCE_TAG::${GITHUB_REF#refs/tags/}
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ env.TAG_NAME }}
+        release_name: Release ${{ env.TAG_NAME }}
+        body: ${{ steps.tag_output.outputs.TAG_CHANGELOG }}
+        draft: false
+        prerelease: false
+
+    - name: Upload Linux x64 Asset
+      id: upload-linux-x64-asset 
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./${{ inputs.name }}_linux_x64/${{ inputs.name }}_linux_x64.zip
+        asset_name: ${{ inputs.name }}_linux_x64.zip
+        asset_content_type: application/zip
+
+    - name: Upload Windows x64 Asset
+      id: upload-windows-x64-asset 
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./${{ inputs.name }}_win_x64/${{ inputs.name }}_win_x64.zip
+        asset_name: ${{ inputs.name }}_win_x64.zip
+        asset_content_type: application/zip

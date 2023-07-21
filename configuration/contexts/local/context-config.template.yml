@@ -1,0 +1,28 @@
+configuration:
+  rootUri: local-cluster
+  outputPath: ''
+environmentVariables:
+  global:
+    docker_username: ''
+    docker_password: ''
+    docker_registry: 'cr.locally.team'
+    docker_base_manifest_path: ''
+    sql_connection_string: Server=${{ global.sql_host }};Persist Security Info=False;User ID=${{ global.sql_username }};Password=${{ global.sql_password }};MultipleActiveResultSets=False;Connection Timeout=30;
+    sql_host: host.docker.internal
+    sql_password: ''
+    sql_username: ''
+  keyvault:
+  terraform:
+credentials:
+  azure:
+    clientId: ''
+    clientSecret: ''
+    subscriptionId: ''
+    tenantId: ''
+backendConfig:
+  azure: 
+    location: ${{ global.azure_location}}
+    subscriptionId: ${{ credentials.azure.subscription_id  }}
+    resourceGroupName: ''
+    storageAccountName: ''
+    containerName: ''

@@ -1,0 +1,11 @@
+**/bin
+*.personal.*
+**/*.personal.*
+**/.env
+/.local
+**/ssl
+*.exe
+.terraform
+.output
+.output1
+*/locally.exe

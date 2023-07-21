@@ -1,0 +1,30 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+        {
+            "type": "shell",
+            "group": "build",            
+            "isBackground": true,
+            "presentation": {
+              "echo": true,
+              "reveal": "silent",
+              "focus": false,
+              "panel": "shared",
+              "showReuseMessage": true,
+              "clear": false
+            },
+            "options": {
+              "cwd": "${workspaceFolder}/src"
+            },
+            "problemMatcher": [],
+            "label": "build",
+            "command": "go",
+            "args":[ 
+              "build",
+              "-ldflags='-w -s'",
+              "-o",
+              "../bin/locally.exe"
+            ],
+        }
+    ]
+}

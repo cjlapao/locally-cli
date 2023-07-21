@@ -1,0 +1,26 @@
+currentContext: local
+contexts:
+    - name: local
+      configPath:  C:\Code\services\config.yml
+tools:
+    # docker:
+    #     dockerPath: C:\Program Files\Docker\Docker\resources\bin\docker.exe
+    #     dockerComposePath: C:\Program Files\Docker\Docker\resources\bin\docker-compose.exe
+    caddy:
+        path: c:\tools\caddy_windows_amd64.exe
+    terraform:
+      path: C:\Users\carlos.lapao\AppData\Roaming\Terraform\terraform_14.exe
+    git:
+      accessToken: 
+      publicKeyPath: 
+      privateKeyPath:
+network:
+    localIp: 127.0.0.1
+    domainName: 
+    certPath:  
+    privateKeyPath: 
+cors:
+    allowedMethods: OPTIONS,HEAD,GET,POST,PUT,PATCH,DELETE
+    allowedHeaders: '*'
+    allowedOrigins:
+        - localhost

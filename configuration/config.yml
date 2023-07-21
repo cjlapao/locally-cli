@@ -1,0 +1,13 @@
+contexts:
+    - name: local
+      configPath: .\contexts\local\config.yml
+network:
+    localIp: 127.0.0.1
+    domainName: localdev.team
+    certPath: ''
+    privateKeyPath: ''
+cors:
+    allowedMethods: OPTIONS,HEAD,GET,POST,PUT,PATCH,DELETE
+    allowedHeaders: '*'
+    allowedOrigins:
+        - localhost
