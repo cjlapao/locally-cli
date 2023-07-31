@@ -11,10 +11,7 @@
             // Comment out if you need to setup environment variables for the module
             //"envFile": "${workspaceFolder}/.env",
             "args": [
-              "pipelines", 
-              "run", 
-              "loginapp",  
-              "--file=C:\\Code\\bin\\config.personal.yml", 
+              "api", 
               "--debug"
             ]
         }

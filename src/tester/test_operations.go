@@ -2,12 +2,13 @@ package tester
 
 import (
 	"fmt"
+
 	"github.com/cjlapao/locally-cli/azure_cli"
-	"github.com/cjlapao/locally-cli/azure_keyvault"
 	"github.com/cjlapao/locally-cli/common"
 	"github.com/cjlapao/locally-cli/environment"
+	"github.com/cjlapao/locally-cli/lanes"
 	"github.com/cjlapao/locally-cli/notifications"
-	"github.com/cjlapao/locally-cli/pipelines"
+	"github.com/cjlapao/locally-cli/vaults/azure_keyvault"
 
 	"github.com/cjlapao/common-go/helper"
 )
@@ -15,7 +16,7 @@ import (
 var notify = notifications.Get()
 
 func TestOperations(subCommand string) {
-	automationService := pipelines.Get()
+	automationService := lanes.Get()
 	switch subCommand {
 	case "azure_acr":
 		action := common.VerifyCommand(helper.GetArgumentAt(2))

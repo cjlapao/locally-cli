@@ -79,14 +79,10 @@ func (svc *ConfigService) GetCurrentContext() *Context {
 		if context != nil {
 			return context
 		} else {
-			notify.Error("No context found, exiting")
-			os.Exit(1)
+			notify.Error("No context found, starting with empty context")
+			return nil
 		}
 	}
-
-	notify.Error("No context found, exiting")
-	os.Exit(1)
-	return nil
 }
 
 func (svc *ConfigService) GetContext(name string) *Context {

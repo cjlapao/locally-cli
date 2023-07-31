@@ -23,3 +23,7 @@ const (
 	DEFAULT_WAITING_FOR_SECONDS     int    = 5
 	OUTPUT_TO_FILE                  string = "outputToFile"
 )
+
+const (
+	API_PREFIX_VAR string = "API_PREFIX"
+)

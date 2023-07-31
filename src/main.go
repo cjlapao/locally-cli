@@ -9,9 +9,9 @@ import (
 	"github.com/cjlapao/locally-cli/configuration"
 	"github.com/cjlapao/locally-cli/environment"
 	"github.com/cjlapao/locally-cli/help"
+	"github.com/cjlapao/locally-cli/lanes"
 	"github.com/cjlapao/locally-cli/notifications"
 	"github.com/cjlapao/locally-cli/operations"
-	"github.com/cjlapao/locally-cli/pipelines"
 	"github.com/cjlapao/locally-cli/system"
 	"github.com/cjlapao/locally-cli/tester"
 
@@ -20,7 +20,7 @@ import (
 	"github.com/cjlapao/common-go/version"
 )
 
-var releaseVersion = "0.0.71"
+var releaseVersion = "0.1.71"
 var versionSvc = version.Get()
 
 var logger = log.Get()
@@ -34,8 +34,8 @@ func main() {
 		os.Exit(0)
 	}
 	versionSvc.PrintAnsiHeader()
-	command := helper.GetCommandAt(0)
-	subCommand := helper.GetCommandAt(1)
+	command := strings.ToLower(helper.GetCommandAt(0))
+	subCommand := strings.ToLower(helper.GetCommandAt(1))
 
 	if helper.GetFlagSwitch("help", false) && command == "" {
 		help.ShowHelpForNoCommand()
@@ -49,6 +49,12 @@ func main() {
 
 	if helper.GetFlagSwitch("debug", false) {
 		logger.WithDebug()
+	}
+
+	operationsService := operations.Get()
+	if command == "api" {
+		apiOperation := operationsService.GetOperation(operations.API_OPERATION_NAME)
+		apiOperation.Run()
 	}
 
 	config := configuration.Get()
@@ -78,8 +84,8 @@ func main() {
 		operations.HostsOperations(subCommand)
 	case "tools":
 		operations.ToolsOperations(subCommand)
-	case "pipelines":
-		pipelines.Operations(subCommand)
+	case "lanes":
+		lanes.Operations(subCommand)
 	case "env":
 		environment.Operations(subCommand)
 	case "infrastructure":
