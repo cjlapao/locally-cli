@@ -9,7 +9,7 @@
             "program": "${workspaceFolder}/src/main.go",
             "cwd": "${workspaceFolder}/bin",
             // Comment out if you need to setup environment variables for the module
-            //"envFile": "${workspaceFolder}/.env",
+            "envFile": "${workspaceFolder}/.env",
             "args": [
               "api", 
               "--debug"
