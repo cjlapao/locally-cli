@@ -7,6 +7,7 @@ import (
 
 	"github.com/cjlapao/locally-cli/common"
 	"github.com/cjlapao/locally-cli/configuration"
+	"github.com/cjlapao/locally-cli/context/pipeline_component"
 	"github.com/cjlapao/locally-cli/git"
 	"github.com/cjlapao/locally-cli/lanes/entities"
 	"github.com/cjlapao/locally-cli/lanes/interfaces"
@@ -38,13 +39,13 @@ func (worker GitPipelineWorker) Name() string {
 	return worker.name
 }
 
-func (worker GitPipelineWorker) Run(task *configuration.PipelineTask) entities.PipelineWorkerResult {
+func (worker GitPipelineWorker) Run(task *pipeline_component.PipelineTask) entities.PipelineWorkerResult {
 	config := configuration.Get()
 	git := git.Get()
 
 	result := entities.PipelineWorkerResult{}
 
-	if task.Type != configuration.GitTask {
+	if task.Type != pipeline_component.GitTask {
 		notify.Debug("[%s] %s: This is not a task for me, bye...", worker.name, task.Name)
 		result.State = entities.StateIgnored
 		return result
@@ -84,7 +85,7 @@ func (worker GitPipelineWorker) Run(task *configuration.PipelineTask) entities.P
 	}
 
 	msg := fmt.Sprintf("Git executed successfully for task %s", task.Name)
-	if config.Debug() {
+	if common.IsDebug() {
 		msg = fmt.Sprintf("[%s] %s", worker.name, msg)
 	}
 
@@ -95,9 +96,9 @@ func (worker GitPipelineWorker) Run(task *configuration.PipelineTask) entities.P
 	return result
 }
 
-func (worker GitPipelineWorker) Validate(task *configuration.PipelineTask) entities.PipelineWorkerResult {
+func (worker GitPipelineWorker) Validate(task *pipeline_component.PipelineTask) entities.PipelineWorkerResult {
 	result := entities.PipelineWorkerResult{}
-	if task.Type != configuration.GitTask {
+	if task.Type != pipeline_component.GitTask {
 		result.State = entities.StateIgnored
 		return result
 	}
@@ -128,7 +129,7 @@ func (worker GitPipelineWorker) extractRepoName(url string) string {
 	return name
 }
 
-func (worker GitPipelineWorker) parseParameters(task *configuration.PipelineTask) (*GitParameters, error) {
+func (worker GitPipelineWorker) parseParameters(task *pipeline_component.PipelineTask) (*GitParameters, error) {
 	encoded, err := yaml.Marshal(task.Inputs)
 	if err != nil {
 		return nil, err

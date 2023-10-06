@@ -2,11 +2,14 @@ package npm
 
 import (
 	"fmt"
-	"github.com/cjlapao/locally-cli/configuration"
-	"github.com/cjlapao/locally-cli/executer"
-	"github.com/cjlapao/locally-cli/icons"
 	"os"
 	"strings"
+
+	"github.com/cjlapao/locally-cli/common"
+	"github.com/cjlapao/locally-cli/configuration"
+	"github.com/cjlapao/locally-cli/executer"
+	"github.com/cjlapao/locally-cli/helpers"
+	"github.com/cjlapao/locally-cli/icons"
 )
 
 type NpmCommandWrapper struct {
@@ -23,7 +26,7 @@ func (svc *NpmCommandWrapper) CheckForNpm(softFail bool) {
 	config = configuration.Get()
 	if !config.GlobalConfiguration.Tools.Checked.NpmChecked {
 		notify.InfoWithIcon(icons.IconFlag, "Checking for npm in the system")
-		if output, err := executer.ExecuteWithNoOutput(configuration.GetNpmPath(), "-v"); err != nil {
+		if output, err := executer.ExecuteWithNoOutput(helpers.GetNpmPath(), "-v"); err != nil {
 			if !softFail {
 				notify.Error("Npm tool not found in system, this is required for the selected function")
 				os.Exit(1)
@@ -42,7 +45,7 @@ func (svc *NpmCommandWrapper) CheckForNpm(softFail bool) {
 func (svc *NpmCommandWrapper) CI(workingDir string, minVersion string) error {
 	svc.versionCheck(minVersion)
 	svc.init()
-	if output, err := executer.ExecuteWithNoOutput(configuration.GetNpmPath(), "ci", "--prefix", workingDir); err != nil {
+	if output, err := executer.ExecuteWithNoOutput(helpers.GetNpmPath(), "ci", "--prefix", workingDir); err != nil {
 		return svc.error(output, err, "There was an error running npm install")
 	} else {
 		svc.Output = output.GetAllOutput()
@@ -55,7 +58,7 @@ func (svc *NpmCommandWrapper) CI(workingDir string, minVersion string) error {
 func (svc *NpmCommandWrapper) Install(workingDir string, minVersion string) error {
 	svc.versionCheck(minVersion)
 	svc.init()
-	if output, err := executer.ExecuteWithNoOutput(configuration.GetNpmPath(), "install", "--force", "--prefix", workingDir); err != nil {
+	if output, err := executer.ExecuteWithNoOutput(helpers.GetNpmPath(), "install", "--force", "--prefix", workingDir); err != nil {
 		return svc.error(output, err, "There was an error running npm install")
 	} else {
 		svc.success("Install", output)
@@ -67,7 +70,7 @@ func (svc *NpmCommandWrapper) Install(workingDir string, minVersion string) erro
 func (svc *NpmCommandWrapper) Publish(workingDir string, minVersion string) error {
 	svc.versionCheck(minVersion)
 	svc.init()
-	if output, err := executer.ExecuteWithNoOutput(configuration.GetNpmPath(), "publish", "--prefix", workingDir); err != nil {
+	if output, err := executer.ExecuteWithNoOutput(helpers.GetNpmPath(), "publish", "--prefix", workingDir); err != nil {
 		return svc.error(output, err, "There was an error running npm publish")
 	} else {
 		svc.success("Publish", output)
@@ -82,7 +85,7 @@ func (svc *NpmCommandWrapper) Custom(customCommand string, workingDir string, mi
 	commands := strings.Split(customCommand, " ")
 	commands = append(commands, "--prefix")
 	commands = append(commands, workingDir)
-	if output, err := executer.ExecuteWithNoOutput(configuration.GetNpmPath(), commands...); err != nil {
+	if output, err := executer.ExecuteWithNoOutput(helpers.GetNpmPath(), commands...); err != nil {
 		errorString := fmt.Sprintf("There was an error running npm custom [%s]", customCommand)
 		return svc.error(output, err, errorString)
 	} else {
@@ -94,7 +97,7 @@ func (svc *NpmCommandWrapper) Custom(customCommand string, workingDir string, mi
 }
 
 func (svc *NpmCommandWrapper) init() error {
-	if output, err := executer.ExecuteWithNoOutput(configuration.GetNpmPath(), "init", "-y"); err != nil {
+	if output, err := executer.ExecuteWithNoOutput(helpers.GetNpmPath(), "init", "-y"); err != nil {
 		return svc.error(output, err, "There was an error initialising npm for locally")
 	} else {
 		svc.success("Init", output)
@@ -106,7 +109,7 @@ func (svc *NpmCommandWrapper) init() error {
 func (svc *NpmCommandWrapper) error(output executer.ExecuteOutput, err error, errorString string) error {
 	notify.FromError(err, errorString)
 
-	if config.Debug() {
+	if common.IsDebug() {
 		notify.Debug(output.StdErr)
 	}
 
@@ -116,7 +119,7 @@ func (svc *NpmCommandWrapper) error(output executer.ExecuteOutput, err error, er
 func (svc *NpmCommandWrapper) success(command string, output executer.ExecuteOutput) {
 	svc.Output = output.GetAllOutput()
 
-	if config.Debug() {
+	if common.IsDebug() {
 		notify.Success("executed %s with: %s", command, output.StdOut)
 	} else {
 		notify.Success("executed %s", command)

@@ -2,12 +2,14 @@ package mappers
 
 import (
 	"fmt"
-	"github.com/cjlapao/locally-cli/configuration"
+
+	"github.com/cjlapao/locally-cli/context/git_component"
+	"github.com/cjlapao/locally-cli/context/service_component"
 	"github.com/cjlapao/locally-cli/environment"
 	"github.com/cjlapao/locally-cli/notifications"
 )
 
-func DecodeGitCredentials(source *configuration.GitCredentials) *configuration.GitCredentials {
+func DecodeGitCredentials(source *git_component.GitCredentials) *git_component.GitCredentials {
 	env := environment.Get()
 	notify := notifications.Get()
 	source.AccessToken = env.Replace(source.AccessToken)
@@ -20,7 +22,7 @@ func DecodeGitCredentials(source *configuration.GitCredentials) *configuration.G
 	return source
 }
 
-func DecodeBackendComponent(source *configuration.BackendComponent) *configuration.BackendComponent {
+func DecodeBackendComponent(source *service_component.BackendComponent) *service_component.BackendComponent {
 	env := environment.Get()
 	notify := notifications.Get()
 	source.Name = env.Replace(source.Name)

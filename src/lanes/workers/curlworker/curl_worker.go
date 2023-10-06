@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/cjlapao/locally-cli/configuration"
+	"github.com/cjlapao/locally-cli/common"
+	"github.com/cjlapao/locally-cli/context/pipeline_component"
 	"github.com/cjlapao/locally-cli/environment"
 	"github.com/cjlapao/locally-cli/lanes/entities"
 	"github.com/cjlapao/locally-cli/lanes/interfaces"
@@ -41,11 +42,10 @@ func (worker CurlPipelineWorker) Name() string {
 	return worker.name
 }
 
-func (worker CurlPipelineWorker) Run(task *configuration.PipelineTask) entities.PipelineWorkerResult {
-	config := configuration.Get()
+func (worker CurlPipelineWorker) Run(task *pipeline_component.PipelineTask) entities.PipelineWorkerResult {
 	result := entities.PipelineWorkerResult{}
 
-	if task.Type != configuration.CurlTask {
+	if task.Type != pipeline_component.CurlTask {
 		notify.Debug("[%s] %s: This is not a task for me, bye...", worker.name, task.Name)
 		result.State = entities.StateIgnored
 		return result
@@ -72,7 +72,7 @@ func (worker CurlPipelineWorker) Run(task *configuration.PipelineTask) entities.
 	}
 
 	msg := fmt.Sprintf("Curl executed successfully for task %s, response status code %s", task.Name, result.StatusCode)
-	if config.Debug() {
+	if common.IsDebug() {
 		msg = fmt.Sprintf("[%s] %s", worker.name, msg)
 
 	}
@@ -83,9 +83,9 @@ func (worker CurlPipelineWorker) Run(task *configuration.PipelineTask) entities.
 	return result
 }
 
-func (worker CurlPipelineWorker) Validate(task *configuration.PipelineTask) entities.PipelineWorkerResult {
+func (worker CurlPipelineWorker) Validate(task *pipeline_component.PipelineTask) entities.PipelineWorkerResult {
 	result := entities.PipelineWorkerResult{}
-	if task.Type != configuration.CurlTask {
+	if task.Type != pipeline_component.CurlTask {
 		result.State = entities.StateIgnored
 		return result
 	}
@@ -105,7 +105,7 @@ func (worker CurlPipelineWorker) Validate(task *configuration.PipelineTask) enti
 	return result
 }
 
-func (worker CurlPipelineWorker) runTask(task *configuration.PipelineTask) entities.PipelineWorkerResult {
+func (worker CurlPipelineWorker) runTask(task *pipeline_component.PipelineTask) entities.PipelineWorkerResult {
 	result := entities.PipelineWorkerResult{}
 	env := environment.Get()
 
@@ -195,7 +195,7 @@ func (worker CurlPipelineWorker) runTask(task *configuration.PipelineTask) entit
 	return result
 }
 
-func (worker CurlPipelineWorker) parseParameters(task *configuration.PipelineTask) (*CurlParameters, error) {
+func (worker CurlPipelineWorker) parseParameters(task *pipeline_component.PipelineTask) (*CurlParameters, error) {
 	encoded, err := yaml.Marshal(task.Inputs)
 	if err != nil {
 		return nil, err

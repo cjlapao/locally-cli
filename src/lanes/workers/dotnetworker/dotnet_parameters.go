@@ -1,11 +1,11 @@
 package dotnetworker
 
 import (
-	"github.com/cjlapao/locally-cli/environment"
-	"github.com/cjlapao/locally-cli/git"
 	"net/url"
 
-	"github.com/cjlapao/locally-cli/configuration"
+	"github.com/cjlapao/locally-cli/context/git_component"
+	"github.com/cjlapao/locally-cli/environment"
+	"github.com/cjlapao/locally-cli/git"
 )
 
 type DotnetPipelineWorkerParameters struct {
@@ -48,7 +48,7 @@ func (c *DotnetPipelineWorkerParameters) Decode() {
 
 	c.RepoUrl = env.Replace(c.RepoUrl)
 	if c.RepoAccessToken != "" {
-		cred := configuration.GitCredentials{
+		cred := git_component.GitCredentials{
 			AccessToken: env.Replace(c.RepoAccessToken),
 		}
 		parsedUrl, err := url.Parse(c.RepoUrl)

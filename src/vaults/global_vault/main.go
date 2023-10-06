@@ -30,6 +30,13 @@ func (c GlobalVault) Sync() (map[string]interface{}, error) {
 	notify := notifications.Get()
 	result := make(map[string]interface{})
 
+	if context == nil {
+		return result, nil
+	}
+	if !context.IsValid {
+		return result, fmt.Errorf("invalid context selected")
+	}
+
 	// Adding Global Variables
 	if context.EnvironmentVariables != nil && context.EnvironmentVariables.Global != nil && len(context.EnvironmentVariables.Global) > 0 {
 		for key, value := range context.EnvironmentVariables.Global {

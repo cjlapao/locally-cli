@@ -10,6 +10,11 @@
             "cwd": "${workspaceFolder}/bin",
             // Comment out if you need to setup environment variables for the module
             "envFile": "${workspaceFolder}/.env",
+            "output": "${workspaceFolder}/bin/locally",
+            "dlvFlags": [
+                "--listen=:2345",
+                "--api-version=2",
+            ],
             "args": [
               "api", 
               "--debug"

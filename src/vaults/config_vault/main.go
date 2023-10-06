@@ -34,6 +34,13 @@ func (c ConfigVault) Sync() (map[string]interface{}, error) {
 
 	result := make(map[string]interface{})
 
+	if context == nil {
+		return result, fmt.Errorf("no context selected")
+	}
+	if !context.IsValid {
+		return result, fmt.Errorf("invalid context selected")
+	}
+
 	baseContextConfigPath := context.RootConfigFilePath
 	defaultPath := helper.JoinPath(baseContextConfigPath, configuration.DEFAULT_CONTEXT_SERVICE_FOLDER)
 	infrastructurePath := helper.JoinPath(defaultPath, configuration.DEFAULT_CONTEXT_INFRASTRUCTURE_FOLDER)

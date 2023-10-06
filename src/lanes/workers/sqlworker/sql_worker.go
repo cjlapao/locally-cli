@@ -6,7 +6,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/cjlapao/locally-cli/configuration"
+	"github.com/cjlapao/locally-cli/common"
+	"github.com/cjlapao/locally-cli/context/pipeline_component"
 	"github.com/cjlapao/locally-cli/lanes/entities"
 	"github.com/cjlapao/locally-cli/lanes/interfaces"
 	"github.com/cjlapao/locally-cli/notifications"
@@ -38,11 +39,10 @@ func (worker SqlPipelineWorker) Name() string {
 	return worker.name
 }
 
-func (worker SqlPipelineWorker) Run(task *configuration.PipelineTask) entities.PipelineWorkerResult {
-	config := configuration.Get()
+func (worker SqlPipelineWorker) Run(task *pipeline_component.PipelineTask) entities.PipelineWorkerResult {
 	result := entities.PipelineWorkerResult{}
 
-	if task.Type != configuration.SqlTask {
+	if task.Type != pipeline_component.SqlTask {
 		notify.Debug("[%s] %s: This is not a task for me, bye...", worker.name, task.Name)
 		result.State = entities.StateIgnored
 		return result
@@ -87,7 +87,7 @@ func (worker SqlPipelineWorker) Run(task *configuration.PipelineTask) entities.P
 	}
 
 	msg := fmt.Sprintf("Sql executed successfully for task %s, affected %s rows", task.Name, fmt.Sprintf("%d", affected))
-	if config.Debug() {
+	if common.IsDebug() {
 		msg = fmt.Sprintf("[%s] %s", worker.name, msg)
 
 	}
@@ -99,9 +99,9 @@ func (worker SqlPipelineWorker) Run(task *configuration.PipelineTask) entities.P
 	return result
 }
 
-func (worker SqlPipelineWorker) Validate(task *configuration.PipelineTask) entities.PipelineWorkerResult {
+func (worker SqlPipelineWorker) Validate(task *pipeline_component.PipelineTask) entities.PipelineWorkerResult {
 	result := entities.PipelineWorkerResult{}
-	if task.Type != configuration.SqlTask {
+	if task.Type != pipeline_component.SqlTask {
 		result.State = entities.StateIgnored
 		return result
 	}
@@ -121,7 +121,7 @@ func (worker SqlPipelineWorker) Validate(task *configuration.PipelineTask) entit
 	return result
 }
 
-func (worker SqlPipelineWorker) parseParameters(task *configuration.PipelineTask) (*SqlParameters, error) {
+func (worker SqlPipelineWorker) parseParameters(task *pipeline_component.PipelineTask) (*SqlParameters, error) {
 	encoded, err := yaml.Marshal(task.Inputs)
 	if err != nil {
 		return nil, err

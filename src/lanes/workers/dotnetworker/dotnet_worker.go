@@ -4,7 +4,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/cjlapao/locally-cli/configuration"
+	"github.com/cjlapao/locally-cli/common"
+	"github.com/cjlapao/locally-cli/context/pipeline_component"
 	"github.com/cjlapao/locally-cli/docker"
 	"github.com/cjlapao/locally-cli/lanes/entities"
 	"github.com/cjlapao/locally-cli/lanes/interfaces"
@@ -36,11 +37,10 @@ func (worker DotnetPipelineWorker) Name() string {
 	return worker.name
 }
 
-func (worker DotnetPipelineWorker) Run(task *configuration.PipelineTask) entities.PipelineWorkerResult {
-	config := configuration.Get()
+func (worker DotnetPipelineWorker) Run(task *pipeline_component.PipelineTask) entities.PipelineWorkerResult {
 	result := entities.PipelineWorkerResult{}
 
-	if task.Type != configuration.DotnetTask {
+	if task.Type != pipeline_component.DotnetTask {
 		notify.Debug("[%s] %s: This is not a task for me, bye...", worker.name, task.Name)
 		result.State = entities.StateIgnored
 		return result
@@ -63,13 +63,13 @@ func (worker DotnetPipelineWorker) Run(task *configuration.PipelineTask) entitie
 
 	dockerSvc := docker.Get()
 
-	err = dockerSvc.RunDotnetContainer(inputs.Command, inputs.Context, inputs.BaseImage, fmt.Sprintf("%s-migration", configuration.EncodeName(task.Name)), inputs.RepoUrl, inputs.ProjectPath, inputs.Arguments, inputs.EnvironmentVariables, inputs.BuildArguments)
+	err = dockerSvc.RunDotnetContainer(inputs.Command, inputs.Context, inputs.BaseImage, fmt.Sprintf("%s-migration", common.EncodeName(task.Name)), inputs.RepoUrl, inputs.ProjectPath, inputs.Arguments, inputs.EnvironmentVariables, inputs.BuildArguments)
 	if err != nil {
 		return entities.NewPipelineWorkerResultFromError(ErrorRunningImage, err)
 	}
 
 	msg := fmt.Sprintf("Dotnet %s executed successfully for task %s", inputs.Command, task.Name)
-	if config.Debug() {
+	if common.IsDebug() {
 		msg = fmt.Sprintf("[%s] %s", worker.name, msg)
 	}
 
@@ -80,9 +80,9 @@ func (worker DotnetPipelineWorker) Run(task *configuration.PipelineTask) entitie
 	return result
 }
 
-func (worker DotnetPipelineWorker) Validate(task *configuration.PipelineTask) entities.PipelineWorkerResult {
+func (worker DotnetPipelineWorker) Validate(task *pipeline_component.PipelineTask) entities.PipelineWorkerResult {
 	result := entities.PipelineWorkerResult{}
-	if task.Type != configuration.DotnetTask {
+	if task.Type != pipeline_component.DotnetTask {
 		result.State = entities.StateIgnored
 		return result
 	}
@@ -102,7 +102,7 @@ func (worker DotnetPipelineWorker) Validate(task *configuration.PipelineTask) en
 	return result
 }
 
-func (worker DotnetPipelineWorker) parseParameters(task *configuration.PipelineTask) (*DotnetPipelineWorkerParameters, error) {
+func (worker DotnetPipelineWorker) parseParameters(task *pipeline_component.PipelineTask) (*DotnetPipelineWorkerParameters, error) {
 	encoded, err := yaml.Marshal(task.Inputs)
 	if err != nil {
 		return nil, err

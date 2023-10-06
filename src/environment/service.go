@@ -65,6 +65,13 @@ func (env *Environment) Initialize() {
 		}
 	}()
 
+	if len(env.vaults) > 0 {
+		env.vaults = make([]interfaces.EnvironmentVault, 0)
+	}
+	if len(env.functions) > 0 {
+		env.functions = make([]env_interfaces.VariableFunction, 0)
+	}
+
 	// Adding environment vaults
 	env.vaults = append(env.vaults, config_vault.New())
 	env.vaults = append(env.vaults, credentials_vault.New())
@@ -77,8 +84,11 @@ func (env *Environment) Initialize() {
 	env.functions = append(env.functions, random.RandomValueFunction{})
 
 	// Reading the values at the beginning
-	env.Sync()
-	env.isInitialized = true
+	if err := env.Sync(); err != nil {
+		env.isInitialized = false
+	} else {
+		env.isInitialized = true
+	}
 }
 
 func Get() *Environment {

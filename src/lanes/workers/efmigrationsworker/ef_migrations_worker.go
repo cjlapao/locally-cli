@@ -4,7 +4,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/cjlapao/locally-cli/configuration"
+	"github.com/cjlapao/locally-cli/common"
+	"github.com/cjlapao/locally-cli/context/pipeline_component"
 	"github.com/cjlapao/locally-cli/docker"
 	"github.com/cjlapao/locally-cli/lanes/entities"
 	"github.com/cjlapao/locally-cli/lanes/interfaces"
@@ -36,11 +37,10 @@ func (worker EFMigrationsPipelineWorker) Name() string {
 	return worker.name
 }
 
-func (worker EFMigrationsPipelineWorker) Run(task *configuration.PipelineTask) entities.PipelineWorkerResult {
-	config := configuration.Get()
+func (worker EFMigrationsPipelineWorker) Run(task *pipeline_component.PipelineTask) entities.PipelineWorkerResult {
 	result := entities.PipelineWorkerResult{}
 
-	if task.Type != configuration.EFMigrationTask {
+	if task.Type != pipeline_component.EFMigrationTask {
 		notify.Debug("[%s] %s: This is not a task for me, bye...", worker.name, task.Name)
 		result.State = entities.StateIgnored
 		return result
@@ -62,14 +62,14 @@ func (worker EFMigrationsPipelineWorker) Run(task *configuration.PipelineTask) e
 
 	dockerSvc := docker.Get()
 
-	err = dockerSvc.RunEfMigrations(inputs.Context, inputs.BaseImage, fmt.Sprintf("%s-migration", configuration.EncodeName(task.Name)),
+	err = dockerSvc.RunEfMigrations(inputs.Context, inputs.BaseImage, fmt.Sprintf("%s-migration", common.EncodeName(task.Name)),
 		inputs.RepoUrl, inputs.ProjectPath, inputs.StartupProjectPath, inputs.DbConnectionString, inputs.Arguments, inputs.EnvironmentVariables)
 	if err != nil {
 		return entities.NewPipelineWorkerResultFromError(ErrorRunningImage, err)
 	}
 
 	msg := fmt.Sprintf("Ef Migrations executed successfully for task %s", task.Name)
-	if config.Debug() {
+	if common.IsDebug() {
 		msg = fmt.Sprintf("[%s] %s", worker.name, msg)
 	}
 
@@ -80,9 +80,9 @@ func (worker EFMigrationsPipelineWorker) Run(task *configuration.PipelineTask) e
 	return result
 }
 
-func (worker EFMigrationsPipelineWorker) Validate(task *configuration.PipelineTask) entities.PipelineWorkerResult {
+func (worker EFMigrationsPipelineWorker) Validate(task *pipeline_component.PipelineTask) entities.PipelineWorkerResult {
 	result := entities.PipelineWorkerResult{}
-	if task.Type != configuration.EFMigrationTask {
+	if task.Type != pipeline_component.EFMigrationTask {
 		result.State = entities.StateIgnored
 		return result
 	}
@@ -102,7 +102,7 @@ func (worker EFMigrationsPipelineWorker) Validate(task *configuration.PipelineTa
 	return result
 }
 
-func (worker EFMigrationsPipelineWorker) parseParameters(task *configuration.PipelineTask) (*EfMigrationsPipelineWorkerParameters, error) {
+func (worker EFMigrationsPipelineWorker) parseParameters(task *pipeline_component.PipelineTask) (*EfMigrationsPipelineWorkerParameters, error) {
 	encoded, err := yaml.Marshal(task.Inputs)
 	if err != nil {
 		return nil, err

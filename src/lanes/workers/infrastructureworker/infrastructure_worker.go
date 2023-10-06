@@ -6,7 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/cjlapao/locally-cli/configuration"
+	"github.com/cjlapao/locally-cli/common"
+	"github.com/cjlapao/locally-cli/context/pipeline_component"
 	"github.com/cjlapao/locally-cli/infrastructure"
 	"github.com/cjlapao/locally-cli/lanes/entities"
 	"github.com/cjlapao/locally-cli/lanes/interfaces"
@@ -37,11 +38,10 @@ func (worker InfrastructurePipelineWorker) Name() string {
 	return worker.name
 }
 
-func (worker InfrastructurePipelineWorker) Run(task *configuration.PipelineTask) entities.PipelineWorkerResult {
-	config := configuration.Get()
+func (worker InfrastructurePipelineWorker) Run(task *pipeline_component.PipelineTask) entities.PipelineWorkerResult {
 	result := entities.PipelineWorkerResult{}
 
-	if task.Type != configuration.InfrastructureTask {
+	if task.Type != pipeline_component.InfrastructureTask {
 		notify.Debug("[%s] %s: This is not a task for me, bye...", worker.name, task.Name)
 		result.State = entities.StateIgnored
 		return result
@@ -88,7 +88,7 @@ func (worker InfrastructurePipelineWorker) Run(task *configuration.PipelineTask)
 	}
 
 	msg := fmt.Sprintf("Infrastructure executed successfully for task %s", task.Name)
-	if config.Debug() {
+	if common.IsDebug() {
 		msg = fmt.Sprintf("[%s] %s", worker.name, msg)
 	}
 
@@ -99,9 +99,9 @@ func (worker InfrastructurePipelineWorker) Run(task *configuration.PipelineTask)
 	return result
 }
 
-func (worker InfrastructurePipelineWorker) Validate(task *configuration.PipelineTask) entities.PipelineWorkerResult {
+func (worker InfrastructurePipelineWorker) Validate(task *pipeline_component.PipelineTask) entities.PipelineWorkerResult {
 	result := entities.PipelineWorkerResult{}
-	if task.Type != configuration.InfrastructureTask {
+	if task.Type != pipeline_component.InfrastructureTask {
 		result.State = entities.StateIgnored
 		return result
 	}
@@ -121,7 +121,7 @@ func (worker InfrastructurePipelineWorker) Validate(task *configuration.Pipeline
 	return result
 }
 
-func (worker InfrastructurePipelineWorker) parseParameters(task *configuration.PipelineTask) (*InfrastructureParameters, error) {
+func (worker InfrastructurePipelineWorker) parseParameters(task *pipeline_component.PipelineTask) (*InfrastructureParameters, error) {
 	encoded, err := yaml.Marshal(task.Inputs)
 	if err != nil {
 		return nil, err

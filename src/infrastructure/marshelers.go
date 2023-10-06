@@ -3,6 +3,8 @@ package infrastructure
 import (
 	"encoding/json"
 	"fmt"
+
+	"github.com/cjlapao/locally-cli/common"
 	"github.com/cjlapao/locally-cli/environment"
 )
 
@@ -20,24 +22,24 @@ func marshalValue(value interface{}, level int, indent string) string {
 	switch t := value.(type) {
 	case string:
 		t = env.Replace(t)
-		if config.Debug() {
+		if common.IsDebug() {
 			notify.Debug("Found variable of type %s with value %s", fmt.Sprintf("%T", t), fmt.Sprintf("%v", t))
 		}
 		return escapeString(t)
 
 	case int:
-		if config.Debug() {
+		if common.IsDebug() {
 			notify.Debug("Found variable of type %s with value %s", fmt.Sprintf("%T", t), fmt.Sprintf("%v", value))
 		}
 		return fmt.Sprintf("%v", value)
 	case bool:
-		if config.Debug() {
+		if common.IsDebug() {
 			notify.Debug("Found variable of type %s with value %s", fmt.Sprintf("%T", t), fmt.Sprintf("%v", value))
 		}
 		return fmt.Sprintf("%v", value)
 
 	case map[string]interface{}:
-		if config.Debug() {
+		if common.IsDebug() {
 			notify.Debug("Found variable of type %s with value %s", fmt.Sprintf("%T", t), fmt.Sprintf("%v", value))
 		}
 
@@ -55,7 +57,7 @@ func marshalValue(value interface{}, level int, indent string) string {
 		result += "}"
 		return result
 	case []interface{}:
-		if config.Debug() {
+		if common.IsDebug() {
 			notify.Debug("Found variable of type %s with value %s", fmt.Sprintf("%T", t), fmt.Sprintf("%v", value))
 		}
 

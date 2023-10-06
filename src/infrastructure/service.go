@@ -5,20 +5,26 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/cjlapao/locally-cli/azure_cli"
-	"github.com/cjlapao/locally-cli/common"
-	"github.com/cjlapao/locally-cli/configuration"
-	"github.com/cjlapao/locally-cli/entities"
-	"github.com/cjlapao/locally-cli/environment"
-	"github.com/cjlapao/locally-cli/executer"
-	"github.com/cjlapao/locally-cli/git"
-	"github.com/cjlapao/locally-cli/icons"
-	"github.com/cjlapao/locally-cli/mappers"
-	"github.com/cjlapao/locally-cli/notifications"
 	"io/fs"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/cjlapao/locally-cli/azure_cli"
+	"github.com/cjlapao/locally-cli/common"
+	"github.com/cjlapao/locally-cli/configuration"
+	"github.com/cjlapao/locally-cli/context"
+	context_entities "github.com/cjlapao/locally-cli/context/entities"
+	"github.com/cjlapao/locally-cli/context/infrastructure_component"
+	"github.com/cjlapao/locally-cli/dependency_tree"
+	"github.com/cjlapao/locally-cli/entities"
+	"github.com/cjlapao/locally-cli/environment"
+	"github.com/cjlapao/locally-cli/executer"
+	"github.com/cjlapao/locally-cli/git"
+	"github.com/cjlapao/locally-cli/helpers"
+	"github.com/cjlapao/locally-cli/icons"
+	"github.com/cjlapao/locally-cli/mappers"
+	"github.com/cjlapao/locally-cli/notifications"
 
 	cryptorand "github.com/cjlapao/common-go-cryptorand"
 	"github.com/cjlapao/common-go/helper"
@@ -57,7 +63,7 @@ func Get() *TerraformService {
 	return New()
 }
 
-func (svc *TerraformService) base(operation, name string) (*configuration.ConfigService, *configuration.Context) {
+func (svc *TerraformService) base(operation, name string) (*configuration.ConfigService, *context.Context) {
 	if name != "" {
 		notify.Wrench("%s infrastructure stack %s", operation, name)
 	} else {
@@ -76,7 +82,7 @@ func (svc *TerraformService) base(operation, name string) (*configuration.Config
 	return config, context
 }
 
-func (svc *TerraformService) generateTerraformBackendConfig(context *configuration.Context, stack *configuration.InfrastructureStack) (string, error) {
+func (svc *TerraformService) generateTerraformBackendConfig(context *context.Context, stack *infrastructure_component.InfrastructureStack) (string, error) {
 	env := environment.Get()
 	notify.Wrench("Setting up %s stack backend configuration", stack.Name)
 	outputPath := helper.JoinPath(context.Configuration.OutputPath, common.INFRASTRUCTURE_PATH)
@@ -89,7 +95,7 @@ func (svc *TerraformService) generateTerraformBackendConfig(context *configurati
 		}
 	}
 
-	filePath := helper.JoinPath(outputPath, fmt.Sprintf("%s_backend_config.tf", configuration.EncodeName(stack.Name)))
+	filePath := helper.JoinPath(outputPath, fmt.Sprintf("%s_backend_config.tf", common.EncodeName(stack.Name)))
 
 	if !strings.HasSuffix(stack.Backend.StateFileName, ".tfstate") {
 		stack.Backend.StateFileName = fmt.Sprintf("%s.tfstate", env.Replace(stack.Backend.StateFileName))
@@ -98,7 +104,7 @@ func (svc *TerraformService) generateTerraformBackendConfig(context *configurati
 	ctx := config.GetCurrentContext()
 	if ctx.BackendConfig != nil && ctx.BackendConfig.Azure != nil {
 		if stack.Backend == nil {
-			stack.Backend = &configuration.InfrastructureAzureBackend{}
+			stack.Backend = &infrastructure_component.InfrastructureAzureBackend{}
 		}
 
 		if stack.Backend.AccessKey == "" {
@@ -126,14 +132,14 @@ func (svc *TerraformService) generateTerraformBackendConfig(context *configurati
 		return "", err
 	}
 
-	if config.Debug() {
+	if common.IsDebug() {
 		notify.Debug(configContent)
 	}
 
 	return filePath, nil
 }
 
-func (svc *TerraformService) generateTerraformVariableFile(context *configuration.Context, stack *configuration.InfrastructureStack) (string, error) {
+func (svc *TerraformService) generateTerraformVariableFile(context *context.Context, stack *infrastructure_component.InfrastructureStack) (string, error) {
 	if stack == nil || len(stack.Variables) == 0 {
 		err := fmt.Errorf("%s no variables found in %s stack", icons.IconInfo, stack.Name)
 		return "", err
@@ -150,8 +156,8 @@ func (svc *TerraformService) generateTerraformVariableFile(context *configuratio
 		}
 	}
 
-	filePath := helper.JoinPath(outputPath, fmt.Sprintf("%s_variables.tf", configuration.EncodeName(stack.Name)))
-	if config.Debug() {
+	filePath := helper.JoinPath(outputPath, fmt.Sprintf("%s_variables.tf", common.EncodeName(stack.Name)))
+	if common.IsDebug() {
 		notify.Debug("Variable File Path: %s", filePath)
 	}
 
@@ -162,14 +168,14 @@ func (svc *TerraformService) generateTerraformVariableFile(context *configuratio
 
 	svc.wrapper.Format(filePath)
 
-	if config.Debug() {
+	if common.IsDebug() {
 		notify.Debug("Variable File Content:\n%v", variableContent)
 	}
 
 	return filePath, nil
 }
 
-func (svc *TerraformService) setTerraformAuthContext(context *configuration.Context) {
+func (svc *TerraformService) setTerraformAuthContext(context *context.Context) {
 	currentTenant := os.Getenv("ARM_TENANT_ID")
 	if context.Infrastructure.Authorization != nil {
 		if !strings.EqualFold(currentTenant, context.Infrastructure.Authorization.TenantId) {
@@ -186,7 +192,7 @@ func (svc *TerraformService) CheckForTerraform(softFail bool) {
 	config = configuration.Get()
 	if !config.GlobalConfiguration.Tools.Checked.TerraformChecked {
 		notify.Wrench("Checking for terraform tool in the system")
-		if output, err := executer.ExecuteWithNoOutput(configuration.GetTerraformPath(), "version", "--json"); err != nil {
+		if output, err := executer.ExecuteWithNoOutput(helpers.GetTerraformPath(), "version", "--json"); err != nil {
 			if !softFail {
 				notify.Error("Terraform tool not found in system, this is required for the selected function")
 				os.Exit(1)
@@ -219,7 +225,7 @@ func (svc *TerraformService) CheckForCredentials() error {
 	ctx := config.GetCurrentContext()
 	needsCreating := false
 	if ctx.Credentials == nil {
-		ctx.Credentials = &configuration.Credentials{
+		ctx.Credentials = &context_entities.Credentials{
 			Azure: &entities.AzureCredentials{},
 		}
 		needsCreating = true
@@ -237,7 +243,7 @@ func (svc *TerraformService) CheckForCredentials() error {
 
 	if needsCreating {
 		notify.Hammer("Creating the required credentials to run infrastructure")
-		name := fmt.Sprintf("locally-%s-%s", configuration.EncodeName(ctx.Name), cryptorand.GetRandomString(5))
+		name := fmt.Sprintf("locally-%s-%s", common.EncodeName(ctx.Name), cryptorand.GetRandomString(5))
 		azCli := azure_cli.Get()
 		notify.Wrench("Logging in with user to Azure to avoid issues")
 		if ctx.Credentials == nil || ctx.Credentials.Azure == nil {
@@ -255,7 +261,7 @@ func (svc *TerraformService) CheckForCredentials() error {
 
 	// Creating the authorization object if it does not exists
 	if ctx.Infrastructure.Authorization == nil {
-		ctx.Infrastructure.Authorization = &configuration.InfrastructureAuthorization{}
+		ctx.Infrastructure.Authorization = &infrastructure_component.InfrastructureAuthorization{}
 	}
 
 	// Adding the variables into the right zone
@@ -320,7 +326,7 @@ func (svc *TerraformService) InitiateStack(options *TerraformServiceOptions) {
 	}
 
 	commandArgs := make([]string, 0)
-	stacks := config.GetInfrastructureStacks(options.Name, !options.BuildDependencies)
+	stacks := context.GetInfrastructureStacks(options.Name, !options.BuildDependencies)
 
 	if options.BuildDependencies {
 		var dependencyError error
@@ -384,7 +390,7 @@ func (svc *TerraformService) ValidateStack(options *TerraformServiceOptions) {
 	}
 
 	commandArgs := make([]string, 0)
-	stacks := config.GetInfrastructureStacks(options.Name, !options.BuildDependencies)
+	stacks := context.GetInfrastructureStacks(options.Name, !options.BuildDependencies)
 	if len(stacks) == 0 {
 		notify.Warning("No infrastructure stacks found")
 	}
@@ -433,7 +439,7 @@ func (svc *TerraformService) PlanStack(options *TerraformServiceOptions) *PlanCh
 	}
 
 	commandArgs := make([]string, 0)
-	stacks := config.GetInfrastructureStacks(options.Name, !options.BuildDependencies)
+	stacks := context.GetInfrastructureStacks(options.Name, !options.BuildDependencies)
 	if len(stacks) == 0 {
 		notify.Warning("No infrastructure stacks found")
 	}
@@ -492,8 +498,8 @@ func (svc *TerraformService) PlanStack(options *TerraformServiceOptions) *PlanCh
 			}
 		}
 
-		planFileName := helper.JoinPath(planOutputPath, fmt.Sprintf("%s.plan", configuration.EncodeName(stack.Name)))
-		if config.Debug() {
+		planFileName := helper.JoinPath(planOutputPath, fmt.Sprintf("%s.plan", common.EncodeName(stack.Name)))
+		if common.IsDebug() {
 			notify.Debug("Plan File Path: %s", planFileName)
 		}
 
@@ -541,7 +547,7 @@ func (svc *TerraformService) ApplyStack(options *TerraformServiceOptions) {
 	}
 
 	commandArgs := make([]string, 0)
-	stacks := config.GetInfrastructureStacks(options.Name, !options.BuildDependencies)
+	stacks := context.GetInfrastructureStacks(options.Name, !options.BuildDependencies)
 	if len(stacks) == 0 {
 		notify.Warning("No infrastructure stacks found")
 	}
@@ -572,8 +578,8 @@ func (svc *TerraformService) ApplyStack(options *TerraformServiceOptions) {
 		var planChanges *PlanChanges
 		var err error
 		planOutputPath := helper.JoinPath(context.Configuration.OutputPath, common.INFRASTRUCTURE_PATH)
-		planFileName := helper.JoinPath(planOutputPath, fmt.Sprintf("%s.plan", configuration.EncodeName(stack.Name)))
-		if config.Debug() {
+		planFileName := helper.JoinPath(planOutputPath, fmt.Sprintf("%s.plan", common.EncodeName(stack.Name)))
+		if common.IsDebug() {
 			notify.Debug("Plan File Path: %s", icons.IconFire, planFileName)
 		}
 		if !helper.FileExists(planFileName) {
@@ -587,7 +593,7 @@ func (svc *TerraformService) ApplyStack(options *TerraformServiceOptions) {
 			}
 		}
 
-		if config.Debug() {
+		if common.IsDebug() {
 			notify.Debug("Plan Changes %v", fmt.Sprintf("%v", planChanges))
 		}
 
@@ -676,7 +682,7 @@ func (svc *TerraformService) ApplyStack(options *TerraformServiceOptions) {
 
 		now := time.Now()
 		stack.LastApplied = &now
-		fragment := config.GetFragment(stack.GetSource())
+		fragment := context.GetFragment(stack.GetSource())
 		context.SaveFragment(fragment)
 	}
 }
@@ -688,12 +694,12 @@ func (svc *TerraformService) DestroyStack(options *TerraformServiceOptions) {
 	}
 
 	commandArgs := make([]string, 0)
-	stacks := config.GetInfrastructureStacks(options.Name, !options.BuildDependencies)
+	stacks := context.GetInfrastructureStacks(options.Name, !options.BuildDependencies)
 	if len(stacks) == 0 {
 		notify.Warning("No infrastructure stacks found")
 	}
 
-	if config.HasTags() || options.BuildDependencies {
+	if context.HasTags() || options.BuildDependencies {
 		var err error
 		stacks, err = config.GetInfrastructureDependencies(stacks)
 		if err != nil {
@@ -708,7 +714,7 @@ func (svc *TerraformService) DestroyStack(options *TerraformServiceOptions) {
 		}
 	}
 
-	configuration.ReverseDependency(stacks)
+	dependency_tree.ReverseDependency(stacks)
 	stackNames := ""
 
 	for i, stack := range stacks {
@@ -775,8 +781,8 @@ func (svc *TerraformService) DestroyStack(options *TerraformServiceOptions) {
 			}
 		}
 
-		backupFileName := helper.JoinPath(backupPath, fmt.Sprintf("%s.backup", configuration.EncodeName(stack.Name)))
-		if config.Debug() {
+		backupFileName := helper.JoinPath(backupPath, fmt.Sprintf("%s.backup", common.EncodeName(stack.Name)))
+		if common.IsDebug() {
 			notify.Debug("Backup File Path: %s", backupFileName)
 		}
 
@@ -804,7 +810,7 @@ func (svc *TerraformService) OutputStack(options *TerraformServiceOptions) {
 		return
 	}
 
-	stacks := config.GetInfrastructureStacks(options.Name, !options.BuildDependencies)
+	stacks := context.GetInfrastructureStacks(options.Name, !options.BuildDependencies)
 
 	if options.BuildDependencies {
 		var dependencyError error
@@ -844,8 +850,8 @@ func (svc *TerraformService) OutputStack(options *TerraformServiceOptions) {
 				context.EnvironmentVariables.Terraform = make(map[string]interface{}, 0)
 			}
 
-			terraformKey := fmt.Sprintf("%s.%s", strings.ToLower(configuration.EncodeName(stack.Name)), strings.ToLower(key))
-			if config.Debug() {
+			terraformKey := fmt.Sprintf("%s.%s", strings.ToLower(common.EncodeName(stack.Name)), strings.ToLower(key))
+			if common.IsDebug() {
 				notify.Debug("Setting the terraform variable %s to the global environments %s", key, terraformKey)
 			}
 
@@ -858,7 +864,7 @@ func (svc *TerraformService) OutputStack(options *TerraformServiceOptions) {
 		}
 
 		context.SaveEnvironmentVariables()
-		if config.Debug() {
+		if common.IsDebug() {
 			notify.Debug("Config Global Environment Variables:\n  %s", fmt.Sprintf("%v", context.EnvironmentVariables))
 		}
 	}
@@ -872,7 +878,7 @@ func (svc *TerraformService) GraphStack(options *TerraformServiceOptions) {
 
 	notify.InfoWithIcon(icons.IconMagnifyingGlass, "This can take a while...")
 
-	stacks := config.GetInfrastructureStacks(options.Name, true)
+	stacks := context.GetInfrastructureStacks(options.Name, true)
 	if len(stacks) == 0 {
 		notify.Warning("No infrastructure stacks found")
 	}
@@ -918,7 +924,7 @@ func (svc *TerraformService) GraphStack(options *TerraformServiceOptions) {
 			tfstate["storage_account_name"] = stack.Backend.StorageAccountName
 		}
 
-		fragment := config.GetFragment(stack.GetSource())
+		fragment := context.GetFragment(stack.GetSource())
 		if fragment != nil {
 			fragmentStack := config.GetFragmentInfrastructureStack(fragment, stack.Name)
 			if fragmentStack != nil {
@@ -935,7 +941,7 @@ func (svc *TerraformService) GraphStack(options *TerraformServiceOptions) {
 						stack.AddDependency(backendStack.Name)
 						stack.AddRequiredState(backendStack.Name)
 						backendStack.AddRequiredBy(stack.Name)
-						fragment := config.GetFragment(backendStack.GetSource())
+						fragment := context.GetFragment(backendStack.GetSource())
 						if fragment != nil {
 							if err := fragment.SaveFragment(fragment); err != nil {
 								notify.Warning(err.Error())
@@ -970,7 +976,7 @@ func (svc *TerraformService) GraphStack(options *TerraformServiceOptions) {
 	}
 }
 
-func (svc *TerraformService) CanClone(stack *configuration.InfrastructureStack) bool {
+func (svc *TerraformService) CanClone(stack *infrastructure_component.InfrastructureStack) bool {
 	if stack == nil {
 		notify.Debug("Stack is nil, ignoring")
 		return false
@@ -1004,7 +1010,7 @@ func (svc *TerraformService) CanClone(stack *configuration.InfrastructureStack) 
 	return true
 }
 
-func (svc *TerraformService) clone(stack *configuration.InfrastructureStack) (string, error) {
+func (svc *TerraformService) clone(stack *infrastructure_component.InfrastructureStack) (string, error) {
 	env := environment.Get()
 
 	destination := env.Replace(stack.Repository.Destination)
@@ -1035,7 +1041,7 @@ func (svc *TerraformService) clone(stack *configuration.InfrastructureStack) (st
 	}
 }
 
-func (svc *TerraformService) getPath(stack *configuration.InfrastructureStack, options *TerraformServiceOptions) (string, error) {
+func (svc *TerraformService) getPath(stack *infrastructure_component.InfrastructureStack, options *TerraformServiceOptions) (string, error) {
 	env := environment.Get()
 	returnPath := ""
 

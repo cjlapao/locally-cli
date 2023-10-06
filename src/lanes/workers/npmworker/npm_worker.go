@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/cjlapao/locally-cli/configuration"
+	"github.com/cjlapao/locally-cli/common"
+	"github.com/cjlapao/locally-cli/context/pipeline_component"
 	"github.com/cjlapao/locally-cli/help"
 	"github.com/cjlapao/locally-cli/lanes/entities"
 	"github.com/cjlapao/locally-cli/lanes/interfaces"
@@ -36,11 +37,10 @@ func (worker NpmPipelineWorker) Name() string {
 	return worker.name
 }
 
-func (worker NpmPipelineWorker) Run(task *configuration.PipelineTask) entities.PipelineWorkerResult {
-	config := configuration.Get()
+func (worker NpmPipelineWorker) Run(task *pipeline_component.PipelineTask) entities.PipelineWorkerResult {
 	result := entities.PipelineWorkerResult{}
 
-	if task.Type != configuration.NpmTask {
+	if task.Type != pipeline_component.NpmTask {
 		notify.Debug("[%s] %s: This is not a task for me, bye...", worker.name, task.Name)
 		result.State = entities.StateIgnored
 		return result
@@ -91,7 +91,7 @@ func (worker NpmPipelineWorker) Run(task *configuration.PipelineTask) entities.P
 	}
 
 	msg := fmt.Sprintf("Npm %s executed successfully for task %s", inputs.Command, task.Name)
-	if config.Debug() {
+	if common.IsDebug() {
 		msg = fmt.Sprintf("[%s] %s", worker.name, msg)
 	}
 
@@ -102,9 +102,9 @@ func (worker NpmPipelineWorker) Run(task *configuration.PipelineTask) entities.P
 	return result
 }
 
-func (worker NpmPipelineWorker) Validate(task *configuration.PipelineTask) entities.PipelineWorkerResult {
+func (worker NpmPipelineWorker) Validate(task *pipeline_component.PipelineTask) entities.PipelineWorkerResult {
 	result := entities.PipelineWorkerResult{}
-	if task.Type != configuration.NpmTask {
+	if task.Type != pipeline_component.NpmTask {
 		result.State = entities.StateIgnored
 		return result
 	}
@@ -124,7 +124,7 @@ func (worker NpmPipelineWorker) Validate(task *configuration.PipelineTask) entit
 	return result
 }
 
-func (worker NpmPipelineWorker) parseParameters(task *configuration.PipelineTask) (*NpmPipelineWorkerParameters, error) {
+func (worker NpmPipelineWorker) parseParameters(task *pipeline_component.PipelineTask) (*NpmPipelineWorkerParameters, error) {
 	encoded, err := yaml.Marshal(task.Inputs)
 	if err != nil {
 		return nil, err

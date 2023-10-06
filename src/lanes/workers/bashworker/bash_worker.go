@@ -6,7 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/cjlapao/locally-cli/configuration"
+	"github.com/cjlapao/locally-cli/common"
+	"github.com/cjlapao/locally-cli/context/pipeline_component"
 	"github.com/cjlapao/locally-cli/executer"
 	"github.com/cjlapao/locally-cli/lanes/entities"
 	"github.com/cjlapao/locally-cli/lanes/interfaces"
@@ -37,11 +38,10 @@ func (worker BashPipelineWorker) Name() string {
 	return worker.name
 }
 
-func (worker BashPipelineWorker) Run(task *configuration.PipelineTask) entities.PipelineWorkerResult {
-	config := configuration.Get()
+func (worker BashPipelineWorker) Run(task *pipeline_component.PipelineTask) entities.PipelineWorkerResult {
 	result := entities.PipelineWorkerResult{}
 
-	if task.Type != configuration.BashTask {
+	if task.Type != pipeline_component.BashTask {
 		notify.Debug("[%s] %s: This is not a task for me, bye...", worker.name, task.Name)
 		result.State = entities.StateIgnored
 		return result
@@ -69,7 +69,7 @@ func (worker BashPipelineWorker) Run(task *configuration.PipelineTask) entities.
 		msg += fmt.Sprintf(" in folder %s", inputs.WorkingDirectory)
 	}
 
-	if config.Debug() {
+	if common.IsDebug() {
 		msg = fmt.Sprintf("[%s] %s", worker.name, msg)
 	}
 
@@ -80,7 +80,7 @@ func (worker BashPipelineWorker) Run(task *configuration.PipelineTask) entities.
 	return result
 }
 
-func (worker BashPipelineWorker) runTask(task *configuration.PipelineTask) entities.PipelineWorkerResult {
+func (worker BashPipelineWorker) runTask(task *pipeline_component.PipelineTask) entities.PipelineWorkerResult {
 	result := entities.PipelineWorkerResult{}
 
 	inputs, err := worker.parseParameters(task)
@@ -121,9 +121,9 @@ func (worker BashPipelineWorker) runTask(task *configuration.PipelineTask) entit
 	return result
 }
 
-func (worker BashPipelineWorker) Validate(task *configuration.PipelineTask) entities.PipelineWorkerResult {
+func (worker BashPipelineWorker) Validate(task *pipeline_component.PipelineTask) entities.PipelineWorkerResult {
 	result := entities.PipelineWorkerResult{}
-	if task.Type != configuration.BashTask {
+	if task.Type != pipeline_component.BashTask {
 		result.State = entities.StateIgnored
 		return result
 	}
@@ -143,7 +143,7 @@ func (worker BashPipelineWorker) Validate(task *configuration.PipelineTask) enti
 	return result
 }
 
-func (worker BashPipelineWorker) parseParameters(task *configuration.PipelineTask) (*BashParameters, error) {
+func (worker BashPipelineWorker) parseParameters(task *pipeline_component.PipelineTask) (*BashParameters, error) {
 	encoded, err := yaml.Marshal(task.Inputs)
 	if err != nil {
 		return nil, err

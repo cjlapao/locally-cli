@@ -21,9 +21,13 @@ import (
 	"github.com/cjlapao/locally-cli/azure_cli"
 	"github.com/cjlapao/locally-cli/common"
 	"github.com/cjlapao/locally-cli/configuration"
+	"github.com/cjlapao/locally-cli/context/docker_component"
+	"github.com/cjlapao/locally-cli/context/entities"
+	"github.com/cjlapao/locally-cli/context/git_component"
 	"github.com/cjlapao/locally-cli/environment"
 	"github.com/cjlapao/locally-cli/executer"
 	"github.com/cjlapao/locally-cli/git"
+	"github.com/cjlapao/locally-cli/helpers"
 	"github.com/cjlapao/locally-cli/icons"
 	"github.com/cjlapao/locally-cli/mappers"
 	"github.com/cjlapao/locally-cli/notifications"
@@ -48,8 +52,8 @@ type DockerServiceOptions struct {
 	BuildDependencies bool
 	RootFolder        string
 	Path              string
-	DockerRegistry    *configuration.DockerRegistry
-	DockerCompose     *configuration.DockerCompose
+	DockerRegistry    *docker_component.DockerRegistry
+	DockerCompose     *docker_component.DockerCompose
 	StdOutput         bool
 }
 
@@ -74,7 +78,7 @@ func (svc *DockerService) CheckForDocker(softFail bool) {
 	config = configuration.Get()
 	if !config.GlobalConfiguration.Tools.Checked.DockerChecked {
 		notify.InfoWithIcon(icons.IconFlag, "Checking for docker tool in the system")
-		if output, err := executer.ExecuteWithNoOutput(configuration.GetDockerPath(), "version", "-f", "json"); err != nil {
+		if output, err := executer.ExecuteWithNoOutput(helpers.GetDockerPath(), "version", "-f", "json"); err != nil {
 			if !softFail {
 				notify.Error("Docker tool not found in system, this is required for the selected function")
 				os.Exit(1)
@@ -103,7 +107,7 @@ func (svc *DockerService) CheckForDockerCompose(softFail bool) {
 	if !config.GlobalConfiguration.Tools.Checked.DockerComposeChecked {
 
 		notify.InfoWithIcon(icons.IconFlag, "Checking for docker compose tool in the system")
-		if output, err := executer.ExecuteWithNoOutput(configuration.GetDockerComposePath(), "version", "-f", "json"); err != nil {
+		if output, err := executer.ExecuteWithNoOutput(helpers.GetDockerComposePath(), "version", "-f", "json"); err != nil {
 			if !softFail {
 				notify.Error("Docker compose tool not found in system, this is required for the selected function")
 				os.Exit(1)
@@ -129,7 +133,8 @@ func (svc *DockerService) CheckForDockerCompose(softFail bool) {
 
 func (svc *DockerService) BuildServiceContainer(options *DockerServiceOptions) error {
 	serviceFound := false
-	containers := config.GetDockerServices(options.Name, !options.BuildDependencies)
+	ctx := config.GetCurrentContext()
+	containers := ctx.GetDockerServices(options.Name, !options.BuildDependencies)
 
 	// Building dependencies
 	if options.BuildDependencies {
@@ -187,7 +192,8 @@ func (svc *DockerService) BuildServiceContainer(options *DockerServiceOptions) e
 
 func (svc *DockerService) RebuildServiceContainer(options *DockerServiceOptions) error {
 	serviceFound := false
-	containers := config.GetDockerServices(options.Name, !options.BuildDependencies)
+	ctx := config.GetCurrentContext()
+	containers := ctx.GetDockerServices(options.Name, !options.BuildDependencies)
 
 	// Building dependencies
 	if options.BuildDependencies {
@@ -221,7 +227,7 @@ func (svc *DockerService) RebuildServiceContainer(options *DockerServiceOptions)
 		getLatest := helper.GetFlagSwitch("get-latest", false)
 		if getLatest && container.DockerRegistry != nil && container.DockerRegistry.Enabled {
 			basePath := helper.JoinPath(config.GetCurrentContext().Configuration.OutputPath, common.DOCKER_COMPOSE_PATH)
-			serviceFolder := helper.JoinPath(basePath, configuration.EncodeName(container.Name))
+			serviceFolder := helper.JoinPath(basePath, common.EncodeName(container.Name))
 			helper.DeleteAllFiles(serviceFolder)
 		}
 
@@ -255,7 +261,8 @@ func (svc *DockerService) RebuildServiceContainer(options *DockerServiceOptions)
 
 func (svc *DockerService) ServiceContainerUp(options *DockerServiceOptions) error {
 	serviceFound := false
-	containers := config.GetDockerServices(options.Name, !options.BuildDependencies)
+	ctx := config.GetCurrentContext()
+	containers := ctx.GetDockerServices(options.Name, !options.BuildDependencies)
 
 	// Building dependencies
 	if options.BuildDependencies {
@@ -284,7 +291,7 @@ func (svc *DockerService) ServiceContainerUp(options *DockerServiceOptions) erro
 		if getLatest && container.DockerRegistry != nil && container.DockerRegistry.Enabled {
 			notify.Info("Removing generated docker compose to get latest...")
 			basePath := helper.JoinPath(config.GetCurrentContext().Configuration.OutputPath, common.DOCKER_COMPOSE_PATH)
-			serviceFolder := helper.JoinPath(basePath, configuration.EncodeName(container.Name))
+			serviceFolder := helper.JoinPath(basePath, common.EncodeName(container.Name))
 			helper.DeleteAllFiles(serviceFolder)
 		}
 
@@ -314,7 +321,8 @@ func (svc *DockerService) ServiceContainerUp(options *DockerServiceOptions) erro
 
 func (svc *DockerService) ServiceContainerDown(options *DockerServiceOptions) error {
 	serviceFound := false
-	containers := config.GetDockerServices(options.Name, !options.BuildDependencies)
+	ctx := config.GetCurrentContext()
+	containers := ctx.GetDockerServices(options.Name, !options.BuildDependencies)
 
 	// Building dependencies
 	if options.BuildDependencies {
@@ -381,7 +389,8 @@ func (svc *DockerService) ServiceContainerDown(options *DockerServiceOptions) er
 
 func (svc *DockerService) StartServiceContainer(options *DockerServiceOptions) error {
 	serviceFound := false
-	containers := config.GetDockerServices(options.Name, !options.BuildDependencies)
+	ctx := config.GetCurrentContext()
+	containers := ctx.GetDockerServices(options.Name, !options.BuildDependencies)
 
 	// Building dependencies
 	if options.BuildDependencies {
@@ -432,7 +441,8 @@ func (svc *DockerService) StartServiceContainer(options *DockerServiceOptions) e
 
 func (svc *DockerService) StopServiceContainer(options *DockerServiceOptions) error {
 	serviceFound := false
-	containers := config.GetDockerServices(options.Name, !options.BuildDependencies)
+	ctx := config.GetCurrentContext()
+	containers := ctx.GetDockerServices(options.Name, !options.BuildDependencies)
 
 	// Building dependencies
 	if options.BuildDependencies {
@@ -474,7 +484,8 @@ func (svc *DockerService) StopServiceContainer(options *DockerServiceOptions) er
 
 func (svc *DockerService) PauseServiceContainer(options *DockerServiceOptions) error {
 	serviceFound := false
-	containers := config.GetDockerServices(options.Name, !options.BuildDependencies)
+	ctx := config.GetCurrentContext()
+	containers := ctx.GetDockerServices(options.Name, !options.BuildDependencies)
 
 	// Building dependencies
 	if options.BuildDependencies {
@@ -515,7 +526,8 @@ func (svc *DockerService) PauseServiceContainer(options *DockerServiceOptions) e
 
 func (svc *DockerService) ResumeServiceContainer(options *DockerServiceOptions) error {
 	serviceFound := false
-	containers := config.GetDockerServices(options.Name, !options.BuildDependencies)
+	ctx := config.GetCurrentContext()
+	containers := ctx.GetDockerServices(options.Name, !options.BuildDependencies)
 
 	// Building dependencies
 	if options.BuildDependencies {
@@ -556,7 +568,8 @@ func (svc *DockerService) ResumeServiceContainer(options *DockerServiceOptions) 
 
 func (svc *DockerService) ServiceContainerStatus(options *DockerServiceOptions) error {
 	serviceFound := false
-	containers := config.GetDockerServices(options.Name, !options.BuildDependencies)
+	ctx := config.GetCurrentContext()
+	containers := ctx.GetDockerServices(options.Name, !options.BuildDependencies)
 
 	// Building dependencies
 	if options.BuildDependencies {
@@ -606,7 +619,8 @@ func (svc *DockerService) ListServiceContainer(options *DockerServiceOptions) er
 		return nil
 	}
 
-	containers := config.GetDockerServices(options.Name, !options.BuildDependencies)
+	ctx := config.GetCurrentContext()
+	containers := ctx.GetDockerServices(options.Name, !options.BuildDependencies)
 
 	// Building dependencies
 	if options.BuildDependencies {
@@ -640,7 +654,8 @@ func (svc *DockerService) ListServiceContainer(options *DockerServiceOptions) er
 
 func (svc *DockerService) ServiceContainerLogs(options *DockerServiceOptions) error {
 	serviceFound := false
-	containers := config.GetDockerServices(options.Name, true)
+	ctx := config.GetCurrentContext()
+	containers := ctx.GetDockerServices(options.Name, true)
 
 	for _, container := range containers {
 		containerPath, pathError := svc.getPath(container, options)
@@ -665,7 +680,8 @@ func (svc *DockerService) ServiceContainerLogs(options *DockerServiceOptions) er
 
 func (svc *DockerService) GenerateServiceDockerComposeOverrideFile(options *DockerServiceOptions) error {
 	serviceFound := false
-	containers := config.GetDockerServices(options.Name, !options.BuildDependencies)
+	ctx := config.GetCurrentContext()
+	containers := ctx.GetDockerServices(options.Name, !options.BuildDependencies)
 
 	// Building dependencies
 	if options.BuildDependencies {
@@ -720,7 +736,8 @@ func (svc *DockerService) GenerateServiceDockerComposeFile(options *DockerServic
 	var dependencyError error
 
 	serviceFound := false
-	containers := config.GetDockerServices(options.Name, true)
+	ctx := config.GetCurrentContext()
+	containers := ctx.GetDockerServices(options.Name, true)
 
 	containers, dependencyError = config.GetDockerContainerDependencies(containers)
 	if dependencyError != nil {
@@ -753,7 +770,7 @@ func (svc *DockerService) GenerateServiceDockerComposeFile(options *DockerServic
 
 		notify.Debug("registry: %s,  Manifest Path: %s", container.DockerRegistry.Registry, container.DockerRegistry.ManifestPath)
 
-		serviceFolder := helper.JoinPath(basePath, configuration.EncodeName(container.Name))
+		serviceFolder := helper.JoinPath(basePath, common.EncodeName(container.Name))
 		if !helper.FileExists(serviceFolder) {
 			notify.Hammer("Creating %s folder", serviceFolder)
 			if !helper.CreateDirectory(serviceFolder, fs.ModePerm) {
@@ -796,7 +813,8 @@ func (svc *DockerService) GenerateServiceDockerComposeFile(options *DockerServic
 
 func (svc *DockerService) DeleteImage(options *DockerServiceOptions) error {
 	serviceFound := false
-	containers := config.GetDockerServices(options.Name, !options.BuildDependencies)
+	ctx := config.GetCurrentContext()
+	containers := ctx.GetDockerServices(options.Name, !options.BuildDependencies)
 
 	// Building dependencies
 	if options.BuildDependencies {
@@ -890,7 +908,7 @@ func (svc *DockerService) RunEfMigrations(context, baseImage, imageName, repoUrl
 		}
 	}
 
-	dockerFilePath := helper.JoinPath(migrationFolder, fmt.Sprintf("%s.dockerfile", configuration.EncodeName(imageName)))
+	dockerFilePath := helper.JoinPath(migrationFolder, fmt.Sprintf("%s.dockerfile", common.EncodeName(imageName)))
 	helper.WriteToFile(dockerFile, dockerFilePath)
 	notify.Debug("docker file %s\ncontent:\n %s", dockerFilePath, dockerFile)
 
@@ -941,7 +959,7 @@ func (svc *DockerService) RunEfMigrations(context, baseImage, imageName, repoUrl
 		}
 	}
 
-	if !config.Debug() {
+	if !common.IsDebug() {
 		if err := wrapper.Down(migrationFolder, imageName, ""); err != nil {
 			return err
 		}
@@ -1006,7 +1024,7 @@ func (svc *DockerService) RunDotnetContainer(command, context, baseImage, imageN
 		}
 	}
 
-	dockerFilePath := helper.JoinPath(runFolder, fmt.Sprintf("%s.dockerfile", configuration.EncodeName(imageName)))
+	dockerFilePath := helper.JoinPath(runFolder, fmt.Sprintf("%s.dockerfile", common.EncodeName(imageName)))
 	helper.WriteToFile(dockerFile, dockerFilePath)
 	notify.Debug("docker file %s\ncontent:\n %s", dockerFilePath, dockerFile)
 
@@ -1057,7 +1075,7 @@ func (svc *DockerService) RunDotnetContainer(command, context, baseImage, imageN
 		}
 	}
 
-	if !config.Debug() {
+	if !common.IsDebug() {
 		if err := wrapper.Down(runFolder, imageName, ""); err != nil {
 			return err
 		}
@@ -1130,7 +1148,8 @@ func (svc *DockerService) PullImage(options *DockerServiceOptions) error {
 		}
 	}
 
-	containers := config.GetDockerServices(options.Name, true)
+	ctx := config.GetCurrentContext()
+	containers := ctx.GetDockerServices(options.Name, true)
 	if len(containers) > 0 {
 		containers[0].DockerRegistry.Clone(registry, false)
 		// currentContext := config.GetCurrentContext()
@@ -1215,7 +1234,7 @@ func (worker DockerService) GetLatestImageTag(registry, imagePath, username, pas
 	}
 
 	notify.Debug("Parsing the response body %s", fmt.Sprintf("%v", string(body)))
-	var manifestTags configuration.DockerRegistryTagList
+	var manifestTags docker_component.DockerRegistryTagList
 	if err := json.Unmarshal(body, &manifestTags); err != nil {
 		return "", err
 	}
@@ -1235,7 +1254,7 @@ func (worker DockerService) GetLatestImageTag(registry, imagePath, username, pas
 	return manifestTags.Tags[0], nil
 }
 
-func (svc *DockerService) generateDockerComposeServiceOverride(component *configuration.DockerContainer) string {
+func (svc *DockerService) generateDockerComposeServiceOverride(component *docker_component.DockerContainer) string {
 	env := environment.Get()
 	context := config.GetCurrentContext()
 	notify.Hammer("Building %s container fragment", component.Name)
@@ -1315,7 +1334,7 @@ func (svc *DockerService) generateDockerComposeServiceOverride(component *config
 	return caddyFragment
 }
 
-func (svc *DockerService) generateContainerDockerCompose(container *configuration.DockerContainer) string {
+func (svc *DockerService) generateContainerDockerCompose(container *docker_component.DockerContainer) string {
 	env := environment.Get()
 
 	dockerCompose := container.DockerCompose
@@ -1372,7 +1391,7 @@ func (svc *DockerService) generateContainerDockerCompose(container *configuratio
 
 			image = strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(env.Replace(image), "https://", ""), "http://", ""), "//", "/")
 		} else {
-			image = fmt.Sprintf("${DOCKER_REGISTRY-}%s", configuration.EncodeName(component.Name))
+			image = fmt.Sprintf("${DOCKER_REGISTRY-}%s", common.EncodeName(component.Name))
 		}
 		args := component.BuildArguments
 		if dockerComposeService != nil && dockerComposeService.Build != nil && len(dockerComposeService.Build.Args) > 0 {
@@ -1719,7 +1738,7 @@ func (svc *DockerService) generateDotnetContainerComposeFile(name, imageName str
 	return dockerComposeFile
 }
 
-func (svc *DockerService) getPath(container *configuration.DockerContainer, options *DockerServiceOptions) (string, error) {
+func (svc *DockerService) getPath(container *docker_component.DockerContainer, options *DockerServiceOptions) (string, error) {
 	notify.Debug(container.Name)
 	returnPath := ""
 
@@ -1730,7 +1749,7 @@ func (svc *DockerService) getPath(container *configuration.DockerContainer, opti
 	}
 
 	if container.Location == nil {
-		container.Location = &configuration.Location{}
+		container.Location = &entities.Location{}
 	}
 
 	if container.Location.Path == "" {
@@ -1741,7 +1760,7 @@ func (svc *DockerService) getPath(container *configuration.DockerContainer, opti
 		if container.DockerCompose != nil {
 			options.DockerCompose = container.DockerCompose
 		} else {
-			options.DockerCompose = &configuration.DockerCompose{}
+			options.DockerCompose = &docker_component.DockerCompose{}
 		}
 	}
 
@@ -1749,18 +1768,18 @@ func (svc *DockerService) getPath(container *configuration.DockerContainer, opti
 		if container.DockerRegistry != nil {
 			options.DockerRegistry = container.DockerRegistry
 		} else {
-			options.DockerRegistry = &configuration.DockerRegistry{}
+			options.DockerRegistry = &docker_component.DockerRegistry{}
 		}
 	}
 
 	if container.Repository == nil {
-		container.Repository = &configuration.GitCloneRepository{}
+		container.Repository = &git_component.GitCloneRepository{}
 	}
 	if container.DockerCompose == nil {
-		container.DockerCompose = &configuration.DockerCompose{}
+		container.DockerCompose = &docker_component.DockerCompose{}
 	}
 	if container.DockerRegistry == nil {
-		container.DockerRegistry = &configuration.DockerRegistry{}
+		container.DockerRegistry = &docker_component.DockerRegistry{}
 	}
 
 	if container.Repository.Enabled {
@@ -1776,7 +1795,7 @@ func (svc *DockerService) getPath(container *configuration.DockerContainer, opti
 
 	if returnPath == "" && (options.DockerRegistry.Enabled || container.DockerRegistry.Enabled) {
 		basePath := helper.JoinPath(config.GetCurrentContext().Configuration.OutputPath, common.DOCKER_COMPOSE_PATH)
-		serviceFolder := helper.JoinPath(basePath, configuration.EncodeName(container.Name))
+		serviceFolder := helper.JoinPath(basePath, common.EncodeName(container.Name))
 		returnPath = serviceFolder
 	}
 
@@ -1798,7 +1817,7 @@ func (svc *DockerService) getPath(container *configuration.DockerContainer, opti
 	return returnPath, nil
 }
 
-func (svc *DockerService) CanClone(container *configuration.DockerContainer) bool {
+func (svc *DockerService) CanClone(container *docker_component.DockerContainer) bool {
 	if container == nil {
 		notify.Debug("Container is nil, ignoring")
 		return false
@@ -1832,7 +1851,7 @@ func (svc *DockerService) CanClone(container *configuration.DockerContainer) boo
 	return true
 }
 
-func (svc *DockerService) clone(container *configuration.DockerContainer) (string, error) {
+func (svc *DockerService) clone(container *docker_component.DockerContainer) (string, error) {
 	env := environment.Get()
 
 	if container.Repository == nil {
@@ -1867,7 +1886,7 @@ func (svc *DockerService) clone(container *configuration.DockerContainer) (strin
 	}
 }
 
-func (svc *DockerService) CheckComposeFolder(container *configuration.DockerContainer) error {
+func (svc *DockerService) CheckComposeFolder(container *docker_component.DockerContainer) error {
 	basePath := helper.JoinPath(config.GetCurrentContext().Configuration.OutputPath, common.DOCKER_COMPOSE_PATH)
 	if !helper.FileExists(basePath) {
 		notify.Hammer("Creating %s folder", basePath)
@@ -1876,7 +1895,7 @@ func (svc *DockerService) CheckComposeFolder(container *configuration.DockerCont
 			return err
 		}
 	}
-	serviceFolder := helper.JoinPath(basePath, configuration.EncodeName(container.Name))
+	serviceFolder := helper.JoinPath(basePath, common.EncodeName(container.Name))
 	if !helper.FileExists(serviceFolder) {
 		notify.Hammer("Creating %s folder", serviceFolder)
 		if !helper.CreateDirectory(serviceFolder, fs.ModePerm) {
@@ -1888,14 +1907,14 @@ func (svc *DockerService) CheckComposeFolder(container *configuration.DockerCont
 	return nil
 }
 
-func (svc *DockerService) CheckForDockerComposeFile(container *configuration.DockerContainer, containerPath string) error {
+func (svc *DockerService) CheckForDockerComposeFile(container *docker_component.DockerContainer, containerPath string) error {
 	fileList := []string{
 		"docker-compose.yaml",
 		"docker-compose.yml",
 	}
 	if helper.GetFlagSwitch("clean", false) {
 		notify.Debug("Starting to clean the current docker-compose")
-		basePath := helper.JoinPath(config.GetCurrentContext().Configuration.OutputPath, common.DOCKER_COMPOSE_PATH, configuration.EncodeName(container.Name))
+		basePath := helper.JoinPath(config.GetCurrentContext().Configuration.OutputPath, common.DOCKER_COMPOSE_PATH, common.EncodeName(container.Name))
 		for _, file := range fileList {
 			filePath := helper.JoinPath(basePath, file)
 			notify.Debug("Testing for file %s", filePath)

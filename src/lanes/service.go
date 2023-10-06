@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/cjlapao/locally-cli/common"
 	"github.com/cjlapao/locally-cli/configuration"
+	"github.com/cjlapao/locally-cli/context/pipeline_component"
 	"github.com/cjlapao/locally-cli/lanes/entities"
 	"github.com/cjlapao/locally-cli/lanes/interfaces"
 	"github.com/cjlapao/locally-cli/lanes/workers/bashworker"
@@ -17,8 +19,6 @@ import (
 	"github.com/cjlapao/locally-cli/lanes/workers/keyvaultworker"
 	"github.com/cjlapao/locally-cli/lanes/workers/npmworker"
 	"github.com/cjlapao/locally-cli/lanes/workers/sqlworker"
-	"github.com/cjlapao/locally-cli/lanes/workers/webclientmanifestworker"
-	"github.com/cjlapao/locally-cli/lanes/workers/whatsnewworker"
 )
 
 var globalAutomationService *PipelineService
@@ -41,9 +41,7 @@ func New() *PipelineService {
 	svc.registerWorker(efmigrationsworker.EFMigrationsPipelineWorker{})
 	svc.registerWorker(dockerworker.DockerPipelineWorker{})
 	svc.registerWorker(dotnetworker.DotnetPipelineWorker{})
-	svc.registerWorker(whatsnewworker.WhatsNewPipelineWorker{})
 	svc.registerWorker(npmworker.NpmPipelineWorker{})
-	svc.registerWorker(webclientmanifestworker.WebClientManifestPipelineWorker{})
 	return &svc
 }
 
@@ -59,7 +57,7 @@ func (pipeline *PipelineService) registerWorker(worker interfaces.PipelineWorker
 	pipeline.workers = append(pipeline.workers, worker)
 }
 
-func (pipeline *PipelineService) execute(task *configuration.PipelineTask) error {
+func (pipeline *PipelineService) execute(task *pipeline_component.PipelineTask) error {
 	executed := false
 	for _, worker := range pipeline.workers {
 		executer := worker.New()
@@ -79,7 +77,7 @@ func (pipeline *PipelineService) execute(task *configuration.PipelineTask) error
 	return nil
 }
 
-func (pipeline *PipelineService) validate(task *configuration.PipelineTask) bool {
+func (pipeline *PipelineService) validate(task *pipeline_component.PipelineTask) bool {
 	valid := true
 	for _, worker := range pipeline.workers {
 		executer := worker.New()
@@ -93,10 +91,10 @@ func (pipeline *PipelineService) validate(task *configuration.PipelineTask) bool
 	return valid
 }
 
-func (pipeline *PipelineService) GetPipelines(name string, buildDependencies bool) []*configuration.Pipeline {
+func (pipeline *PipelineService) GetPipelines(name string, buildDependencies bool) []*pipeline_component.Pipeline {
 	config := configuration.Get()
 	context := config.GetCurrentContext()
-	result := make([]*configuration.Pipeline, 0)
+	result := make([]*pipeline_component.Pipeline, 0)
 
 	if len(context.Pipelines) == 0 {
 		return result
@@ -112,7 +110,6 @@ func (pipeline *PipelineService) GetPipelines(name string, buildDependencies boo
 }
 
 func (automation *PipelineService) Run(name string) error {
-	config := configuration.Get()
 	pipelines := automation.GetPipelines(name, true)
 
 	if len(pipelines) == 0 {
@@ -132,7 +129,7 @@ func (automation *PipelineService) Run(name string) error {
 				notify.Info("Job %s for pipeline %s is disabled, continuing", job.Name, pipeline.Name)
 				continue
 			}
-			if config.Verbose() {
+			if common.IsVerbose() {
 				notify.Wrench("Starting to execute job %s for pipeline %s", job.Name, pipeline.Name)
 			}
 			for _, step := range job.Steps {
@@ -140,7 +137,7 @@ func (automation *PipelineService) Run(name string) error {
 					notify.Info("Step %s in bob %s for pipeline %s is disabled, continuing", step.Name, job.Name, pipeline.Name)
 					continue
 				}
-				if config.Verbose() {
+				if common.IsVerbose() {
 					notify.Wrench("Starting to execute task %s in job %s for pipeline %s", step.Name, job.Name, pipeline.Name)
 				}
 				if err := automation.execute(step); err != nil {

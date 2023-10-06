@@ -2,12 +2,14 @@ package caddy
 
 import (
 	"fmt"
-	"github.com/cjlapao/locally-cli/common"
-	"github.com/cjlapao/locally-cli/configuration"
-	"github.com/cjlapao/locally-cli/executer"
 	"net/http"
 	"net/url"
 	"os"
+
+	"github.com/cjlapao/locally-cli/common"
+	"github.com/cjlapao/locally-cli/configuration"
+	"github.com/cjlapao/locally-cli/executer"
+	"github.com/cjlapao/locally-cli/helpers"
 
 	"github.com/cjlapao/common-go/helper"
 )
@@ -26,11 +28,11 @@ func (svc *CaddyCommandWrapper) Run() error {
 	notify.Rocket("Running Caddy...")
 	os.Setenv("root_path", helper.JoinPath(config.GetCurrentContext().Configuration.OutputPath, common.CADDY_PATH))
 	for _, client := range config.GetCurrentContext().SpaServices {
-		notify.Debug("Setting env variables for client %v=%v", fmt.Sprintf("%v_path", configuration.EncodeName(client.Name)), client.Path)
-		os.Setenv(fmt.Sprintf("%v_path", configuration.EncodeName(client.Name)), client.Path)
+		notify.Debug("Setting env variables for client %v=%v", fmt.Sprintf("%v_path", common.EncodeName(client.Name)), client.Path)
+		os.Setenv(fmt.Sprintf("%v_path", common.EncodeName(client.Name)), client.Path)
 	}
 
-	output, err := executer.ExecuteAndWatch(configuration.GetCaddyPath(), "run", "--config", helper.JoinPath(config.GetCurrentContext().Configuration.OutputPath, common.CADDY_PATH, "Caddyfile"))
+	output, err := executer.ExecuteAndWatch(helpers.GetCaddyPath(), "run", "--config", helper.JoinPath(config.GetCurrentContext().Configuration.OutputPath, common.CADDY_PATH, "Caddyfile"))
 
 	if err != nil {
 		notify.FromError(err, "Something wrong running caddy")

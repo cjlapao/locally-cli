@@ -2,27 +2,28 @@ package dockerworker
 
 import (
 	"fmt"
-	"github.com/cjlapao/locally-cli/configuration"
-	"github.com/cjlapao/locally-cli/environment"
 	"strings"
+
+	"github.com/cjlapao/locally-cli/context/docker_component"
+	"github.com/cjlapao/locally-cli/environment"
 )
 
 type DockerParameters struct {
-	Command              string                       `json:"command,omitempty" yaml:"command,omitempty"`
-	Registry             string                       `json:"registry,omitempty" yaml:"registry,omitempty"`
-	Username             string                       `json:"username,omitempty" yaml:"username,omitempty"`
-	Password             string                       `json:"password,omitempty" yaml:"password,omitempty"`
-	SubscriptionId       string                       `json:"subscriptionId,omitempty" yaml:"subscriptionId,omitempty"`
-	TenantId             string                       `json:"tenantId,omitempty" yaml:"tenantId,omitempty"`
-	BasePath             string                       `json:"basePath,omitempty" yaml:"basePath,omitempty"`
-	ImagePath            string                       `json:"imagePath,omitempty" yaml:"imagePath,omitempty"`
-	ImageTag             string                       `json:"imageTag,omitempty" yaml:"imageTag,omitempty"`
-	FullImagePath        string                       `json:"-" yaml:"-"`
-	ConfigName           string                       `json:"configName,omitempty" yaml:"configName,omitempty"`
-	ComponentName        string                       `json:"componentName,omitempty" yaml:"componentName,omitempty"`
-	Arguments            map[string]string            `json:"arguments,omitempty" yaml:"arguments,omitempty"`
-	EnvironmentVariables map[string]string            `json:"environmentVars,omitempty" yaml:"environmentVars,omitempty"`
-	DockerCompose        *configuration.DockerCompose `json:"dockerCompose,omitempty" yaml:"dockerCompose,omitempty"`
+	Command              string                          `json:"command,omitempty" yaml:"command,omitempty"`
+	Registry             string                          `json:"registry,omitempty" yaml:"registry,omitempty"`
+	Username             string                          `json:"username,omitempty" yaml:"username,omitempty"`
+	Password             string                          `json:"password,omitempty" yaml:"password,omitempty"`
+	SubscriptionId       string                          `json:"subscriptionId,omitempty" yaml:"subscriptionId,omitempty"`
+	TenantId             string                          `json:"tenantId,omitempty" yaml:"tenantId,omitempty"`
+	BasePath             string                          `json:"basePath,omitempty" yaml:"basePath,omitempty"`
+	ImagePath            string                          `json:"imagePath,omitempty" yaml:"imagePath,omitempty"`
+	ImageTag             string                          `json:"imageTag,omitempty" yaml:"imageTag,omitempty"`
+	FullImagePath        string                          `json:"-" yaml:"-"`
+	ConfigName           string                          `json:"configName,omitempty" yaml:"configName,omitempty"`
+	ComponentName        string                          `json:"componentName,omitempty" yaml:"componentName,omitempty"`
+	Arguments            map[string]string               `json:"arguments,omitempty" yaml:"arguments,omitempty"`
+	EnvironmentVariables map[string]string               `json:"environmentVars,omitempty" yaml:"environmentVars,omitempty"`
+	DockerCompose        *docker_component.DockerCompose `json:"dockerCompose,omitempty" yaml:"dockerCompose,omitempty"`
 }
 
 func (c *DockerParameters) Validate() bool {

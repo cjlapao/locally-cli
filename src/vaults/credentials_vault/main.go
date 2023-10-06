@@ -1,6 +1,7 @@
 package credentials_vault
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/cjlapao/locally-cli/configuration"
@@ -29,6 +30,13 @@ func (c CredentialsVault) Sync() (map[string]interface{}, error) {
 	notify := notifications.Get()
 
 	result := make(map[string]interface{})
+
+	if ctx == nil {
+		return result, nil
+	}
+	if !ctx.IsValid {
+		return result, fmt.Errorf("invalid context selected")
+	}
 
 	if ctx.Credentials != nil {
 		if ctx.Credentials.Azure != nil {

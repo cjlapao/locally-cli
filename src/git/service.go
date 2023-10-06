@@ -2,15 +2,17 @@ package git
 
 import (
 	"fmt"
-	"github.com/cjlapao/locally-cli/common"
-	"github.com/cjlapao/locally-cli/configuration"
-	"github.com/cjlapao/locally-cli/executer"
-	"github.com/cjlapao/locally-cli/icons"
 	"io/fs"
 	"io/ioutil"
 	"net/url"
 	"os"
 	"strings"
+
+	"github.com/cjlapao/locally-cli/common"
+	"github.com/cjlapao/locally-cli/configuration"
+	"github.com/cjlapao/locally-cli/context/git_component"
+	"github.com/cjlapao/locally-cli/executer"
+	"github.com/cjlapao/locally-cli/icons"
 
 	"github.com/cjlapao/common-go/helper"
 	"github.com/go-git/go-git/v5"
@@ -50,7 +52,7 @@ func (svc *GitService) Clone(source, destination string, cleanBeforeClone bool) 
 	return svc.CloneWithCredentials(source, destination, nil, cleanBeforeClone)
 }
 
-func (svc *GitService) CloneWithCredentials(source, destination string, gitCredentials *configuration.GitCredentials, cleanBeforeClone bool) error {
+func (svc *GitService) CloneWithCredentials(source, destination string, gitCredentials *git_component.GitCredentials, cleanBeforeClone bool) error {
 	var publicKey *ssh.PublicKeys
 	config := configuration.Get()
 	sourceUrl, err := url.Parse(source)
@@ -103,7 +105,7 @@ func (svc *GitService) CloneWithCredentials(source, destination string, gitCrede
 
 		runArgs := make([]string, 0)
 		runArgs = append(runArgs, "pull")
-		if config.Debug() {
+		if common.IsDebug() {
 			notify.Debug("Run Parameters: %v", fmt.Sprintf("%v", runArgs))
 		}
 
@@ -121,7 +123,7 @@ func (svc *GitService) CloneWithCredentials(source, destination string, gitCrede
 			}
 			return err
 		}
-		if config.Debug() {
+		if common.IsDebug() {
 			notify.Debug("Output: %s", output.GetAllOutput())
 		}
 	} else {
@@ -168,7 +170,7 @@ func getPrivateKey(source string) (*ssh.PublicKeys, error) {
 	return publicKey, nil
 }
 
-func InsertCredentials(sourceUrl *url.URL, gitCredentials *configuration.GitCredentials) (string, *ssh.PublicKeys, error) {
+func InsertCredentials(sourceUrl *url.URL, gitCredentials *git_component.GitCredentials) (string, *ssh.PublicKeys, error) {
 	if gitCredentials == nil {
 		return sourceUrl.String(), nil, nil
 	}

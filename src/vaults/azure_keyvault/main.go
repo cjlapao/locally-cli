@@ -5,12 +5,13 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"github.com/cjlapao/locally-cli/configuration"
-	"github.com/cjlapao/locally-cli/environment"
-	"github.com/cjlapao/locally-cli/notifications"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/cjlapao/locally-cli/configuration"
+	"github.com/cjlapao/locally-cli/environment"
+	"github.com/cjlapao/locally-cli/notifications"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/keyvault/azsecrets"
@@ -48,6 +49,14 @@ func (c AzureKeyVault) Sync() (map[string]interface{}, error) {
 	config := configuration.Get()
 	configContext := config.GetCurrentContext()
 	result := make(map[string]interface{})
+
+	if configContext == nil {
+		return result, nil
+	}
+	if !configContext.IsValid {
+		return result, fmt.Errorf("invalid context selected")
+	}
+
 	// setting the timeout to 5 minutes
 	context, cancel := context.WithTimeout(context.Background(), time.Second*300)
 

@@ -4,7 +4,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/cjlapao/locally-cli/configuration"
+	"github.com/cjlapao/locally-cli/common"
+	"github.com/cjlapao/locally-cli/context/pipeline_component"
 	"github.com/cjlapao/locally-cli/lanes/entities"
 	"github.com/cjlapao/locally-cli/lanes/interfaces"
 	"github.com/cjlapao/locally-cli/notifications"
@@ -34,11 +35,10 @@ func (worker KeyvaultPipelineWorker) Name() string {
 	return worker.name
 }
 
-func (worker KeyvaultPipelineWorker) Run(task *configuration.PipelineTask) entities.PipelineWorkerResult {
-	config := configuration.Get()
+func (worker KeyvaultPipelineWorker) Run(task *pipeline_component.PipelineTask) entities.PipelineWorkerResult {
 	result := entities.PipelineWorkerResult{}
 
-	if task.Type != configuration.KeyvaultSyncTask {
+	if task.Type != pipeline_component.KeyvaultSyncTask {
 		notify.Debug("[%s] %s: This is not a task for me, bye...", worker.name, task.Name)
 		result.State = entities.StateIgnored
 		return result
@@ -69,7 +69,7 @@ func (worker KeyvaultPipelineWorker) Run(task *configuration.PipelineTask) entit
 	}
 
 	msg := fmt.Sprintf("Azure KeyVault sync executed successfully for task %s", task.Name)
-	if config.Debug() {
+	if common.IsDebug() {
 		msg = fmt.Sprintf("[%s] %s", worker.name, msg)
 	}
 
@@ -80,9 +80,9 @@ func (worker KeyvaultPipelineWorker) Run(task *configuration.PipelineTask) entit
 	return result
 }
 
-func (worker KeyvaultPipelineWorker) Validate(task *configuration.PipelineTask) entities.PipelineWorkerResult {
+func (worker KeyvaultPipelineWorker) Validate(task *pipeline_component.PipelineTask) entities.PipelineWorkerResult {
 	result := entities.PipelineWorkerResult{}
-	if task.Type != configuration.KeyvaultSyncTask {
+	if task.Type != pipeline_component.KeyvaultSyncTask {
 		result.State = entities.StateIgnored
 		return result
 	}
@@ -102,7 +102,7 @@ func (worker KeyvaultPipelineWorker) Validate(task *configuration.PipelineTask) 
 	return result
 }
 
-func (worker KeyvaultPipelineWorker) parseParameters(task *configuration.PipelineTask) (*KeyvaultParameters, error) {
+func (worker KeyvaultPipelineWorker) parseParameters(task *pipeline_component.PipelineTask) (*KeyvaultParameters, error) {
 	encoded, err := yaml.Marshal(task.Inputs)
 	if err != nil {
 		return nil, err

@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/cjlapao/locally-cli/configuration"
+	"github.com/cjlapao/locally-cli/context/pipeline_component"
 	"github.com/cjlapao/locally-cli/lanes/entities"
 	"github.com/cjlapao/locally-cli/notifications"
 )
 
-func RetryRun(task *configuration.PipelineTask, funcToExecute func(task *configuration.PipelineTask) entities.PipelineWorkerResult, retryCount, waitFor int) entities.PipelineWorkerResult {
+func RetryRun(task *pipeline_component.PipelineTask, funcToExecute func(task *pipeline_component.PipelineTask) entities.PipelineWorkerResult, retryCount, waitFor int) entities.PipelineWorkerResult {
 	var result entities.PipelineWorkerResult
 	notify := notifications.Get()
 

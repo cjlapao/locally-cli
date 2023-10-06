@@ -2,10 +2,11 @@ package nugets
 
 import (
 	"fmt"
-	"github.com/cjlapao/locally-cli/configuration"
-	"github.com/cjlapao/locally-cli/executer"
-	"github.com/cjlapao/locally-cli/icons"
 	"time"
+
+	"github.com/cjlapao/locally-cli/executer"
+	"github.com/cjlapao/locally-cli/helpers"
+	"github.com/cjlapao/locally-cli/icons"
 
 	"github.com/cjlapao/common-go/helper"
 )
@@ -74,7 +75,7 @@ func (svc *NugetCommandWrapper) Add(outputPath, packageName, version string) err
 	}
 
 	notify.Rocket("%s Running Nuget Add for package %s", packagePath)
-	output, err := executer.ExecuteAndWatch(configuration.GetNugetPath(), "add", packagePath, "-Source", outputPath)
+	output, err := executer.ExecuteAndWatch(helpers.GetNugetPath(), "add", packagePath, "-Source", outputPath)
 
 	if err != nil {
 		notify.FromError(err, "Something wrong running nuget add")
@@ -112,7 +113,7 @@ func (svc *NugetCommandWrapper) Delete(outputPath, packageName, version string) 
 	}
 
 	notify.Rocket("%s Running Nuget Delete for package %s", packagePath)
-	output, err := executer.ExecuteAndWatch(configuration.GetNugetPath(), "delete", packageName, version, "-Source", outputPath, "-NonInteractive")
+	output, err := executer.ExecuteAndWatch(helpers.GetNugetPath(), "delete", packageName, version, "-Source", outputPath, "-NonInteractive")
 
 	if err != nil {
 		notify.FromError(err, "Something wrong running nuget delete")

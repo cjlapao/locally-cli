@@ -10,8 +10,17 @@ import (
 	"strings"
 
 	"github.com/cjlapao/locally-cli/common"
+	locally_context "github.com/cjlapao/locally-cli/context"
+	"github.com/cjlapao/locally-cli/context/docker_component"
+	context_entities "github.com/cjlapao/locally-cli/context/entities"
+	"github.com/cjlapao/locally-cli/context/infrastructure_component"
+	"github.com/cjlapao/locally-cli/context/nuget_package_component"
+	"github.com/cjlapao/locally-cli/context/service_component"
+	"github.com/cjlapao/locally-cli/dependency_tree"
+	"github.com/cjlapao/locally-cli/entities"
 	"github.com/cjlapao/locally-cli/icons"
 	"github.com/cjlapao/locally-cli/notifications"
+	"github.com/google/uuid"
 
 	"github.com/cjlapao/common-go/helper"
 	"gopkg.in/yaml.v3"
@@ -19,7 +28,7 @@ import (
 
 // This is used to track changes to the context configuration schema. Users are warned if a mismatch is found.
 // Note that this only applies to changes in context configuration schema and not the global configuration
-var schemaVersion = "0.0.3"
+var schemaVersion = "0.0.1"
 
 const (
 	DEFAULT_CONTEXT_INFRASTRUCTURE_FOLDER     string = "infrastructure"
@@ -28,10 +37,6 @@ const (
 	DEFAULT_CONTEXT_SERVICE_MOCKS_FOLDER      string = "mocks"
 	DEFAULT_CONTEXT_SERVICE_WEBCLIENTS_FOLDER string = "webclients"
 	locally_CONFIG_FOLDER                     string = "configuration"
-)
-
-const (
-	OVERRIDE_CONFIG_FILE_MARKER string = ".override"
 )
 
 type ConfigService struct {
@@ -54,8 +59,8 @@ func Get() *ConfigService {
 func New() *ConfigService {
 	globalConfigurationService = &ConfigService{
 		GlobalConfiguration: &GlobalConfiguration{
-			Tools: &Tools{
-				Checked: &CheckedTools{},
+			Tools: &context_entities.Tools{
+				Checked: &context_entities.CheckedTools{},
 			},
 		},
 	}
@@ -71,7 +76,7 @@ func (svc *ConfigService) Init() error {
 	return err
 }
 
-func (svc *ConfigService) GetCurrentContext() *Context {
+func (svc *ConfigService) GetCurrentContext() *locally_context.Context {
 	if svc.GlobalConfiguration.CurrentContext != "" {
 		return svc.GetContext(svc.GlobalConfiguration.CurrentContext)
 	} else {
@@ -85,7 +90,7 @@ func (svc *ConfigService) GetCurrentContext() *Context {
 	}
 }
 
-func (svc *ConfigService) GetContext(name string) *Context {
+func (svc *ConfigService) GetContext(name string) *locally_context.Context {
 	for _, context := range svc.GlobalConfiguration.Contexts {
 		if strings.EqualFold(context.Name, name) {
 			svc.GlobalConfiguration.CurrentContext = context.Name
@@ -96,7 +101,17 @@ func (svc *ConfigService) GetContext(name string) *Context {
 	return nil
 }
 
-func (svc *ConfigService) GetDefaultContext() *Context {
+func (svc *ConfigService) ContextExists(nameOrId string) bool {
+	for _, context := range svc.GlobalConfiguration.Contexts {
+		if strings.EqualFold(context.Name, nameOrId) || strings.EqualFold(context.ID, nameOrId) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (svc *ConfigService) GetDefaultContext() *locally_context.Context {
 	for _, context := range svc.GlobalConfiguration.Contexts {
 		if context.IsDefault {
 			svc.GlobalConfiguration.CurrentContext = context.Name
@@ -114,6 +129,32 @@ func (svc *ConfigService) GetDefaultContext() *Context {
 
 	return nil
 }
+
+func (svc *ConfigService) AddContext(context *locally_context.Context) error {
+	if context == nil {
+		return errors.New("invalid context")
+	}
+
+	if context.Name == "" {
+		return errors.New("context name cannot be empty")
+	}
+
+	if context.ID == "" {
+		context.ID = uuid.New().String()
+	}
+
+	if svc.ContextExists(context.Name) {
+		return fmt.Errorf("context %s already exists", context.Name)
+	}
+
+	svc.GlobalConfiguration.Contexts = append(svc.GlobalConfiguration.Contexts, context)
+	// context.Save()
+	svc.SaveConfigFile()
+
+	return nil
+}
+
+// TODO: remove unecessary code
 
 func (svc *ConfigService) loadConfiguration() error {
 
@@ -133,6 +174,19 @@ func (svc *ConfigService) loadConfiguration() error {
 	//  - Path to the context config file
 	if err := svc.loadContextConfigurationAllContexts(); err != nil {
 		return err
+	}
+
+	// Checking if we need to save the config again due to incompatibility
+	needsSaving := false
+	for _, context := range svc.GlobalConfiguration.Contexts {
+		if context.ID == "" {
+			context.ID = uuid.New().String()
+			needsSaving = true
+		}
+	}
+
+	if needsSaving {
+		svc.SaveConfigFile()
 	}
 
 	return nil
@@ -158,14 +212,28 @@ func (svc *ConfigService) loadGlobalConfiguration() error {
 			svc.GlobalConfiguration.format = "yaml"
 		}
 	} else {
-		notify.Error("No global configuration file was found")
-		return errors.New("no global configuration file was found")
+		notify.Error("No global configuration file was found, creating an empty one")
+		svc.GlobalConfiguration = &GlobalConfiguration{
+			Tools:          &context_entities.Tools{},
+			format:         "yaml",
+			verbose:        false,
+			CurrentContext: "",
+			Cors:           &Cors{},
+			Contexts:       make([]*locally_context.Context, 0),
+			Network: &Network{
+				LocalIP:    "127.0.0.0",
+				DomainName: "cluster.local",
+			},
+			CertificateGenerator: nil,
+		}
+		err := svc.SaveInitialConfigFile()
+		return err
 	}
 
 	return nil
 }
 
-func (svc *ConfigService) getDefaultOutputFolder(context *Context) (string, error) {
+func (svc *ConfigService) getDefaultOutputFolder(context *locally_context.Context) (string, error) {
 	basePath := context.RootConfigFilePath
 	fileInfo, err := os.Stat(basePath)
 	if err != nil {
@@ -179,7 +247,7 @@ func (svc *ConfigService) getDefaultOutputFolder(context *Context) (string, erro
 	return helper.JoinPath(basePath, common.DEFAULT_locally_OUTPUT_PATH), nil
 }
 
-func (svc *ConfigService) doOutputFolderChecks(context *Context) error {
+func (svc *ConfigService) doOutputFolderChecks(context *locally_context.Context) error {
 	if context.Configuration.OutputPath == "" {
 		defaultOutputFolder, err := svc.getDefaultOutputFolder(context)
 		if err != nil {
@@ -200,7 +268,7 @@ func (svc *ConfigService) doOutputFolderChecks(context *Context) error {
 	return nil
 }
 
-func (svc *ConfigService) doConfigurationSchemaChecks(context *Context) {
+func (svc *ConfigService) doConfigurationSchemaChecks(context *locally_context.Context) {
 	if context.Configuration.SchemaVersion == "" {
 		notify.InfoWithIcon(icons.IconWarning, "%s", "##########################################################################################################################################")
 		notify.InfoWithIcon(icons.IconWarning, "Context configuration schema version not specified for context %s in file %s", context.Name, context.RootConfigFilePath)
@@ -214,7 +282,7 @@ func (svc *ConfigService) doConfigurationSchemaChecks(context *Context) {
 	}
 }
 
-func (svc *ConfigService) doConfigFolderChecks(context *Context) error {
+func (svc *ConfigService) doConfigFolderChecks(context *locally_context.Context) error {
 	if context.Configuration.ConfigFolder == "" {
 		basePath := context.RootConfigFilePath
 		fileInfo, err := os.Stat(basePath)
@@ -271,7 +339,7 @@ func (svc *ConfigService) CleanContextConfigurationCurrent() error {
 	return svc.cleanContextConfiguration(context)
 }
 
-func (svc *ConfigService) cleanContextConfiguration(context *Context) error {
+func (svc *ConfigService) cleanContextConfiguration(context *locally_context.Context) error {
 
 	// locally also saves any dynamically determined configuration related to a default fragment config file in a corresponding .override.<ext> file.
 	// Once an override file is created that file is used going forward and the corresponding default config file is ignored.
@@ -287,7 +355,7 @@ func (svc *ConfigService) cleanContextConfiguration(context *Context) error {
 	return svc.cleanContextConfigurationRootFile(context)
 }
 
-func (svc *ConfigService) cleanContextConfigurationRootFile(context *Context) error {
+func (svc *ConfigService) cleanContextConfigurationRootFile(context *locally_context.Context) error {
 
 	if context.BackendConfig != nil {
 		context.BackendConfig.LastInitiated = nil
@@ -299,9 +367,9 @@ func (svc *ConfigService) cleanContextConfigurationRootFile(context *Context) er
 }
 
 func (svc *ConfigService) isOverrideConfigFile(fileNameOrPath string) bool {
-	return strings.HasSuffix(fileNameOrPath, OVERRIDE_CONFIG_FILE_MARKER+".yml") ||
-		strings.HasSuffix(fileNameOrPath, OVERRIDE_CONFIG_FILE_MARKER+".yaml") ||
-		strings.HasSuffix(fileNameOrPath, OVERRIDE_CONFIG_FILE_MARKER+".json")
+	return strings.HasSuffix(fileNameOrPath, common.OVERRIDE_CONFIG_FILE_MARKER+".yml") ||
+		strings.HasSuffix(fileNameOrPath, common.OVERRIDE_CONFIG_FILE_MARKER+".yaml") ||
+		strings.HasSuffix(fileNameOrPath, common.OVERRIDE_CONFIG_FILE_MARKER+".json")
 }
 
 func (svc *ConfigService) deleteOverrideFiles(folderPath string) error {
@@ -330,7 +398,7 @@ func (svc *ConfigService) deleteOverrideFiles(folderPath string) error {
 			}
 		} else {
 			notify.Error("Failed to delete override files from folder %s", folderPath)
-			return errors.New(fmt.Sprintf("Failed to delete override files from folder %s", folderPath))
+			return fmt.Errorf("failed to delete override files from folder %s", folderPath)
 		}
 	}
 
@@ -376,17 +444,17 @@ func (svc *ConfigService) loadContextConfigurationAllContexts() error {
 
 		// Setting the default config service internal url to be used later
 		if context.Configuration.LocallyConfigService == nil {
-			context.Configuration.LocallyConfigService = &LocallyConfigService{
+			context.Configuration.LocallyConfigService = &entities.LocallyConfigService{
 				Url:             "http://config-service.dev-ops.svc.cluster.local",
 				ReverseProxyUrl: "host.docker.internal:5510",
 			}
 		}
 
 		if context.BackendServices == nil {
-			context.BackendServices = make([]*BackendService, 0)
+			context.BackendServices = make([]*service_component.BackendService, 0)
 		}
 		if context.SpaServices == nil {
-			context.SpaServices = make([]*SpaService, 0)
+			context.SpaServices = make([]*service_component.SpaService, 0)
 		}
 	}
 
@@ -395,8 +463,8 @@ func (svc *ConfigService) loadContextConfigurationAllContexts() error {
 
 func (svc *ConfigService) initializeToolsDefaults() {
 	if svc.GlobalConfiguration.Tools == nil {
-		svc.GlobalConfiguration.Tools = &Tools{
-			Checked: &CheckedTools{
+		svc.GlobalConfiguration.Tools = &context_entities.Tools{
+			Checked: &context_entities.CheckedTools{
 				DockerChecked:        false,
 				DockerComposeChecked: false,
 				CaddyChecked:         false,
@@ -429,7 +497,7 @@ func (svc *ConfigService) initializeCorsDefaults() {
 	}
 }
 
-func (svc *ConfigService) loadContextConfigurationRootFile(context *Context) error {
+func (svc *ConfigService) loadContextConfigurationRootFile(context *locally_context.Context) error {
 	if svc.GlobalConfiguration.verbose {
 		notify.Info("Loading configuration file %s for context %s", context.RootConfigFilePath, context.Name)
 	}
@@ -451,7 +519,11 @@ func (svc *ConfigService) loadContextConfigurationRootFile(context *Context) err
 	if !helper.FileExists(context.RootConfigFilePath) {
 		err := fmt.Errorf("the context configuration file %s for context %s does not exist,", context.RootConfigFilePath, context.Name)
 		notify.Error(err.Error())
-		return err
+		context.IsValid = false
+		if strings.EqualFold(svc.GlobalConfiguration.CurrentContext, context.Name) {
+			svc.GlobalConfiguration.CurrentContext = ""
+		}
+		return nil
 	}
 
 	context.Source = context.RootConfigFilePath
@@ -469,10 +541,12 @@ func (svc *ConfigService) loadContextConfigurationRootFile(context *Context) err
 		}
 	}
 
+	context.IsValid = true
+
 	return nil
 }
 
-func (svc *ConfigService) sanitizeConfigFolderPath(context *Context, folderPath string) (string, error) {
+func (svc *ConfigService) sanitizeConfigFolderPath(context *locally_context.Context, folderPath string) (string, error) {
 	if context.Configuration.ConfigFolder == "" || !helper.FileExists(context.Configuration.ConfigFolder) {
 		return "", fmt.Errorf("config folder %s does not exists, skipping loading", context.Configuration.ConfigFolder)
 	}
@@ -491,8 +565,8 @@ func (svc *ConfigService) sanitizeConfigFolderPath(context *Context, folderPath 
 	return folderPath, nil
 }
 
-func (svc *ConfigService) loadContextConfigurationFragment(context *Context, folderPath string, fileName string) error {
-	var configFile Context
+func (svc *ConfigService) loadContextConfigurationFragment(context *locally_context.Context, folderPath string, fileName string) error {
+	var configFile locally_context.Context
 	content, err := helper.ReadFromFile(helper.JoinPath(folderPath, fileName))
 	if err != nil {
 		notify.FromError(err, "There was an error reading the configuration file %s for %s context", fileName, context.Name)
@@ -532,17 +606,17 @@ func (svc *ConfigService) loadContextConfigurationFragment(context *Context, fol
 		}
 
 		for _, pipeline := range configFile.Pipelines {
-			pipeline.source = configFile.Source
+			pipeline.Source = configFile.Source
 		}
 		context.Pipelines = append(context.Pipelines, configFile.Pipelines...)
 
 		for _, m := range configFile.SpaServices {
-			m.source = configFile.Source
+			m.Source = configFile.Source
 		}
 		context.SpaServices = append(context.SpaServices, configFile.SpaServices...)
 
 		for _, m := range configFile.Tenants {
-			m.source = configFile.Source
+			m.Source = configFile.Source
 		}
 		context.Tenants = append(context.Tenants, configFile.Tenants...)
 
@@ -552,32 +626,32 @@ func (svc *ConfigService) loadContextConfigurationFragment(context *Context, fol
 		context.BackendServices = append(context.BackendServices, configFile.BackendServices...)
 
 		for _, m := range configFile.MockServices {
-			m.source = configFile.Source
+			m.Source = configFile.Source
 		}
 		context.MockServices = append(context.MockServices, configFile.MockServices...)
 
 		if configFile.NugetPackages != nil {
 			if context.NugetPackages == nil {
-				context.NugetPackages = &NugetPackages{
-					Packages: make([]*NugetPackage, 0),
+				context.NugetPackages = &nuget_package_component.NugetPackages{
+					Packages: make([]*nuget_package_component.NugetPackage, 0),
 				}
 			}
 
-			configFile.NugetPackages.source = configFile.Source
+			configFile.NugetPackages.Source = configFile.Source
 			if configFile.NugetPackages.OutputSource != "" {
 				context.NugetPackages.OutputSource = configFile.NugetPackages.OutputSource
 			}
 
 			for _, m := range configFile.NugetPackages.Packages {
-				m.source = configFile.Source
+				m.Source = configFile.Source
 			}
 			context.NugetPackages.Packages = append(context.NugetPackages.Packages, configFile.NugetPackages.Packages...)
 		}
 
 		if configFile.Infrastructure != nil {
 			if context.Infrastructure == nil {
-				context.Infrastructure = &Infrastructure{
-					Stacks: make([]*InfrastructureStack, 0),
+				context.Infrastructure = &infrastructure_component.Infrastructure{
+					Stacks: make([]*infrastructure_component.InfrastructureStack, 0),
 				}
 			}
 			configFile.Infrastructure.Source = configFile.Source
@@ -595,7 +669,7 @@ func (svc *ConfigService) loadContextConfigurationFragment(context *Context, fol
 		}
 
 		if context.Fragments == nil {
-			context.Fragments = make([]*Context, 0)
+			context.Fragments = make([]*locally_context.Context, 0)
 		}
 
 		context.Fragments = append(context.Fragments, &configFile)
@@ -612,9 +686,9 @@ func (svc *ConfigService) isConfigFile(fileName string) bool {
 }
 
 func (svc *ConfigService) isDefaultConfigFile(fileName string) bool {
-	return (strings.HasSuffix(fileName, ".yml") && !strings.HasSuffix(fileName, OVERRIDE_CONFIG_FILE_MARKER+".yml")) ||
-		(strings.HasSuffix(fileName, ".yaml") && !strings.HasSuffix(fileName, OVERRIDE_CONFIG_FILE_MARKER+".yaml")) ||
-		(strings.HasSuffix(fileName, ".json") && !strings.HasSuffix(fileName, OVERRIDE_CONFIG_FILE_MARKER+".json"))
+	return (strings.HasSuffix(fileName, ".yml") && !strings.HasSuffix(fileName, common.OVERRIDE_CONFIG_FILE_MARKER+".yml")) ||
+		(strings.HasSuffix(fileName, ".yaml") && !strings.HasSuffix(fileName, common.OVERRIDE_CONFIG_FILE_MARKER+".yaml")) ||
+		(strings.HasSuffix(fileName, ".json") && !strings.HasSuffix(fileName, common.OVERRIDE_CONFIG_FILE_MARKER+".json"))
 }
 
 func (svc *ConfigService) overrideConfigFileExists(folderPath string, fileName string) bool {
@@ -622,24 +696,24 @@ func (svc *ConfigService) overrideConfigFileExists(folderPath string, fileName s
 	// fileName is expected to be a default config file i.e. does not have extension .override.<ext>
 
 	if strings.HasSuffix(fileName, ".yml") {
-		overrideFilePath := strings.TrimSuffix(helper.JoinPath(folderPath, fileName), ".yml") + OVERRIDE_CONFIG_FILE_MARKER + ".yml"
+		overrideFilePath := strings.TrimSuffix(helper.JoinPath(folderPath, fileName), ".yml") + common.OVERRIDE_CONFIG_FILE_MARKER + ".yml"
 		return helper.FileExists(overrideFilePath)
 	}
 
 	if strings.HasSuffix(fileName, ".yaml") {
-		overrideFilePath := strings.TrimSuffix(helper.JoinPath(folderPath, fileName), ".yaml") + OVERRIDE_CONFIG_FILE_MARKER + ".yaml"
+		overrideFilePath := strings.TrimSuffix(helper.JoinPath(folderPath, fileName), ".yaml") + common.OVERRIDE_CONFIG_FILE_MARKER + ".yaml"
 		return helper.FileExists(overrideFilePath)
 	}
 
 	if strings.HasSuffix(fileName, ".json") {
-		overrideFilePath := strings.TrimSuffix(helper.JoinPath(folderPath, fileName), ".json") + OVERRIDE_CONFIG_FILE_MARKER + ".json"
+		overrideFilePath := strings.TrimSuffix(helper.JoinPath(folderPath, fileName), ".json") + common.OVERRIDE_CONFIG_FILE_MARKER + ".json"
 		return helper.FileExists(overrideFilePath)
 	}
 
 	return false
 }
 
-func (svc *ConfigService) loadContextConfigurationFragments(context *Context, folderPath string) error {
+func (svc *ConfigService) loadContextConfigurationFragments(context *locally_context.Context, folderPath string) error {
 
 	// Recurse through the sub-folders and load all the fragment config files found
 
@@ -734,17 +808,19 @@ func (svc *ConfigService) SetCurrentContext(context string) error {
 	return fmt.Errorf("context %s was not found in the current configuration file", context)
 }
 
-func (svc *ConfigService) SaveConfigFile() {
+func (svc *ConfigService) SaveConfigFile() error {
 	var config GlobalConfiguration
 	configContent, err := helper.ReadFromFile(svc.configFilename)
 	if err != nil {
 		notify.FromError(err, "There was an error reading the configuration file")
+		return err
 	}
 
 	switch svc.GlobalConfiguration.format {
 	case "json":
 		if err := json.Unmarshal(configContent, &config); err != nil {
 			notify.FromError(err, "There was an error reading the configuration file")
+			return err
 		}
 		config.CurrentContext = svc.GlobalConfiguration.CurrentContext
 		if svc.GlobalConfiguration.Cors != nil {
@@ -754,15 +830,18 @@ func (svc *ConfigService) SaveConfigFile() {
 		// if svc.Configuration.CertificateGenerator != nil {
 		// 	config.CertificateGenerator = svc.Configuration.CertificateGenerator
 		// }
+
 		content, err := json.MarshalIndent(config, "", "  ")
 		if err != nil {
 			notify.FromError(err, "Unable to set the current context in configuration file")
+			return err
 		}
 
 		helper.WriteToFile(string(content), svc.configFilename)
 	default:
 		if err := yaml.Unmarshal(configContent, &config); err != nil {
 			notify.FromError(err, "There was an error reading the configuration file")
+			return err
 		}
 		config.CurrentContext = svc.GlobalConfiguration.CurrentContext
 		if svc.GlobalConfiguration.Cors != nil {
@@ -773,28 +852,97 @@ func (svc *ConfigService) SaveConfigFile() {
 		// 	config.CertificateGenerator = svc.Configuration.CertificateGenerator
 		// }
 
+		if err := svc.upsertGlobalConfigurationContext(&config); err != nil {
+			return err
+		}
+
 		content, err := yaml.Marshal(config)
 		if err != nil {
 			notify.FromError(err, "Unable to set the current context in configuration file")
+			return err
 		}
 
 		helper.WriteToFile(string(content), svc.configFilename)
 	}
+	return nil
+}
+
+func (svc *ConfigService) upsertGlobalConfigurationContext(config *GlobalConfiguration) error {
+
+	for _, context := range svc.GlobalConfiguration.Contexts {
+		needsAdding := true
+		for _, existingContext := range config.Contexts {
+			if existingContext.Name == context.Name || existingContext.ID == context.ID {
+				if existingContext.ID == "" {
+					existingContext.ID = context.ID
+					if !strings.EqualFold(existingContext.Name, context.Name) {
+						notify.Warning("Context name %s does not match the context name %s in the configuration file", context.Name, existingContext.Name)
+						existingContext.Name = context.Name
+					}
+
+					if context.Configuration != nil {
+						existingContext.Configuration = context.Configuration
+					}
+				}
+				existingContext.IsEnabled = context.IsEnabled
+				needsAdding = false
+				break
+			}
+		}
+
+		if needsAdding {
+			newContext := locally_context.Context{
+				Name:      context.Name,
+				ID:        context.ID,
+				IsEnabled: context.IsEnabled,
+			}
+			if context.Configuration != nil {
+				newContext.Configuration = context.Configuration
+			}
+			config.Contexts = append(config.Contexts, &newContext)
+		}
+	}
+
+	return nil
+}
+
+func (svc *ConfigService) SaveInitialConfigFile() error {
+	exPath := common.GetExeDirectoryPath()
+	svc.configFilename = helper.JoinPath(exPath, "config.yaml")
+	switch svc.GlobalConfiguration.format {
+	case "json":
+		content, err := json.MarshalIndent(svc.GlobalConfiguration, "", "  ")
+		if err != nil {
+			notify.FromError(err, "Unable to set the current context in configuration file")
+			return err
+		}
+
+		helper.WriteToFile(string(content), svc.configFilename)
+	default:
+		content, err := yaml.Marshal(svc.GlobalConfiguration)
+		if err != nil {
+			notify.FromError(err, "Unable to set the current context in configuration file")
+			return err
+		}
+
+		helper.WriteToFile(string(content), svc.configFilename)
+	}
+	return nil
 }
 
 func (svc *ConfigService) ListAllServices() {
 	context := svc.GetCurrentContext()
 	mockServices := context.MockServices
 
-	spaServices := svc.GetSpaServicesByTags()
-	backendServices := svc.GetBackendServicesByTags()
-	nugetPackages := svc.GetNugetPackagesByTags()
-	stacks := svc.GetInfrastructureStacksByTags()
+	spaServices := context.GetSpaServicesByTags()
+	backendServices := context.GetBackendServicesByTags()
+	nugetPackages := context.GetNugetPackagesByTags()
+	stacks := context.GetInfrastructureStacksByTags()
 
 	notify.InfoWithIcon(icons.IconClipboard, "Listing all  %s context services:", svc.GlobalConfiguration.CurrentContext)
 
 	notify.InfoWithIcon(icons.IconFolder, "Pipelines:")
-	BuildDependencyGraph(context.Pipelines, false)
+	dependency_tree.BuildDependencyGraph(context, context.Pipelines, false)
 
 	if len(context.Pipelines) > 0 {
 		for _, pipeline := range context.Pipelines {
@@ -813,7 +961,7 @@ func (svc *ConfigService) ListAllServices() {
 	notify.InfoWithIcon(icons.IconFolder, "Infrastructure Stacks:")
 	if len(stacks) > 0 {
 		for _, stack := range stacks {
-			if svc.Verbose() {
+			if common.IsVerbose() {
 				notify.InfoIndentIcon(icons.IconBlackSquare, "%s in %s", "  ", stack.Name, stack.Source)
 			} else {
 				notify.InfoIndentIcon(icons.IconBlackSquare, "%s", "  ", stack.Name)
@@ -826,7 +974,7 @@ func (svc *ConfigService) ListAllServices() {
 	notify.InfoWithIcon(icons.IconFolder, "Backend Services:")
 	if len(backendServices) > 0 {
 		for _, backendService := range backendServices {
-			if svc.Verbose() {
+			if common.IsVerbose() {
 				notify.InfoIndentIcon(icons.IconBlackSquare, "%s in %s", "  ", backendService.Name, backendService.Source)
 			} else {
 				notify.InfoIndentIcon(icons.IconBlackSquare, "%s", "  ", backendService.Name)
@@ -839,8 +987,8 @@ func (svc *ConfigService) ListAllServices() {
 	notify.InfoWithIcon(icons.IconFolder, "SPA Services:")
 	if len(spaServices) > 0 {
 		for _, spaService := range spaServices {
-			if svc.Verbose() {
-				notify.InfoIndentIcon(icons.IconBlackSquare, " %s in %s", "  ", spaService.Name, spaService.source)
+			if common.IsVerbose() {
+				notify.InfoIndentIcon(icons.IconBlackSquare, " %s in %s", "  ", spaService.Name, spaService.Source)
 			} else {
 				notify.InfoIndentIcon(icons.IconBlackSquare, "%s", "  ", spaService.Name)
 			}
@@ -852,8 +1000,8 @@ func (svc *ConfigService) ListAllServices() {
 	notify.InfoWithIcon(icons.IconFolder, "Tenants:")
 	if len(context.Tenants) > 0 {
 		for _, tenant := range context.Tenants {
-			if svc.Verbose() {
-				notify.InfoIndentIcon(icons.IconBlackSquare, "%s in %s", "  ", tenant.Name, tenant.source)
+			if common.IsVerbose() {
+				notify.InfoIndentIcon(icons.IconBlackSquare, "%s in %s", "  ", tenant.Name, tenant.Source)
 			} else {
 				notify.InfoIndentIcon(icons.IconBlackSquare, "%s", "  ", tenant.Name)
 			}
@@ -865,8 +1013,8 @@ func (svc *ConfigService) ListAllServices() {
 	notify.InfoWithIcon(icons.IconFolder, "Mock Services:")
 	if len(mockServices) > 0 {
 		for _, mockService := range mockServices {
-			if svc.Verbose() {
-				notify.InfoIndentIcon(icons.IconBlackSquare, "%s in %s", "  ", mockService.Name, mockService.source)
+			if common.IsVerbose() {
+				notify.InfoIndentIcon(icons.IconBlackSquare, "%s in %s", "  ", mockService.Name, mockService.Source)
 			} else {
 				notify.InfoIndentIcon(icons.IconBlackSquare, "%s", "  ", mockService.Name)
 			}
@@ -878,8 +1026,8 @@ func (svc *ConfigService) ListAllServices() {
 	notify.InfoWithIcon(icons.IconFolder, "Nuget Packages:")
 	if len(nugetPackages) > 0 {
 		for _, nugetPackage := range nugetPackages {
-			if svc.Verbose() {
-				notify.InfoIndentIcon(icons.IconBlackSquare, "%s in %s", "  ", nugetPackage.Name, nugetPackage.source)
+			if common.IsVerbose() {
+				notify.InfoIndentIcon(icons.IconBlackSquare, "%s in %s", "  ", nugetPackage.Name, nugetPackage.Source)
 			} else {
 				notify.InfoIndentIcon(icons.IconBlackSquare, "%s", "  ", nugetPackage.Name)
 			}
@@ -890,12 +1038,13 @@ func (svc *ConfigService) ListAllServices() {
 }
 
 func (svc *ConfigService) ListAllBackendServices() {
-	backendServices := svc.GetBackendServicesByTags()
+	ctx := svc.GetCurrentContext()
+	backendServices := ctx.GetBackendServicesByTags()
 
 	notify.InfoWithIcon(icons.IconClipboard, "Listing all  %s context backend services:", svc.GlobalConfiguration.CurrentContext)
 	if len(backendServices) > 0 {
 		for _, service := range backendServices {
-			if svc.Verbose() {
+			if common.IsVerbose() {
 				notify.InfoIndentIcon(icons.IconBlackSquare, "%s in %s", "  ", service.Name, service.Source)
 			} else {
 				notify.InfoIndentIcon(icons.IconBlackSquare, "%s", "  ", service.Name)
@@ -907,13 +1056,14 @@ func (svc *ConfigService) ListAllBackendServices() {
 }
 
 func (svc *ConfigService) ListAllSPAServices() {
-	spaServices := svc.GetSpaServicesByTags()
+	ctx := svc.GetCurrentContext()
+	spaServices := ctx.GetSpaServicesByTags()
 
 	notify.InfoWithIcon(icons.IconClipboard, "Listing all %s context SPA services", svc.GlobalConfiguration.CurrentContext)
 	if len(spaServices) > 0 {
 		for _, service := range spaServices {
-			if svc.Verbose() {
-				notify.InfoIndentIcon(icons.IconBlackSquare, "%s in %s", "  ", service.Name, service.source)
+			if common.IsVerbose() {
+				notify.InfoIndentIcon(icons.IconBlackSquare, "%s in %s", "  ", service.Name, service.Source)
 			} else {
 				notify.InfoIndentIcon(icons.IconBlackSquare, "%s", "  ", service.Name)
 			}
@@ -928,8 +1078,8 @@ func (svc *ConfigService) ListAllTenants() {
 	notify.InfoWithIcon(icons.IconClipboard, "Listing all %s context tenants:", svc.GlobalConfiguration.CurrentContext)
 	if len(context.Tenants) > 0 {
 		for _, tenant := range context.Tenants {
-			if svc.Verbose() {
-				notify.InfoIndentIcon(icons.IconBlackSquare, "%s in %s", "  ", tenant.Name, tenant.source)
+			if common.IsVerbose() {
+				notify.InfoIndentIcon(icons.IconBlackSquare, "%s in %s", "  ", tenant.Name, tenant.Source)
 			} else {
 				notify.InfoIndentIcon(icons.IconBlackSquare, "%s", "  ", tenant.Name)
 			}
@@ -944,8 +1094,8 @@ func (svc *ConfigService) ListAllMockServices() {
 	notify.InfoWithIcon(icons.IconClipboard, "Listing all %s context mock services", svc.GlobalConfiguration.CurrentContext)
 	if len(context.Tenants) > 0 {
 		for _, service := range context.MockServices {
-			if svc.Verbose() {
-				notify.InfoIndentIcon(icons.IconBlackSquare, "%s in %s", "  ", service.Name, service.source)
+			if common.IsVerbose() {
+				notify.InfoIndentIcon(icons.IconBlackSquare, "%s in %s", "  ", service.Name, service.Source)
 			} else {
 				notify.InfoIndentIcon(icons.IconBlackSquare, "%s", "  ", service.Name)
 			}
@@ -959,7 +1109,7 @@ func (svc *ConfigService) ListAllPipelines() {
 	context := svc.GetCurrentContext()
 	notify.InfoWithIcon(icons.IconClipboard, "Listing all %s Pipelines", svc.GlobalConfiguration.CurrentContext)
 	notify.InfoWithIcon(icons.IconFolder, "Pipelines:")
-	BuildDependencyGraph(context.Pipelines, false)
+	dependency_tree.BuildDependencyGraph(context, context.Pipelines, false)
 	if len(context.Pipelines) > 0 {
 		for _, pipeline := range context.Pipelines {
 			notify.InfoIndentIcon(icons.IconFolder, "%s", "  ", pipeline.Name)
@@ -983,14 +1133,14 @@ func (svc *ConfigService) ListAllNugetPackages() {
 		return
 	}
 
-	nugetPackages := svc.GetNugetPackagesByTags()
+	nugetPackages := context.GetNugetPackagesByTags()
 
 	notify.InfoWithIcon(icons.IconClipboard, "Listing all %s context nuget packages:", svc.GlobalConfiguration.CurrentContext)
 
 	if len(context.Pipelines) > 0 {
 		for _, nugetPackage := range nugetPackages {
-			if svc.Verbose() {
-				notify.InfoIndentIcon(icons.IconBlackSquare, "%s in %s", "  ", nugetPackage.Name, nugetPackage.source)
+			if common.IsVerbose() {
+				notify.InfoIndentIcon(icons.IconBlackSquare, "%s in %s", "  ", nugetPackage.Name, nugetPackage.Source)
 			} else {
 				notify.InfoIndentIcon(icons.IconBlackSquare, "%s", "  ", nugetPackage.Name)
 			}
@@ -1003,7 +1153,7 @@ func (svc *ConfigService) ListAllNugetPackages() {
 func (svc *ConfigService) ListAllInfrastructureStacks() {
 	context := svc.GetCurrentContext()
 
-	if svc.Debug() {
+	if common.IsDebug() {
 		result, _ := json.Marshal(context.Infrastructure)
 		notify.Debug(string(result))
 	}
@@ -1012,12 +1162,12 @@ func (svc *ConfigService) ListAllInfrastructureStacks() {
 		return
 	}
 
-	stacks := svc.GetInfrastructureStacksByTags()
+	stacks := context.GetInfrastructureStacksByTags()
 
 	notify.InfoWithIcon(icons.IconClipboard, "Listing all %s context infrastructure stacks:", svc.GlobalConfiguration.CurrentContext)
 
 	for _, stack := range stacks {
-		if svc.Verbose() {
+		if common.IsVerbose() {
 			notify.InfoIndentIcon(icons.IconBlackSquare, "%s in %s", "  ", stack.Name, stack.Source)
 		} else {
 			notify.InfoIndentIcon(icons.IconBlackSquare, "%s", stack.Name)
@@ -1031,120 +1181,6 @@ func (svc *ConfigService) PrintCurrentContext() {
 	notify.InfoWithIcon(icons.IconBell, "Current context is set to %s", currentContext)
 }
 
-func (svc *ConfigService) GetDockerServices(name string, ignoreTags bool) []*DockerContainer {
-	result := make([]*DockerContainer, 0)
-
-	var backendServices []*BackendService
-	var frontendServices []*SpaService
-
-	if ignoreTags {
-		notify.Debug("Ignoring flags, getting one by one")
-		backendServices = svc.GetCurrentContext().BackendServices
-		frontendServices = svc.GetCurrentContext().SpaServices
-	} else {
-		backendServices = svc.GetBackendServicesByTags()
-		frontendServices = svc.GetSpaServicesByTags()
-	}
-
-	for _, service := range backendServices {
-		if !service.HasPath() {
-			continue
-		}
-
-		container := DockerContainer{
-			Name:           service.Name,
-			Location:       service.Location,
-			Repository:     service.Repository,
-			DependsOn:      service.DependsOn,
-			RequiredBy:     service.RequiredBy,
-			Source:         service.Source,
-			DockerRegistry: service.DockerRegistry,
-			DockerCompose:  service.DockerCompose,
-			Tags:           service.Tags,
-			Components:     make([]*DockerContainer, 0),
-		}
-
-		for _, component := range service.Components {
-			componentContainer := DockerContainer{
-				Name:                 component.Name,
-				Source:               component.Source,
-				DependsOn:            component.DependsOn,
-				RequiredBy:           component.RequiredBy,
-				EnvironmentVariables: component.EnvironmentVariables,
-				BuildArguments:       component.BuildArguments,
-				ManifestPath:         component.ManifestPath,
-				ManifestTag:          component.ManifestTag,
-				Tags:                 service.Tags,
-			}
-
-			container.Components = append(container.Components, &componentContainer)
-		}
-
-		result = append(result, &container)
-	}
-
-	for _, service := range frontendServices {
-		if !service.HasPath() {
-			continue
-		}
-
-		container := DockerContainer{
-			Name:           service.Name,
-			Location:       service.Location,
-			Repository:     service.Repository,
-			DependsOn:      service.DependsOn,
-			RequiredBy:     service.RequiredBy,
-			Source:         service.source,
-			DockerCompose:  service.DockerCompose,
-			DockerRegistry: service.DockerRegistry,
-			Components:     make([]*DockerContainer, 0),
-			Tags:           service.Tags,
-		}
-
-		componentContainer := DockerContainer{
-			Name:                 service.Name,
-			DependsOn:            service.DependsOn,
-			RequiredBy:           service.RequiredBy,
-			EnvironmentVariables: service.EnvironmentVariables,
-			BuildArguments:       service.BuildArguments,
-			Tags:                 service.Tags,
-		}
-
-		if service.DockerRegistry != nil && service.DockerRegistry.ManifestPath != "" {
-			componentContainer.ManifestPath = service.DockerRegistry.ManifestPath
-		}
-
-		container.Components = append(container.Components, &componentContainer)
-
-		result = append(result, &container)
-	}
-
-	if helper.GetFlagSwitch("all", false) || svc.HasTags() && !ignoreTags {
-		return result
-	} else {
-		if name == "" {
-			return make([]*DockerContainer, 0)
-		}
-
-		filteredContainers := make([]*DockerContainer, 0)
-		for _, container := range result {
-			if strings.EqualFold(EncodeName(container.Name), name) {
-				filteredContainers = append(filteredContainers, container)
-			}
-		}
-
-		return filteredContainers
-	}
-}
-
-func (svc *ConfigService) Verbose() bool {
-	return helper.GetFlagSwitch("verbose", false)
-}
-
-func (svc *ConfigService) Debug() bool {
-	return helper.GetFlagSwitch("debug", false)
-}
-
 func (svc *ConfigService) PrintContextFragments() {
 	context := svc.GetCurrentContext()
 	notify.InfoWithIcon(icons.IconMagnifyingGlass, "Listing all %s context fragments", context.Name)
@@ -1153,18 +1189,7 @@ func (svc *ConfigService) PrintContextFragments() {
 	}
 }
 
-func (svc *ConfigService) GetFragment(source string) *Context {
-	context := svc.GetCurrentContext()
-	for _, s := range context.Fragments {
-		if strings.EqualFold(source, s.Source) {
-			return s
-		}
-	}
-
-	return nil
-}
-
-func (svc *ConfigService) GetFragmentInfrastructureStack(fragment *Context, name string) *InfrastructureStack {
+func (svc *ConfigService) GetFragmentInfrastructureStack(fragment *locally_context.Context, name string) *infrastructure_component.InfrastructureStack {
 	if fragment == nil || fragment.Infrastructure == nil || len(fragment.Infrastructure.Stacks) == 0 {
 		return nil
 	}
@@ -1178,7 +1203,7 @@ func (svc *ConfigService) GetFragmentInfrastructureStack(fragment *Context, name
 	return nil
 }
 
-func (svc *ConfigService) GetInfrastructureDependencies(stacks []*InfrastructureStack) ([]*InfrastructureStack, error) {
+func (svc *ConfigService) GetInfrastructureDependencies(stacks []*infrastructure_component.InfrastructureStack) ([]*infrastructure_component.InfrastructureStack, error) {
 	context := svc.GetCurrentContext()
 	for {
 		added := false
@@ -1212,12 +1237,12 @@ func (svc *ConfigService) GetInfrastructureDependencies(stacks []*Infrastructure
 		}
 	}
 
-	BuildDependencyTree(stacks)
+	dependency_tree.BuildDependencyTree(stacks)
 
 	return stacks, nil
 }
 
-func (svc *ConfigService) GetDockerContainerDependencies(containers []*DockerContainer) ([]*DockerContainer, error) {
+func (svc *ConfigService) GetDockerContainerDependencies(containers []*docker_component.DockerContainer) ([]*docker_component.DockerContainer, error) {
 	context := svc.GetCurrentContext()
 	for {
 		added := false
@@ -1242,7 +1267,7 @@ func (svc *ConfigService) GetDockerContainerDependencies(containers []*DockerCon
 					}
 				}
 			}
-			BuildDependencyTree(container.Components)
+			dependency_tree.BuildDependencyTree(container.Components)
 		}
 
 		if !added {
@@ -1250,7 +1275,7 @@ func (svc *ConfigService) GetDockerContainerDependencies(containers []*DockerCon
 		}
 	}
 
-	BuildDependencyTree(containers)
+	dependency_tree.BuildDependencyTree(containers)
 
 	return containers, nil
 }

@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+
+	"github.com/cjlapao/locally-cli/common"
 )
 
 type BuildImageOptions struct {
@@ -51,7 +53,7 @@ func (b BuildImageOptions) GetArguments() ([]string, error) {
 		args = append(args, "--no-cache")
 	}
 
-	if config.Verbose() {
+	if common.IsVerbose() {
 		args = append(args, "--progress=plain")
 	}
 

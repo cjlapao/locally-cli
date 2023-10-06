@@ -30,6 +30,13 @@ func (c TerraformVault) Sync() (map[string]interface{}, error) {
 	notify := notifications.Get()
 	result := make(map[string]interface{})
 
+	if context == nil {
+		return result, nil
+	}
+	if !context.IsValid {
+		return result, fmt.Errorf("invalid context selected")
+	}
+
 	// Adding Global Variables
 	if context.EnvironmentVariables != nil && context.EnvironmentVariables.Terraform != nil && len(context.EnvironmentVariables.Terraform) > 0 {
 		for key, value := range context.EnvironmentVariables.Terraform {

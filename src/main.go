@@ -20,7 +20,7 @@ import (
 	"github.com/cjlapao/common-go/version"
 )
 
-var releaseVersion = "0.1.71"
+var releaseVersion = "0.0.1"
 var versionSvc = version.Get()
 
 var logger = log.Get()
@@ -51,15 +51,15 @@ func main() {
 		logger.WithDebug()
 	}
 
+	config := configuration.Get()
+	if err := config.Init(); err != nil {
+		notify.Critical("There was a critical error loading the configuration file")
+	}
+
 	operationsService := operations.Get()
 	if command == "api" {
 		apiOperation := operationsService.GetOperation(operations.API_OPERATION_NAME)
 		apiOperation.Run()
-	}
-
-	config := configuration.Get()
-	if err := config.Init(); err != nil {
-		notify.Critical("There was a critical error loading the configuration file")
 	}
 
 	systemService := system.Get()
@@ -120,7 +120,7 @@ func main() {
 }
 
 func SetVersion() {
-	versionSvc.Name = "Locally Command Line Interface"
+	versionSvc.Name = "Locally"
 	versionSvc.Author = "Carlos Lapao"
 	versionSvc.License = "MIT"
 	strVer, err := version.FromString(releaseVersion)

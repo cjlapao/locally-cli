@@ -2,11 +2,13 @@ package operations
 
 import (
 	"fmt"
+	"os"
+
 	"github.com/cjlapao/locally-cli/common"
 	"github.com/cjlapao/locally-cli/configuration"
+	"github.com/cjlapao/locally-cli/context/docker_component"
 	"github.com/cjlapao/locally-cli/docker"
 	"github.com/cjlapao/locally-cli/help"
-	"os"
 
 	"github.com/cjlapao/common-go/helper"
 )
@@ -14,6 +16,7 @@ import (
 func DockerOperations(subCommand string, options *docker.DockerServiceOptions) {
 	dockerService := docker.Get()
 	config := configuration.Get()
+	context := config.GetCurrentContext()
 
 	dockerService.CheckForDocker(false)
 	dockerService.CheckForDockerCompose(false)
@@ -34,7 +37,7 @@ func DockerOperations(subCommand string, options *docker.DockerServiceOptions) {
 
 		buildDependencies := helper.GetFlagSwitch("build-dependencies", false)
 		// Forcing the build dependencies if the tag is on as we need to crawl through them anyway
-		if config.HasTags() {
+		if context.HasTags() {
 			buildDependencies = true
 		}
 
@@ -59,7 +62,7 @@ func DockerOperations(subCommand string, options *docker.DockerServiceOptions) {
 
 		buildDependencies := helper.GetFlagSwitch("build-dependencies", false)
 		// Forcing the build dependencies if the tag is on as we need to crawl through them anyway
-		if config.HasTags() {
+		if context.HasTags() {
 			buildDependencies = true
 		}
 
@@ -84,7 +87,7 @@ func DockerOperations(subCommand string, options *docker.DockerServiceOptions) {
 
 		buildDependencies := helper.GetFlagSwitch("build-dependencies", false)
 		// Forcing the build dependencies if the tag is on as we need to crawl through them anyway
-		if config.HasTags() {
+		if context.HasTags() {
 			buildDependencies = true
 		}
 
@@ -109,7 +112,7 @@ func DockerOperations(subCommand string, options *docker.DockerServiceOptions) {
 
 		buildDependencies := helper.GetFlagSwitch("build-dependencies", false)
 		// Forcing the build dependencies if the tag is on as we need to crawl through them anyway
-		if config.HasTags() {
+		if context.HasTags() {
 			buildDependencies = true
 		}
 
@@ -134,7 +137,7 @@ func DockerOperations(subCommand string, options *docker.DockerServiceOptions) {
 
 		buildDependencies := helper.GetFlagSwitch("build-dependencies", false)
 		// Forcing the build dependencies if the tag is on as we need to crawl through them anyway
-		if config.HasTags() {
+		if context.HasTags() {
 			buildDependencies = true
 		}
 
@@ -159,7 +162,7 @@ func DockerOperations(subCommand string, options *docker.DockerServiceOptions) {
 
 		buildDependencies := helper.GetFlagSwitch("build-dependencies", false)
 		// Forcing the build dependencies if the tag is on as we need to crawl through them anyway
-		if config.HasTags() {
+		if context.HasTags() {
 			buildDependencies = true
 		}
 
@@ -184,7 +187,7 @@ func DockerOperations(subCommand string, options *docker.DockerServiceOptions) {
 
 		buildDependencies := helper.GetFlagSwitch("build-dependencies", false)
 		// Forcing the build dependencies if the tag is on as we need to crawl through them anyway
-		if config.HasTags() {
+		if context.HasTags() {
 			buildDependencies = true
 		}
 
@@ -209,7 +212,7 @@ func DockerOperations(subCommand string, options *docker.DockerServiceOptions) {
 
 		buildDependencies := helper.GetFlagSwitch("build-dependencies", false)
 		// Forcing the build dependencies if the tag is on as we need to crawl through them anyway
-		if config.HasTags() {
+		if context.HasTags() {
 			buildDependencies = true
 		}
 
@@ -234,7 +237,7 @@ func DockerOperations(subCommand string, options *docker.DockerServiceOptions) {
 
 		buildDependencies := helper.GetFlagSwitch("build-dependencies", false)
 		// Forcing the build dependencies if the tag is on as we need to crawl through them anyway
-		if config.HasTags() {
+		if context.HasTags() {
 			buildDependencies = true
 		}
 
@@ -281,7 +284,7 @@ func DockerOperations(subCommand string, options *docker.DockerServiceOptions) {
 
 		buildDependencies := helper.GetFlagSwitch("build-dependencies", false)
 		// Forcing the build dependencies if the tag is on as we need to crawl through them anyway
-		if config.HasTags() {
+		if context.HasTags() {
 			buildDependencies = true
 		}
 
@@ -306,7 +309,7 @@ func DockerOperations(subCommand string, options *docker.DockerServiceOptions) {
 
 		buildDependencies := helper.GetFlagSwitch("build-dependencies", false)
 		// Forcing the build dependencies if the tag is on as we need to crawl through them anyway
-		if config.HasTags() {
+		if context.HasTags() {
 			buildDependencies = true
 		}
 
@@ -331,7 +334,7 @@ func DockerOperations(subCommand string, options *docker.DockerServiceOptions) {
 
 		buildDependencies := helper.GetFlagSwitch("build-dependencies", false)
 		// Forcing the build dependencies if the tag is on as we need to crawl through them anyway
-		if config.HasTags() {
+		if context.HasTags() {
 			buildDependencies = true
 		}
 
@@ -354,7 +357,7 @@ func DockerOperations(subCommand string, options *docker.DockerServiceOptions) {
 
 		if options == nil {
 			options = &docker.DockerServiceOptions{
-				DockerRegistry: &configuration.DockerRegistry{
+				DockerRegistry: &docker_component.DockerRegistry{
 					Enabled:      true,
 					Registry:     helper.GetFlagValue("registry", ""),
 					ManifestPath: helper.GetFlagValue("manifest-path", ""),

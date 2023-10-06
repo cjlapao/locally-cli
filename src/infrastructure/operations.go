@@ -1,17 +1,19 @@
 package infrastructure
 
 import (
+	"os"
+
 	"github.com/cjlapao/locally-cli/configuration"
 	"github.com/cjlapao/locally-cli/help"
 	"github.com/cjlapao/locally-cli/icons"
 	"github.com/cjlapao/locally-cli/notifications"
-	"os"
 
 	"github.com/cjlapao/common-go/helper"
 )
 
 func Operations(subCommand, stack string, options *TerraformServiceOptions) {
 	config := configuration.Get()
+	ctx := config.GetCurrentContext()
 	terraformSvc := Get()
 	notify := notifications.Get()
 
@@ -28,14 +30,14 @@ func Operations(subCommand, stack string, options *TerraformServiceOptions) {
 			help.ShowHelpForInfrastructureCommand()
 			os.Exit(0)
 		}
-		if stack == "" && !config.HasTags() {
+		if stack == "" && !ctx.HasTags() {
 			help.ShowHelpForInfrastructureCommand()
 			os.Exit(0)
 		}
 
 		buildDependencies := helper.GetFlagSwitch("build-dependencies", false)
 		// Forcing the build dependencies if the tag is on as we need to crawl through them anyway
-		if config.HasTags() {
+		if ctx.HasTags() {
 			buildDependencies = true
 		}
 		if options != nil && options.BuildDependencies {
@@ -57,14 +59,14 @@ func Operations(subCommand, stack string, options *TerraformServiceOptions) {
 			os.Exit(0)
 		}
 
-		if stack == "" && !config.HasTags() {
+		if stack == "" && !ctx.HasTags() {
 			help.ShowHelpForInfrastructureCommand()
 			os.Exit(0)
 		}
 
 		buildDependencies := helper.GetFlagSwitch("build-dependencies", false)
 		// Forcing the build dependencies if the tag is on as we need to crawl through them anyway
-		if config.HasTags() {
+		if ctx.HasTags() {
 			buildDependencies = true
 		}
 		if options != nil && options.BuildDependencies {
@@ -87,13 +89,13 @@ func Operations(subCommand, stack string, options *TerraformServiceOptions) {
 			os.Exit(0)
 		}
 
-		if stack == "" && !config.HasTags() {
+		if stack == "" && !ctx.HasTags() {
 			help.ShowHelpForInfrastructureCommand()
 			os.Exit(0)
 		}
 
 		buildDependencies := false
-		if config.HasTags() {
+		if ctx.HasTags() {
 			buildDependencies = true
 		}
 		if options != nil && options.BuildDependencies {
@@ -115,13 +117,13 @@ func Operations(subCommand, stack string, options *TerraformServiceOptions) {
 			os.Exit(0)
 		}
 
-		if stack == "" && !config.HasTags() {
+		if stack == "" && !ctx.HasTags() {
 			help.ShowHelpForInfrastructureCommand()
 			os.Exit(0)
 		}
 
 		buildDependencies := false
-		if config.HasTags() {
+		if ctx.HasTags() {
 			buildDependencies = true
 		}
 		if options != nil && options.BuildDependencies {
@@ -147,7 +149,7 @@ func Operations(subCommand, stack string, options *TerraformServiceOptions) {
 			os.Exit(0)
 		}
 
-		if stack == "" && !config.HasTags() {
+		if stack == "" && !ctx.HasTags() {
 			help.ShowHelpForInfrastructureCommand()
 			os.Exit(0)
 		}
@@ -167,7 +169,7 @@ func Operations(subCommand, stack string, options *TerraformServiceOptions) {
 			os.Exit(0)
 		}
 
-		if stack == "" && !config.HasTags() {
+		if stack == "" && !ctx.HasTags() {
 			help.ShowHelpForInfrastructureCommand()
 			os.Exit(0)
 		}
@@ -188,14 +190,14 @@ func Operations(subCommand, stack string, options *TerraformServiceOptions) {
 			os.Exit(0)
 		}
 
-		if stack == "" && !config.HasTags() {
+		if stack == "" && !ctx.HasTags() {
 			help.ShowHelpForInfrastructureCommand()
 			os.Exit(0)
 		}
 
 		buildDependencies := helper.GetFlagSwitch("build-dependencies", false)
 		// Forcing the build dependencies if the tag is on as we need to crawl through them anyway
-		if config.HasTags() {
+		if ctx.HasTags() {
 			buildDependencies = true
 		}
 		if options != nil && options.BuildDependencies {
@@ -217,14 +219,14 @@ func Operations(subCommand, stack string, options *TerraformServiceOptions) {
 			os.Exit(0)
 		}
 
-		if stack == "" && !config.HasTags() {
+		if stack == "" && !ctx.HasTags() {
 			help.ShowHelpForInfrastructureUpCommand()
 			os.Exit(0)
 		}
 
 		buildDependencies := helper.GetFlagSwitch("build-dependencies", false)
 		// Forcing the build dependencies if the tag is on as we need to crawl through them anyway
-		if config.HasTags() {
+		if ctx.HasTags() {
 			buildDependencies = true
 		}
 		if options != nil && options.BuildDependencies {
@@ -238,7 +240,7 @@ func Operations(subCommand, stack string, options *TerraformServiceOptions) {
 			}
 		}
 
-		stacks := config.GetInfrastructureStacks(stack, !buildDependencies)
+		stacks := ctx.GetInfrastructureStacks(stack, !buildDependencies)
 		if len(stacks) == 0 {
 			notify.Warning("No infrastructure stacks found")
 		}
@@ -303,14 +305,14 @@ func Operations(subCommand, stack string, options *TerraformServiceOptions) {
 			os.Exit(0)
 		}
 
-		if stack == "" && !config.HasTags() {
+		if stack == "" && !ctx.HasTags() {
 			help.ShowHelpForInfrastructureCommand()
 			os.Exit(0)
 		}
 
 		buildDependencies := helper.GetFlagSwitch("build-dependencies", false)
 		// Forcing the build dependencies if the tag is on as we need to crawl through them anyway
-		if config.HasTags() {
+		if ctx.HasTags() {
 			buildDependencies = true
 		}
 		if options != nil && options.BuildDependencies {
@@ -332,14 +334,14 @@ func Operations(subCommand, stack string, options *TerraformServiceOptions) {
 			os.Exit(0)
 		}
 
-		if stack == "" && !config.HasTags() {
+		if stack == "" && !ctx.HasTags() {
 			help.ShowHelpForInfrastructureCommand()
 			os.Exit(0)
 		}
 
 		buildDependencies := helper.GetFlagSwitch("build-dependencies", false)
 		// Forcing the build dependencies if the tag is on as we need to crawl through them anyway
-		if config.HasTags() {
+		if ctx.HasTags() {
 			buildDependencies = true
 		}
 		if options != nil && options.BuildDependencies {

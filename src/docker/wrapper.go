@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
+
 	"github.com/cjlapao/locally-cli/azure_cli"
-	"github.com/cjlapao/locally-cli/configuration"
+	"github.com/cjlapao/locally-cli/common"
 	"github.com/cjlapao/locally-cli/environment"
 	"github.com/cjlapao/locally-cli/executer"
+	"github.com/cjlapao/locally-cli/helpers"
 	"github.com/cjlapao/locally-cli/icons"
-	"strings"
 
 	"github.com/cjlapao/common-go/helper"
 )
@@ -68,7 +70,7 @@ func (svc *DockerCommandWrapper) Build(path string, serviceName string, componen
 		args = append(args, "--no-cache")
 	}
 
-	output, err = configuration.Retry("Docker Compose Build", configuration.GetDockerComposePath(), args, true)
+	output, err = helpers.Retry("Docker Compose Build", helpers.GetDockerComposePath(), args, true)
 
 	if err != nil {
 		notify.FromError(err, "There was an error running docker build")
@@ -82,7 +84,6 @@ func (svc *DockerCommandWrapper) Build(path string, serviceName string, componen
 
 func (svc *DockerCommandWrapper) Up(path string, serviceName string, componentName string) error {
 	env := environment.Get()
-
 	path = env.Replace(path)
 	serviceName = env.Replace(serviceName)
 	componentName = env.Replace(componentName)
@@ -112,7 +113,7 @@ func (svc *DockerCommandWrapper) Up(path string, serviceName string, componentNa
 		args = append(args, "--force-recreate")
 	}
 
-	output, err = configuration.Retry("docker-compose Up", configuration.GetDockerComposePath(), args, true)
+	output, err = helpers.Retry("docker-compose Up", helpers.GetDockerComposePath(), args, true)
 
 	if err != nil {
 		notify.FromError(err, "There was an error running docker-compose up")
@@ -143,7 +144,7 @@ func (svc *DockerCommandWrapper) Down(path string, serviceName string, component
 	args = append(args, path)
 	args = append(args, "down")
 
-	output, err = executer.Execute(configuration.GetDockerComposePath(), args...)
+	output, err = executer.Execute(helpers.GetDockerComposePath(), args...)
 
 	if err != nil {
 		notify.FromError(err, "Something wrong running docker compose build")
@@ -182,7 +183,7 @@ func (svc *DockerCommandWrapper) Start(path string, serviceName string, componen
 		args = append(args, componentName)
 	}
 
-	output, err = executer.Execute(configuration.GetDockerComposePath(), args...)
+	output, err = executer.Execute(helpers.GetDockerComposePath(), args...)
 
 	if err != nil {
 		notify.FromError(err, "Something wrong running docker compose start")
@@ -216,7 +217,7 @@ func (svc *DockerCommandWrapper) Stop(path string, serviceName string, component
 		args = append(args, componentName)
 	}
 
-	output, err = executer.Execute(configuration.GetDockerComposePath(), args...)
+	output, err = executer.Execute(helpers.GetDockerComposePath(), args...)
 
 	if err != nil {
 		notify.FromError(err, "Something wrong running docker compose stop")
@@ -255,7 +256,7 @@ func (svc *DockerCommandWrapper) Pause(path string, serviceName string, componen
 		args = append(args, componentName)
 	}
 
-	output, err = executer.Execute(configuration.GetDockerComposePath(), args...)
+	output, err = executer.Execute(helpers.GetDockerComposePath(), args...)
 
 	if err != nil {
 		notify.FromError(err, "Something wrong running docker compose pause")
@@ -294,7 +295,7 @@ func (svc *DockerCommandWrapper) Resume(path string, serviceName string, compone
 		args = append(args, componentName)
 	}
 
-	output, err = executer.Execute(configuration.GetDockerComposePath(), args...)
+	output, err = executer.Execute(helpers.GetDockerComposePath(), args...)
 
 	if err != nil {
 		notify.FromError(err, "Something wrong running docker compose unpause")
@@ -335,7 +336,7 @@ func (svc *DockerCommandWrapper) Status(path string, serviceName string, compone
 		args = append(args, componentName)
 	}
 
-	output, err = executer.Execute(configuration.GetDockerComposePath(), args...)
+	output, err = executer.Execute(helpers.GetDockerComposePath(), args...)
 	if err != nil {
 		notify.FromError(err, "Something wrong running docker compose component status")
 		return err
@@ -364,7 +365,7 @@ func (svc *DockerCommandWrapper) IsRunning(imageName string) (bool, error) {
 	args = append(args, "--format")
 	args = append(args, "'{\"image\": \"{{.Image}}\", \"state\":\"{{.State}}\"}'")
 
-	output, err = executer.ExecuteWithNoOutput(configuration.GetDockerPath(), args...)
+	output, err = executer.ExecuteWithNoOutput(helpers.GetDockerPath(), args...)
 	if err != nil {
 		notify.FromError(err, "Something wrong running docker compose component status")
 		return false, err
@@ -373,7 +374,7 @@ func (svc *DockerCommandWrapper) IsRunning(imageName string) (bool, error) {
 	lines := strings.Split(output.StdOut, "\n")
 	for _, line := range lines {
 		line := strings.Trim(line, "'")
-		if config.Debug() {
+		if common.IsDebug() {
 			notify.Debug(line)
 		}
 
@@ -416,7 +417,7 @@ func (svc *DockerCommandWrapper) List(serviceName string) error {
 		args = append(args, "--filter")
 		args = append(args, fmt.Sprintf("name=%v", serviceName))
 	}
-	output, err = executer.Execute(configuration.GetDockerComposePath(), args...)
+	output, err = executer.Execute(helpers.GetDockerComposePath(), args...)
 	if err != nil {
 		notify.FromError(err, "Something wrong running docker compose component status")
 		return err
@@ -459,7 +460,7 @@ func (svc *DockerCommandWrapper) Logs(path string, serviceName string, component
 		args = append(args, "-f")
 	}
 
-	output, err = executer.Execute(configuration.GetDockerComposePath(), args...)
+	output, err = executer.Execute(helpers.GetDockerComposePath(), args...)
 
 	if err != nil {
 		notify.FromError(err, "Something wrong running docker compose logs")
@@ -502,7 +503,7 @@ func (svc *DockerCommandWrapper) GetServiceImages(path string, serviceName strin
 		args = append(args, componentName)
 	}
 
-	output, err = executer.ExecuteWithNoOutput(configuration.GetDockerComposePath(), args...)
+	output, err = executer.ExecuteWithNoOutput(helpers.GetDockerComposePath(), args...)
 
 	var parsedOutput = make([]ContainerImage, 0)
 	lines := strings.Split(output.StdOut, "\n")
@@ -575,7 +576,7 @@ func (svc *DockerCommandWrapper) RemoveImage(imageName string, tagName string) e
 	args = append(args, "rm")
 	args = append(args, fmt.Sprintf("%v:%v", imageName, tagName))
 
-	output, err = executer.Execute(configuration.GetDockerPath(), args...)
+	output, err = executer.Execute(helpers.GetDockerPath(), args...)
 	if err != nil {
 		notify.FromError(err, "Something wrong running docker image removal")
 		return err
@@ -598,7 +599,7 @@ func (svc *DockerCommandWrapper) BuildImage(options BuildImageOptions) error {
 	notify.Rocket("Building image %v:%v", options.Name, options.Tag)
 
 	notify.Debug("Parameters: %s", fmt.Sprintf("%v", args))
-	output, err = executer.Execute(configuration.GetDockerPath(), args...)
+	output, err = executer.Execute(helpers.GetDockerPath(), args...)
 	if err != nil {
 		notify.FromError(err, "Something wrong running docker build image")
 		return err
@@ -653,7 +654,7 @@ func (svc *DockerCommandWrapper) Login(crName, username, password, subscriptionI
 	args = append(args, password)
 	args = append(args, crName)
 
-	output, err = executer.Execute(configuration.GetDockerPath(), args...)
+	output, err = executer.Execute(helpers.GetDockerPath(), args...)
 	if err != nil {
 		notify.FromError(err, "Something wrong running docker login")
 		return err
@@ -703,7 +704,7 @@ func (svc *DockerCommandWrapper) Pull(crName, imagePath, tag string) error {
 	args = append(args, fmt.Sprintf("%s/%s:%s", crName, imagePath, tag))
 
 	notify.Debug("Pull arguments: %s", fmt.Sprintf("%v", args))
-	output, err = executer.Execute(configuration.GetDockerPath(), args...)
+	output, err = executer.Execute(helpers.GetDockerPath(), args...)
 	if err != nil {
 		notify.FromError(err, "Something wrong running docker pull")
 		return err

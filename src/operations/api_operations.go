@@ -22,6 +22,11 @@ func NewApiOperation() *ApiOperation {
 		listener := restapi.GetHttpListener()
 		env := environment.Get()
 		listener.Options.ApiPrefix = env.GetString("env", common.API_PREFIX_VAR)
+		port := env.GetString("env", common.API_PORT_VAR)
+		if port == "" {
+			port = "7750"
+		}
+		listener.Options.HttpPort = port
 
 		if listener.Options.ApiPrefix != "" && listener.Options.ApiPrefix[0] != '/' {
 			listener.Options.ApiPrefix = "/" + listener.Options.ApiPrefix

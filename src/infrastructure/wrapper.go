@@ -4,15 +4,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/cjlapao/locally-cli/common"
-	"github.com/cjlapao/locally-cli/configuration"
-	"github.com/cjlapao/locally-cli/executer"
-	"github.com/cjlapao/locally-cli/icons"
-	"github.com/cjlapao/locally-cli/notifications"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/cjlapao/locally-cli/common"
+	"github.com/cjlapao/locally-cli/configuration"
+	"github.com/cjlapao/locally-cli/executer"
+	"github.com/cjlapao/locally-cli/helpers"
+	"github.com/cjlapao/locally-cli/icons"
+	"github.com/cjlapao/locally-cli/notifications"
 
 	"github.com/cjlapao/common-go/helper"
 )
@@ -54,11 +56,11 @@ func (svc *TerraformCommandWrapper) Init(path string, args ...string) error {
 		return changeDirErr
 	}
 
-	if config.Debug() {
+	if common.IsDebug() {
 		notify.Debug("Init Run Arguments: %v", fmt.Sprintf("%v", runArgs))
 	}
 
-	output, err := executer.ExecuteWithNoOutput(configuration.GetTerraformPath(), runArgs...)
+	output, err := executer.ExecuteWithNoOutput(helpers.GetTerraformPath(), runArgs...)
 
 	changeDirErr = os.Chdir(currentFolder)
 	if changeDirErr != nil {
@@ -110,11 +112,11 @@ func (svc *TerraformCommandWrapper) Validate(path string, args ...string) error 
 		return changeDirErr
 	}
 
-	if config.Debug() {
+	if common.IsDebug() {
 		notify.Debug("Validate Run Arguments: %v", fmt.Sprintf("%v", runArgs))
 	}
 
-	output, execErr := executer.ExecuteWithNoOutput(configuration.GetTerraformPath(), runArgs...)
+	output, execErr := executer.ExecuteWithNoOutput(helpers.GetTerraformPath(), runArgs...)
 
 	var result TerraformValidateResult
 	if err := json.Unmarshal([]byte(output.StdOut), &result); err != nil {
@@ -127,7 +129,7 @@ func (svc *TerraformCommandWrapper) Validate(path string, args ...string) error 
 	}
 
 	if execErr != nil {
-		if config.Debug() {
+		if common.IsDebug() {
 			notify.Debug("Validate output: %s", output)
 		}
 		for _, diagnostic := range result.Diagnostics {
@@ -175,11 +177,11 @@ func (svc *TerraformCommandWrapper) Plan(path, outFilePath string, args ...strin
 		return nil, changeDirErr
 	}
 
-	if config.Debug() {
+	if common.IsDebug() {
 		notify.Debug("Plan Run Arguments: %v", fmt.Sprintf("%v", runArgs))
 	}
 
-	output, err := executer.ExecuteAndWatch(configuration.GetTerraformPath(), runArgs...)
+	output, err := executer.ExecuteAndWatch(helpers.GetTerraformPath(), runArgs...)
 
 	changeDirErr = os.Chdir(currentFolder)
 	if changeDirErr != nil {
@@ -234,11 +236,11 @@ func (svc *TerraformCommandWrapper) Apply(path, planFilePath string, args ...str
 		return changeDirErr
 	}
 
-	if config.Debug() {
+	if common.IsDebug() {
 		notify.Debug("Apply Run Arguments: %v", fmt.Sprintf("%v", runArgs))
 	}
 
-	output, err := executer.ExecuteAndWatch(configuration.GetTerraformPath(), runArgs...)
+	output, err := executer.ExecuteAndWatch(helpers.GetTerraformPath(), runArgs...)
 
 	changeDirErr = os.Chdir(currentFolder)
 	if changeDirErr != nil {
@@ -280,11 +282,11 @@ func (svc *TerraformCommandWrapper) Destroy(path, backupFilePath string, args ..
 		return changeDirErr
 	}
 
-	if config.Debug() {
+	if common.IsDebug() {
 		notify.Debug("Destroy Run Arguments: %v", fmt.Sprintf("%v", runArgs))
 	}
 
-	output, err := executer.ExecuteAndWatch(configuration.GetTerraformPath(), runArgs...)
+	output, err := executer.ExecuteAndWatch(helpers.GetTerraformPath(), runArgs...)
 
 	changeDirErr = os.Chdir(currentFolder)
 	if changeDirErr != nil {
@@ -320,11 +322,11 @@ func (svc *TerraformCommandWrapper) Show(path, outFilePath string) (*PlanChanges
 		return nil, changeDirErr
 	}
 
-	if config.Debug() {
+	if common.IsDebug() {
 		notify.Debug("Show Run Arguments: %v", fmt.Sprintf("%v", runArgs))
 	}
 
-	output, err := executer.ExecuteWithNoOutput(configuration.GetTerraformPath(), runArgs...)
+	output, err := executer.ExecuteWithNoOutput(helpers.GetTerraformPath(), runArgs...)
 
 	changeDirErr = os.Chdir(currentFolder)
 	if changeDirErr != nil {
@@ -343,7 +345,7 @@ func (svc *TerraformCommandWrapper) Show(path, outFilePath string) (*PlanChanges
 		return nil, err
 	}
 
-	if config.Debug() {
+	if common.IsDebug() {
 		output := filepath.Dir(outFilePath)
 		fileName := strings.ReplaceAll(filepath.Base(outFilePath), ".plan", ".plan.json")
 		filePath := helper.JoinPath(output, fileName)
@@ -416,11 +418,11 @@ func (svc *TerraformCommandWrapper) Output(path string) (map[string]TerraformOut
 		return result, changeDirErr
 	}
 
-	if config.Debug() {
+	if common.IsDebug() {
 		notify.Debug("Output Run Arguments: %v", fmt.Sprintf("%v", runArgs))
 	}
 
-	output, err := executer.ExecuteWithNoOutput(configuration.GetTerraformPath(), runArgs...)
+	output, err := executer.ExecuteWithNoOutput(helpers.GetTerraformPath(), runArgs...)
 
 	changeDirErr = os.Chdir(currentFolder)
 	if changeDirErr != nil {
@@ -436,7 +438,7 @@ func (svc *TerraformCommandWrapper) Output(path string) (map[string]TerraformOut
 		return result, err
 	}
 
-	if config.Debug() {
+	if common.IsDebug() {
 		notify.Debug("Output Values: %v", fmt.Sprintf("%v", result))
 	}
 
@@ -454,13 +456,13 @@ func (svc *TerraformCommandWrapper) Format(path string) error {
 	runArgs = append(runArgs, "fmt")
 	runArgs = append(runArgs, path)
 
-	if config.Debug() {
+	if common.IsDebug() {
 		notify.Debug("Ftm Run Arguments: %v", fmt.Sprintf("%v", runArgs))
 	}
 
-	_, err := executer.ExecuteWithNoOutput(configuration.GetTerraformPath(), runArgs...)
+	_, err := executer.ExecuteWithNoOutput(helpers.GetTerraformPath(), runArgs...)
 
-	if config.Verbose() {
+	if common.IsVerbose() {
 		notify.Info("Formatted successfully variable file %s", path)
 	}
 
@@ -490,13 +492,13 @@ func (svc *TerraformCommandWrapper) DependencyGraph(path string) (*TerraformGrap
 		return nil, changeDirErr
 	}
 
-	if config.Debug() {
+	if common.IsDebug() {
 		notify.Debug("Graph Run Arguments: %v", fmt.Sprintf("%v", runArgs))
 	}
 
-	output, err := executer.ExecuteWithNoOutput(configuration.GetTerraformPath(), runArgs...)
+	output, err := executer.ExecuteWithNoOutput(helpers.GetTerraformPath(), runArgs...)
 
-	if config.Debug() {
+	if common.IsDebug() {
 		notify.Info(output.GetAllOutput())
 	}
 
@@ -505,7 +507,7 @@ func (svc *TerraformCommandWrapper) DependencyGraph(path string) (*TerraformGrap
 		return nil, changeDirErr
 	}
 
-	if config.Verbose() {
+	if common.IsVerbose() {
 		notify.Info("Graph generated successfully variable file %s", path)
 	}
 
