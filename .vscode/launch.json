@@ -9,12 +9,14 @@
             "program": "${workspaceFolder}/src/main.go",
             "cwd": "${workspaceFolder}/bin",
             // Comment out if you need to setup environment variables for the module
-            //"envFile": "${workspaceFolder}/.env",
+            "envFile": "${workspaceFolder}/.env",
+            "output": "${workspaceFolder}/bin/locally",
+            "dlvFlags": [
+                "--listen=:2345",
+                "--api-version=2",
+            ],
             "args": [
-              "pipelines", 
-              "run", 
-              "loginapp",  
-              "--file=C:\\Code\\bin\\config.personal.yml", 
+              "api", 
               "--debug"
             ]
         }

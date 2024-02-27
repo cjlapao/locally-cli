@@ -1,5 +1,7 @@
 package common
 
+import "github.com/cjlapao/common-go/helper"
+
 const (
 	DEFAULT_locally_OUTPUT_PATH     string = ".cache-data"
 	DEFAULT_CONFIG_SERVICE_PATH     string = "config-data"
@@ -23,3 +25,20 @@ const (
 	DEFAULT_WAITING_FOR_SECONDS     int    = 5
 	OUTPUT_TO_FILE                  string = "outputToFile"
 )
+
+const (
+	API_PREFIX_VAR string = "API_PREFIX"
+	API_PORT_VAR   string = "API_PORT"
+)
+
+const (
+	OVERRIDE_CONFIG_FILE_MARKER string = ".override"
+)
+
+func IsVerbose() bool {
+	return helper.GetFlagSwitch("verbose", false)
+}
+
+func IsDebug() bool {
+	return helper.GetFlagSwitch("debug", false)
+}

@@ -6,6 +6,6 @@ type LocallyService interface {
 	GetSource() string
 	AddDependency(value string)
 	AddRequiredBy(value string)
-	BuildDependency() error
+	// BuildDependency() error
 	SaveFragment() error
 }

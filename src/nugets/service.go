@@ -1,13 +1,15 @@
 package nugets
 
 import (
-	"github.com/cjlapao/locally-cli/configuration"
-	"github.com/cjlapao/locally-cli/executer"
-	"github.com/cjlapao/locally-cli/icons"
-	"github.com/cjlapao/locally-cli/notifications"
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/cjlapao/locally-cli/configuration"
+	"github.com/cjlapao/locally-cli/executer"
+	"github.com/cjlapao/locally-cli/helpers"
+	"github.com/cjlapao/locally-cli/icons"
+	"github.com/cjlapao/locally-cli/notifications"
 
 	"github.com/cjlapao/common-go/helper"
 )
@@ -40,7 +42,7 @@ func (svc *NugetService) CheckForDotnet(softFail bool) {
 	config = configuration.Get()
 	if !config.GlobalConfiguration.Tools.Checked.DotnetChecked {
 		notify.InfoWithIcon(icons.IconFlag, "Checking for dotnet tool in the system")
-		if output, err := executer.ExecuteWithNoOutput(configuration.GetDotnetPath(), "--version"); err != nil {
+		if output, err := executer.ExecuteWithNoOutput(helpers.GetDotnetPath(), "--version"); err != nil {
 			if !softFail {
 				notify.Error("Dotnet tool not found in system, this is required for the selected function")
 				os.Exit(1)
@@ -58,7 +60,7 @@ func (svc *NugetService) CheckForNuget(softFail bool) {
 	config = configuration.Get()
 	if !config.GlobalConfiguration.Tools.Checked.NugetChecked {
 		notify.InfoWithIcon(icons.IconFlag, "Checking for nuget tool in the system")
-		if output, err := executer.ExecuteWithNoOutput(configuration.GetNugetPath(), "help"); err != nil {
+		if output, err := executer.ExecuteWithNoOutput(helpers.GetNugetPath(), "help"); err != nil {
 			if !softFail {
 				notify.Error("Nuget tool not found in system, this is required for the selected function")
 				os.Exit(1)
@@ -85,7 +87,7 @@ func (svc *NugetService) GenerateNugetPackages(name string, tags ...string) {
 	if len(tags) > 0 || name == "" {
 		notify.Wrench("Generating %s packages", strconv.Itoa(len(nugetPackages)))
 		if len(tags) > 0 {
-			nugetPackages = config.GetNugetPackagesByTags()
+			nugetPackages = context.GetNugetPackagesByTags()
 		}
 		for _, pkg := range nugetPackages {
 			notify.Wrench("Generating nuget package for %s", pkg.Name)

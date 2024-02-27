@@ -5,14 +5,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/cjlapao/locally-cli/configuration"
-	"github.com/cjlapao/locally-cli/executer"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/cjlapao/locally-cli/common"
+	"github.com/cjlapao/locally-cli/executer"
+	"github.com/cjlapao/locally-cli/helpers"
 
 	"github.com/pascaldekloe/jwt"
 )
@@ -30,8 +32,6 @@ type Oauth2ACRTokenExchangeResponse struct {
 }
 
 func (svc *AzureAcrTool) GetAcrRefreshToken(acr, subscription string) (string, error) {
-	config := configuration.Get()
-
 	notify.Rocket("Running Azure Cli Acr Token...")
 
 	if acr == "" {
@@ -42,7 +42,7 @@ func (svc *AzureAcrTool) GetAcrRefreshToken(acr, subscription string) (string, e
 	acr = strings.TrimPrefix(acr, "https://")
 	acr = strings.TrimPrefix(acr, "http://")
 
-	encodedAcrName := configuration.EncodeName(acr)
+	encodedAcrName := common.EncodeName(acr)
 	token := os.Getenv(fmt.Sprintf("locally_AZURE_%s_ACR_TOKEN", encodedAcrName))
 	notify.Debug("Token value: %s", token)
 
@@ -69,11 +69,11 @@ func (svc *AzureAcrTool) GetAcrRefreshToken(acr, subscription string) (string, e
 	}
 	runArgs = append(runArgs, "--expose-token")
 
-	if config.Debug() {
+	if common.IsDebug() {
 		notify.Debug("run parameters: %v", fmt.Sprintf("%v", runArgs))
 	}
 
-	output, err := executer.ExecuteWithNoOutput(configuration.GetAzureCliPath(), runArgs...)
+	output, err := executer.ExecuteWithNoOutput(helpers.GetAzureCliPath(), runArgs...)
 
 	if err != nil {
 		notify.FromError(err, "Something wrong running setting the subscription")

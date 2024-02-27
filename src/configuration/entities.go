@@ -1,22 +1,21 @@
 package configuration
 
-import "crypto/x509"
+import (
+	"crypto/x509"
+
+	"github.com/cjlapao/locally-cli/context"
+	"github.com/cjlapao/locally-cli/context/entities"
+)
 
 type GlobalConfiguration struct {
 	format               string
 	verbose              bool
 	CurrentContext       string                      `json:"currentContext" yaml:"currentContext"`
-	Contexts             []*Context                  `json:"contexts,omitempty" yaml:"contexts,omitempty"`
-	Tools                *Tools                      `json:"tools,omitempty" yaml:"tools,omitempty"`
+	Contexts             []*context.Context          `json:"contexts,omitempty" yaml:"contexts,omitempty"`
+	Tools                *entities.Tools             `json:"tools,omitempty" yaml:"tools,omitempty"`
 	Network              *Network                    `json:"network,omitempty" yaml:"network,omitempty"`
 	CertificateGenerator *CertificateGeneratorConfig `json:"certificateGenerator,omitempty" yaml:"certificateGenerator,omitempty"`
 	Cors                 *Cors                       `json:"cors,omitempty" yaml:"cors,omitempty"`
-}
-
-type Location struct {
-	RootFolder string `json:"rootFolder,omitempty" yaml:"rootFolder,omitempty"`
-	Path       string `json:"path,omitempty" yaml:"path,omitempty"`
-	DistPath   string `json:"distPath,omitempty" yaml:"distPath,omitempty"`
 }
 
 type Cors struct {
@@ -30,45 +29,6 @@ type Network struct {
 	DomainName     string `json:"domainName,omitempty" yaml:"domainName,omitempty"`
 	CERTPath       string `json:"certPath,omitempty" yaml:"certPath,omitempty"`
 	PrivateKeyPath string `json:"privateKeyPath,omitempty" yaml:"privateKeyPath,omitempty"`
-}
-
-type MockService struct {
-	source     string
-	Name       string      `json:"name,omitempty" yaml:"name,omitempty"`
-	MockRoutes []MockRoute `json:"mockRoutes,omitempty" yaml:"mockRoutes,omitempty"`
-}
-
-type MockRoute struct {
-	Name     string              `json:"name,omitempty" yaml:"name,omitempty"`
-	Regex    string              `json:"regex,omitempty" yaml:"regex,omitempty"`
-	Headers  []map[string]string `json:"headers,omitempty" yaml:"headers,omitempty"`
-	Responds MockRouteResponse   `json:"responds,omitempty" yaml:"responds,omitempty"`
-}
-
-type MockRouteResponse struct {
-	ContentType string                 `json:"contentType,omitempty" yaml:"contentType,omitempty"`
-	Body        map[string]interface{} `json:"body,omitempty" yaml:"body,omitempty"`
-	RawBody     string                 `json:"rawBody,omitempty" yaml:"rawBody,omitempty"`
-}
-
-type Route struct {
-	Name    string              `json:"name,omitempty" yaml:"name,omitempty"`
-	Regex   string              `json:"regex,omitempty" yaml:"regex,omitempty"`
-	Replace RouteReplace        `json:"replace,omitempty" yaml:"replace,omitempty"`
-	Headers []map[string]string `json:"headers,omitempty" yaml:"headers,omitempty"`
-}
-
-type RouteReplace struct {
-	Type string `json:"type,omitempty" yaml:"type,omitempty"`
-	Old  string `json:"old,omitempty" yaml:"old,omitempty"`
-	New  string `json:"new,omitempty" yaml:"new,omitempty"`
-}
-
-type Tenant struct {
-	source string
-	ID     string `json:"id,omitempty" yaml:"id,omitempty"`
-	Name   string `json:"name,omitempty" yaml:"name,omitempty"`
-	URI    string `json:"uri,omitempty" yaml:"uri,omitempty"`
 }
 
 type CertificateGeneratorConfig struct {

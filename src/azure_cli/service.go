@@ -3,11 +3,15 @@ package azure_cli
 import (
 	"encoding/json"
 	"errors"
+	"os"
+
+	"github.com/cjlapao/locally-cli/common"
 	"github.com/cjlapao/locally-cli/configuration"
+	"github.com/cjlapao/locally-cli/context/infrastructure_component"
 	"github.com/cjlapao/locally-cli/executer"
+	"github.com/cjlapao/locally-cli/helpers"
 	"github.com/cjlapao/locally-cli/icons"
 	"github.com/cjlapao/locally-cli/notifications"
-	"os"
 )
 
 var globalAzureCliService *AzureCliService
@@ -38,7 +42,7 @@ func (svc *AzureCliService) CheckForAzureCli(softFail bool) {
 	config := configuration.Get()
 	if !config.GlobalConfiguration.Tools.Checked.AzureCliChecked {
 		notify.InfoWithIcon(icons.IconFlag, "Checking for AzureCli tool in the system")
-		if output, err := executer.ExecuteWithNoOutput(configuration.GetAzureCliPath(), "version"); err != nil {
+		if output, err := executer.ExecuteWithNoOutput(helpers.GetAzureCliPath(), "version"); err != nil {
 			if !softFail {
 				notify.Error("AzureCli tool not found in system, this is required for the selected function")
 				os.Exit(1)
@@ -57,7 +61,7 @@ func (svc *AzureCliService) CheckForAzureCli(softFail bool) {
 			}
 
 			notify.Success("AzureCli found with version %s, core version %s, telemetry version %s", jOutput.AzureCLI, jOutput.AzureCLICore, jOutput.AzureCLITelemetry)
-			if config.Verbose() {
+			if common.IsVerbose() {
 				for extension, version := range jOutput.Extensions {
 					notify.Success("Found AzureCli extension %s with version %s", extension, version)
 				}
@@ -68,7 +72,7 @@ func (svc *AzureCliService) CheckForAzureCli(softFail bool) {
 	}
 }
 
-func (svc *AzureCliService) InitBackendResources(config *configuration.InfrastructureAzureBackendConfig) error {
+func (svc *AzureCliService) InitBackendResources(config *infrastructure_component.InfrastructureAzureBackendConfig) error {
 	configSvc := configuration.Get()
 	context := configSvc.GetCurrentContext()
 	if context.Credentials == nil {

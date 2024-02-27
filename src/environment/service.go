@@ -2,19 +2,20 @@ package environment
 
 import (
 	"fmt"
-	"github.com/cjlapao/locally-cli/configuration/backend_vault"
-	"github.com/cjlapao/locally-cli/configuration/config_vault"
-	"github.com/cjlapao/locally-cli/configuration/credentials_vault"
+	"strconv"
+	"strings"
+
 	"github.com/cjlapao/locally-cli/environment/functions/random"
 	env_interfaces "github.com/cjlapao/locally-cli/environment/interfaces"
 	"github.com/cjlapao/locally-cli/interfaces"
 	"github.com/cjlapao/locally-cli/tools"
-	"strconv"
-	"strings"
+	"github.com/cjlapao/locally-cli/vaults/backend_vault"
+	"github.com/cjlapao/locally-cli/vaults/config_vault"
+	"github.com/cjlapao/locally-cli/vaults/credentials_vault"
 
-	"github.com/cjlapao/locally-cli/environment/global_vault"
-	"github.com/cjlapao/locally-cli/environment/keyvault_vault"
-	"github.com/cjlapao/locally-cli/environment/terraform_vault"
+	"github.com/cjlapao/locally-cli/vaults/global_vault"
+	"github.com/cjlapao/locally-cli/vaults/keyvault_vault"
+	"github.com/cjlapao/locally-cli/vaults/terraform_vault"
 
 	"github.com/cjlapao/common-go/guard"
 )
@@ -27,36 +28,74 @@ const (
 )
 
 type Environment struct {
-	variables map[string]map[string]interface{}
-	vaults    []interfaces.EnvironmentVault
-	isSync    bool
-	functions []env_interfaces.VariableFunction
+	isInitialized bool
+	variables     map[string]map[string]interface{}
+	vaults        []interfaces.EnvironmentVault
+	isSync        bool
+	functions     []env_interfaces.VariableFunction
 }
 
 func New() *Environment {
 	svc := Environment{
-		variables: make(map[string]map[string]interface{}),
-		vaults:    make([]interfaces.EnvironmentVault, 0),
-		functions: make([]env_interfaces.VariableFunction, 0),
-		isSync:    false,
+		variables:     make(map[string]map[string]interface{}),
+		vaults:        make([]interfaces.EnvironmentVault, 0),
+		functions:     make([]env_interfaces.VariableFunction, 0),
+		isSync:        false,
+		isInitialized: false,
 	}
 
-	svc.vaults = append(svc.vaults, config_vault.New())
-	svc.vaults = append(svc.vaults, credentials_vault.New())
-	svc.vaults = append(svc.vaults, backend_vault.New())
-	svc.vaults = append(svc.vaults, global_vault.New())
-	svc.vaults = append(svc.vaults, terraform_vault.New())
-	svc.vaults = append(svc.vaults, keyvault_vault.New())
+	// Adding system environment variables
+	svc.addEnvironment("API_PREFIX", "api")
 
-	svc.functions = append(svc.functions, random.RandomValueFunction{})
-	// Reading the values at the beginning
-	svc.Sync()
 	globalEnvironment = &svc
 	return globalEnvironment
 }
 
+func (env *Environment) IsInitialized() bool {
+	return env.isInitialized
+}
+
+func (env *Environment) Initialize() {
+
+	defer func() {
+		if r := recover(); r != nil {
+			err := fmt.Errorf("unable to sync environment: %v", r)
+			notify.Error(err.Error())
+			env.isInitialized = false
+		}
+	}()
+
+	if len(env.vaults) > 0 {
+		env.vaults = make([]interfaces.EnvironmentVault, 0)
+	}
+	if len(env.functions) > 0 {
+		env.functions = make([]env_interfaces.VariableFunction, 0)
+	}
+
+	// Adding environment vaults
+	env.vaults = append(env.vaults, config_vault.New())
+	env.vaults = append(env.vaults, credentials_vault.New())
+	env.vaults = append(env.vaults, backend_vault.New())
+	env.vaults = append(env.vaults, global_vault.New())
+	env.vaults = append(env.vaults, terraform_vault.New())
+	env.vaults = append(env.vaults, keyvault_vault.New())
+
+	// Adding environment functions
+	env.functions = append(env.functions, random.RandomValueFunction{})
+
+	// Reading the values at the beginning
+	if err := env.Sync(); err != nil {
+		env.isInitialized = false
+	} else {
+		env.isInitialized = true
+	}
+}
+
 func Get() *Environment {
 	if globalEnvironment != nil {
+		if !globalEnvironment.isInitialized {
+			globalEnvironment.Initialize()
+		}
 		return globalEnvironment
 	}
 
@@ -402,6 +441,17 @@ func (env *Environment) execute(value string, args ...string) string {
 		value = executer.Exec(value, args...)
 	}
 	return value
+}
+
+func (env *Environment) addEnvironment(key, value string) error {
+	if err := guard.EmptyOrNil(key); err != nil {
+		return err
+	}
+	if err := env.Add("env", key, value); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // func (env *Environment) Decode(source interface{}) error {

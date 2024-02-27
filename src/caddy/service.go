@@ -11,8 +11,11 @@ import (
 
 	"github.com/cjlapao/locally-cli/common"
 	"github.com/cjlapao/locally-cli/configuration"
+	"github.com/cjlapao/locally-cli/context/mock_component"
+	"github.com/cjlapao/locally-cli/context/service_component"
 	"github.com/cjlapao/locally-cli/docker"
 	"github.com/cjlapao/locally-cli/executer"
+	"github.com/cjlapao/locally-cli/helpers"
 	"github.com/cjlapao/locally-cli/hosts"
 	"github.com/cjlapao/locally-cli/icons"
 	"github.com/cjlapao/locally-cli/notifications"
@@ -48,7 +51,7 @@ func (svc *CaddyService) CheckForCaddy(softFail bool) {
 	config = configuration.Get()
 	if !config.GlobalConfiguration.Tools.Checked.CaddyChecked {
 		notify.InfoWithIcon(icons.IconFlag, "Checking for Caddy tool in the system")
-		if output, err := executer.ExecuteWithNoOutput(configuration.GetCaddyPath(), "version"); err != nil {
+		if output, err := executer.ExecuteWithNoOutput(helpers.GetCaddyPath(), "version"); err != nil {
 			if !softFail {
 				notify.Error("Caddy tool not found in system, this is required for the selected function")
 				os.Exit(1)
@@ -250,7 +253,7 @@ func (svc *CaddyService) generateSpaServicesCaddyFile() error {
 			notify.Error(err.Error())
 			return err
 		} else {
-			if config.Verbose() {
+			if common.IsVerbose() {
 				notify.InfoWithIcon(icons.IconCheckMark, "Folder %v was created successfully", common.CADDY_UI_PATH)
 			}
 		}
@@ -263,7 +266,7 @@ func (svc *CaddyService) generateSpaServicesCaddyFile() error {
 
 		if client.UseReverseProxy && client.ReverseProxyURI != "" {
 			notify.Wrench("Generating %v as a reverse proxy caddy file", client.Name)
-			clientFolderName := configuration.EncodeName(client.Name)
+			clientFolderName := common.EncodeName(client.Name)
 			filePath := helper.JoinPath(folderPath, fmt.Sprintf("%v.caddyfile", clientFolderName))
 			caddyFile := ""
 			if client.URI == "." || client.URI == "" {
@@ -302,12 +305,12 @@ func (svc *CaddyService) generateSpaServicesCaddyFile() error {
 				return err
 			}
 
-			if config.Verbose() {
+			if common.IsVerbose() {
 				notify.InfoWithIcon(icons.IconCheckMark, "Finished generating %v as a reverse proxy caddy file", client.Name)
 			}
 		} else {
 			notify.Wrench("Generating %v caddy file", client.Name)
-			clientFolderName := configuration.EncodeName(client.Name)
+			clientFolderName := common.EncodeName(client.Name)
 			filePath := helper.JoinPath(folderPath, fmt.Sprintf("%v.caddyfile", clientFolderName))
 			caddyFile := ""
 			if client.URI == "" {
@@ -386,7 +389,7 @@ func (svc *CaddyService) generateSpaServicesCaddyFile() error {
 				return err
 			}
 
-			if config.Verbose() {
+			if common.IsVerbose() {
 				notify.InfoWithIcon(icons.IconCheckMark, "Finished generating %v caddy file", client.Name)
 			}
 		}
@@ -405,7 +408,7 @@ func (svc *CaddyService) generateBackendRootServicesAndRoutesCaddyFile() error {
 			notify.Error(err.Error())
 			return err
 		} else {
-			if config.Verbose() {
+			if common.IsVerbose() {
 				notify.Hammer("Folder %v was created successfully", common.CADDY_ROOT_SERVICES_PATH)
 			}
 		}
@@ -419,7 +422,7 @@ func (svc *CaddyService) generateBackendRootServicesAndRoutesCaddyFile() error {
 			notify.Error(err.Error())
 			return err
 		} else {
-			if config.Verbose() {
+			if common.IsVerbose() {
 				notify.InfoWithIcon(icons.IconCheckMark, "Folder %v was created successfully", common.CADDY_ROOT_SERVICES_HOSTS_PATH)
 			}
 		}
@@ -433,7 +436,7 @@ func (svc *CaddyService) generateBackendRootServicesAndRoutesCaddyFile() error {
 			notify.Error(err.Error())
 			return err
 		} else {
-			if config.Verbose() {
+			if common.IsVerbose() {
 				notify.InfoWithIcon(icons.IconCheckMark, "Folder %v was created successfully", common.CADDY_ROOT_SERVICES_ROUTES_PATH)
 			}
 		}
@@ -444,7 +447,7 @@ func (svc *CaddyService) generateBackendRootServicesAndRoutesCaddyFile() error {
 			for _, component := range service.Components {
 				if component.ReverseProxyURI != "" && len(component.Routes) > 0 {
 					notify.Wrench("Generating %v service %v component caddy file", service.Name, component.Name)
-					componentFolderName := fmt.Sprintf("%v_%v", configuration.EncodeName(service.Name), configuration.EncodeName(component.Name))
+					componentFolderName := fmt.Sprintf("%v_%v", common.EncodeName(service.Name), common.EncodeName(component.Name))
 					serviceFilePath := helper.JoinPath(servicesHostFolderPath, fmt.Sprintf("%v.caddyfile", componentFolderName))
 					componentCaddyFile := fmt.Sprintf("(%v) {\n", componentFolderName)
 					componentCaddyFile += fmt.Sprintf("  reverse_proxy %v\n", component.ReverseProxyURI)
@@ -454,16 +457,16 @@ func (svc *CaddyService) generateBackendRootServicesAndRoutesCaddyFile() error {
 						return err
 					}
 
-					if config.Verbose() {
+					if common.IsVerbose() {
 						notify.InfoWithIcon(icons.IconCheckMark, "Finished generating %v service %v component caddy file", service.Name, component.Name)
 					}
 
 					notify.Wrench("Generating %v service %v component routes caddy file", service.Name, component.Name)
-					componentRoutesFolderName := fmt.Sprintf("%v_%v_routes", configuration.EncodeName(service.Name), configuration.EncodeName(component.Name))
+					componentRoutesFolderName := fmt.Sprintf("%v_%v_routes", common.EncodeName(service.Name), common.EncodeName(component.Name))
 					serviceRoutesFilePath := helper.JoinPath(servicesRouteFolderPath, fmt.Sprintf("%v.caddyfile", componentRoutesFolderName))
 					componentRoutesCaddyFile := ""
 					for _, route := range component.Routes {
-						routeEndpoint := configuration.EncodeName(route.Name)
+						routeEndpoint := common.EncodeName(route.Name)
 						componentRoutesCaddyFile += fmt.Sprintf("@%v_%v_endpoint {\n", componentRoutesFolderName, routeEndpoint)
 						componentRoutesCaddyFile += fmt.Sprintf("  path_regexp %v\n", route.Regex)
 						componentRoutesCaddyFile += "}\n"
@@ -501,7 +504,7 @@ func (svc *CaddyService) generateBackendRootServicesAndRoutesCaddyFile() error {
 						return err
 					}
 
-					if config.Verbose() {
+					if common.IsVerbose() {
 						notify.InfoWithIcon(icons.IconCheckMark, "Finished generating %v service %v component routes caddy file", service.Name, component.Name)
 					}
 				}
@@ -521,7 +524,7 @@ func (svc *CaddyService) generateTenantsCaddyFile() error {
 			notify.Error(err.Error())
 			return err
 		} else {
-			if config.Verbose() {
+			if common.IsVerbose() {
 				notify.InfoWithIcon(icons.IconCheckMark, "Folder %v was created successfully", common.CADDY_TENANTS_PATH)
 			}
 		}
@@ -530,9 +533,9 @@ func (svc *CaddyService) generateTenantsCaddyFile() error {
 	defaultSpa := svc.getDefaultSpaService()
 	for _, tenant := range config.GetCurrentContext().Tenants {
 		notify.Wrench("Generating %v tenant caddy file", tenant.Name)
-		tenantFolderName := configuration.EncodeName(tenant.Name)
+		tenantFolderName := common.EncodeName(tenant.Name)
 		filePath := helper.JoinPath(folderPath, fmt.Sprintf("%v.caddyfile", tenantFolderName))
-		webClientShellName := configuration.EncodeName(common.WEB_CLIENT_SHELL_NAME)
+		webClientShellName := common.EncodeName(common.WEB_CLIENT_SHELL_NAME)
 		caddyFile := fmt.Sprintf("%v.%v {\n", tenant.URI, config.GlobalConfiguration.Network.DomainName)
 		caddyFile += "\n"
 		caddyFile += fmt.Sprintf("  import cors_headers https://%v.%v\n", config.GetCurrentContext().Configuration.RootURI, config.GlobalConfiguration.Network.DomainName)
@@ -559,7 +562,7 @@ func (svc *CaddyService) generateTenantsCaddyFile() error {
 			return err
 		}
 
-		if config.Verbose() {
+		if common.IsVerbose() {
 			notify.InfoWithIcon(icons.IconCheckMark, "Finished generating %v tenant caddy file", tenant.Name)
 		}
 
@@ -577,7 +580,7 @@ func (svc *CaddyService) generateHostedBackendServicesCaddyFile() error {
 			notify.Error(err.Error())
 			return err
 		} else {
-			if config.Verbose() {
+			if common.IsVerbose() {
 				notify.InfoWithIcon(icons.IconCheckMark, "Folder %v was created successfully", common.CADDY_HOSTED_SERVICES_PATH)
 			}
 		}
@@ -586,7 +589,7 @@ func (svc *CaddyService) generateHostedBackendServicesCaddyFile() error {
 	for _, backend := range config.GetCurrentContext().BackendServices {
 		if backend.URI != "" {
 			notify.Wrench("Generating %v hosted backend service caddy file", backend.Name)
-			backendFolderName := configuration.EncodeName(backend.Name)
+			backendFolderName := common.EncodeName(backend.Name)
 			filePath := helper.JoinPath(folderPath, fmt.Sprintf("%v.caddyfile", backendFolderName))
 			caddyFile := fmt.Sprintf("%v.%v {\n", backend.URI, config.GlobalConfiguration.Network.DomainName)
 			caddyFile += "\n"
@@ -612,8 +615,8 @@ func (svc *CaddyService) generateHostedBackendServicesCaddyFile() error {
 
 			for _, component := range backend.Components {
 				for _, route := range component.Routes {
-					componentName := fmt.Sprintf("%v_%v", configuration.EncodeName(backend.Name), configuration.EncodeName(component.Name))
-					routeEndpoint := configuration.EncodeName(route.Name)
+					componentName := fmt.Sprintf("%v_%v", common.EncodeName(backend.Name), common.EncodeName(component.Name))
+					routeEndpoint := common.EncodeName(route.Name)
 					caddyFile += fmt.Sprintf("  @%v_%v_endpoint {\n", componentName, routeEndpoint)
 
 					caddyFile += fmt.Sprintf("    path_regexp %v\n", route.Regex)
@@ -657,7 +660,7 @@ func (svc *CaddyService) generateHostedBackendServicesCaddyFile() error {
 				return err
 			}
 
-			if config.Verbose() {
+			if common.IsVerbose() {
 				notify.InfoWithIcon(icons.IconCheckMark, "%s Finished generating %v hosted backend service caddy file", backend.Name)
 			}
 		}
@@ -666,7 +669,7 @@ func (svc *CaddyService) generateHostedBackendServicesCaddyFile() error {
 	return nil
 }
 
-func (svc *CaddyService) getDefaultSpaService() *configuration.SpaService {
+func (svc *CaddyService) getDefaultSpaService() *service_component.SpaService {
 	config := configuration.Get()
 	for _, spaService := range config.GetCurrentContext().SpaServices {
 		if spaService.Default {
@@ -687,21 +690,21 @@ func (svc *CaddyService) generateCaddyMockServicesRoutesFile() error {
 			notify.Error(err.Error())
 			return err
 		} else {
-			if config.Verbose() {
+			if common.IsVerbose() {
 				notify.InfoWithIcon(icons.IconCheckMark, "Folder %v was created", common.CADDY_MOCK_ROUTES_PATH)
 			}
 		}
 	}
 
 	for _, mockService := range config.GetCurrentContext().MockServices {
-		mockRoutesFolderName := fmt.Sprintf("%v_mock_routes", configuration.EncodeName(mockService.Name))
+		mockRoutesFolderName := fmt.Sprintf("%v_mock_routes", common.EncodeName(mockService.Name))
 		serviceRoutesFilePath := helper.JoinPath(servicesMockRouteFolderPath, fmt.Sprintf("%v.caddyfile", mockRoutesFolderName))
 		notify.Wrench("Generating mock service %v routes caddy file", mockService.Name)
 		mockRoutesCaddyFile := ""
 		for _, mockRoute := range mockService.MockRoutes {
 			notify.Debug(mockRoute.Regex)
 			if mockRoute.Regex != "" {
-				routeEndpoint := configuration.EncodeName(mockRoute.Name)
+				routeEndpoint := common.EncodeName(mockRoute.Name)
 				mockRoutesCaddyFile += fmt.Sprintf("@%v_%v_endpoint {\n", mockRoutesFolderName, routeEndpoint)
 				mockRoutesCaddyFile += fmt.Sprintf("  path_regexp %v\n", mockRoute.Regex)
 				mockRoutesCaddyFile += "}\n"
@@ -741,7 +744,7 @@ func (svc *CaddyService) generateCaddyMockServicesRoutesFile() error {
 					return err
 				}
 
-				if config.Verbose() {
+				if common.IsVerbose() {
 					notify.InfoWithIcon(icons.IconCheckMark, "Finished generating mock service %v routes caddy file", mockService.Name)
 				}
 			}
@@ -751,18 +754,18 @@ func (svc *CaddyService) generateCaddyMockServicesRoutesFile() error {
 	return nil
 }
 
-func (svc *CaddyService) copyWebClient(client *configuration.SpaService) error {
+func (svc *CaddyService) copyWebClient(client *service_component.SpaService) error {
 	if err := svc.updateWebClientEnvironment(client); err != nil {
 		return err
 	}
 
 	notify.Info("Starting to copy client SPA %v to the build folder", client.Name)
-	basePath := helper.JoinPath(config.GetCurrentContext().Configuration.OutputPath, common.SPA_PATH, configuration.EncodeName(client.Name))
+	basePath := helper.JoinPath(config.GetCurrentContext().Configuration.OutputPath, common.SPA_PATH, common.EncodeName(client.Name))
 	if err := helper.CopyDir(client.Path, basePath); err != nil {
 		notify.FromError(err, "Could not copy %v Client SPA to build folder")
 		return err
 	}
-	if config.Verbose() {
+	if common.IsVerbose() {
 		notify.Info("Finished copying the client SPA %v to the build folder", client.Name)
 	}
 	return nil
@@ -781,7 +784,7 @@ func (svc *CaddyService) generateDockerfile() error {
 	if config.GlobalConfiguration.Network != nil && config.GlobalConfiguration.Network.CERTPath != "" && config.GlobalConfiguration.Network.PrivateKeyPath != "" {
 		certPath := filepath.Base(config.GlobalConfiguration.Network.CERTPath)
 		privKeyPath := filepath.Base(config.GlobalConfiguration.Network.PrivateKeyPath)
-		baseTlsPath := configuration.EncodeName(helper.JoinPath(common.CADDY_PATH, common.TLS_PATH))
+		baseTlsPath := common.EncodeName(helper.JoinPath(common.CADDY_PATH, common.TLS_PATH))
 
 		dockerFile += fmt.Sprintf("COPY ./%v/%v /etc/caddy/%v\n", baseTlsPath, certPath, certPath)
 		dockerFile += fmt.Sprintf("COPY ./%v/%v /etc/caddy/%v\n", baseTlsPath, privKeyPath, privKeyPath)
@@ -791,10 +794,10 @@ func (svc *CaddyService) generateDockerfile() error {
 
 	for _, client := range config.GetCurrentContext().SpaServices {
 		if !client.UseReverseProxy {
-			folderName := configuration.EncodeName(client.Name)
-			basePath := configuration.EncodeName(helper.JoinPath(common.SPA_PATH, folderName))
-			dockerFile += fmt.Sprintf("COPY ./%v /etc/caddy/spa/%v\n", basePath, configuration.EncodeName(client.Name))
-			dockerFile += fmt.Sprintf("ENV %v_path=/etc/caddy/spa/%v\n", configuration.EncodeName(client.Name), configuration.EncodeName(client.Name))
+			folderName := common.EncodeName(client.Name)
+			basePath := common.EncodeName(helper.JoinPath(common.SPA_PATH, folderName))
+			dockerFile += fmt.Sprintf("COPY ./%v /etc/caddy/spa/%v\n", basePath, common.EncodeName(client.Name))
+			dockerFile += fmt.Sprintf("ENV %v_path=/etc/caddy/spa/%v\n", common.EncodeName(client.Name), common.EncodeName(client.Name))
 		}
 
 		dockerFile += "ENV root_path=/etc/caddy\n"
@@ -943,7 +946,7 @@ func (svc *CaddyService) copyCertificates() error {
 			notify.FromError(err, "Could not copy SSL Certificate %v to build folder", config.GlobalConfiguration.Network.CERTPath)
 			return err
 		}
-		if config.Verbose() {
+		if common.IsVerbose() {
 			notify.InfoWithIcon(icons.IconCheckMark, "Finished copying the SSL Certificate %v to the build folder", config.GlobalConfiguration.Network.CERTPath)
 		}
 
@@ -952,20 +955,20 @@ func (svc *CaddyService) copyCertificates() error {
 			notify.FromError(err, "Could not copy SL Certificate Private Key %v to build folder", config.GlobalConfiguration.Network.PrivateKeyPath)
 			return err
 		}
-		if config.Verbose() {
+		if common.IsVerbose() {
 			notify.InfoWithIcon(icons.IconCheckMark, "Finished copying the SL Certificate Private Key %v to the build folder", config.GlobalConfiguration.Network.PrivateKeyPath)
 		}
 	}
 	return nil
 }
 
-func (svc *CaddyService) generateServiceMockRouteFragment(name string, mockRoutes []*configuration.MockRoute) (string, error) {
+func (svc *CaddyService) generateServiceMockRouteFragment(name string, mockRoutes []*mock_component.MockRoute) (string, error) {
 	notify.Wrench("Generating service %s mock route fragment", name)
 	caddyFragment := ""
 	for _, mockRoute := range mockRoutes {
 		notify.Debug(mockRoute.Regex)
 		if mockRoute.Regex != "" {
-			routeEndpoint := configuration.EncodeName(mockRoute.Name)
+			routeEndpoint := common.EncodeName(mockRoute.Name)
 			caddyFragment += "  \n"
 			caddyFragment += fmt.Sprintf("  @%v_%v_endpoint {\n", name, routeEndpoint)
 			caddyFragment += fmt.Sprintf("    path_regexp %v\n", mockRoute.Regex)
@@ -1003,13 +1006,13 @@ func (svc *CaddyService) generateServiceMockRouteFragment(name string, mockRoute
 		}
 	}
 
-	if config.Verbose() {
+	if common.IsVerbose() {
 		notify.InfoWithIcon(icons.IconCheckMark, "Finished generating service %s mock route fragment", name)
 	}
 	return caddyFragment, nil
 }
 
-func (svc *CaddyService) updateWebClientEnvironment(webClient *configuration.SpaService) error {
+func (svc *CaddyService) updateWebClientEnvironment(webClient *service_component.SpaService) error {
 	// logger.Info("Updating WebClient Environment.json file")
 	// if webClient.EnvironmentPath == "" {
 	// 	return nil

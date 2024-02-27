@@ -5,18 +5,21 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/cjlapao/locally-cli/configuration"
-	"github.com/cjlapao/locally-cli/entities"
-	"github.com/cjlapao/locally-cli/environment"
-	"github.com/cjlapao/locally-cli/executer"
-	"github.com/cjlapao/locally-cli/icons"
-	"github.com/cjlapao/locally-cli/notifications"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/cjlapao/locally-cli/common"
+	"github.com/cjlapao/locally-cli/configuration"
+	"github.com/cjlapao/locally-cli/entities"
+	"github.com/cjlapao/locally-cli/environment"
+	"github.com/cjlapao/locally-cli/executer"
+	"github.com/cjlapao/locally-cli/helpers"
+	"github.com/cjlapao/locally-cli/icons"
+	"github.com/cjlapao/locally-cli/notifications"
 
 	"github.com/pascaldekloe/jwt"
 )
@@ -41,7 +44,6 @@ func GetWrapper() *AzureCliWrapper {
 }
 
 func (svc *AzureCliWrapper) Login(credentials *WrapperCredentials) error {
-	config := configuration.Get()
 	envSvc := environment.Get()
 	notify.Rocket("Running Azure Cli Login...")
 
@@ -89,11 +91,11 @@ func (svc *AzureCliWrapper) Login(credentials *WrapperCredentials) error {
 	}
 
 	if !globalLoginInformation.LoggedIn {
-		if config.Debug() {
+		if common.IsDebug() {
 			notify.Debug("Login Run Arguments: %v", fmt.Sprintf("%v", runArgs))
 		}
 
-		output, err := executer.ExecuteWithNoOutput(configuration.GetAzureCliPath(), runArgs...)
+		output, err := executer.ExecuteWithNoOutput(helpers.GetAzureCliPath(), runArgs...)
 
 		if err != nil {
 			notify.FromError(err, "Something wrong running azure cli login")
@@ -115,7 +117,7 @@ func (svc *AzureCliWrapper) Login(credentials *WrapperCredentials) error {
 				if strings.EqualFold(subscription.ID, credentials.SubscriptionId) {
 					found = true
 					notify.Success("Found subscription %s, setting it to be active", credentials.SubscriptionId)
-					_, err := executer.ExecuteWithNoOutput(configuration.GetAzureCliPath(), "account", "set", "--subscription", credentials.SubscriptionId)
+					_, err := executer.ExecuteWithNoOutput(helpers.GetAzureCliPath(), "account", "set", "--subscription", credentials.SubscriptionId)
 					if err != nil {
 						notify.FromError(err, "Something wrong running azureCli login")
 						if output.GetAllOutput() != "" {
@@ -160,7 +162,6 @@ func (svc *AzureCliWrapper) Login(credentials *WrapperCredentials) error {
 
 func (svc *AzureCliWrapper) UserLogin(subscriptionId, tenantId string) error {
 	env := environment.Get()
-	config := configuration.Get()
 	msg := "Running Azure Cli User Login"
 	if tenantId != "" {
 		msg += fmt.Sprintf(" for tenant %s", tenantId)
@@ -203,13 +204,13 @@ func (svc *AzureCliWrapper) UserLogin(subscriptionId, tenantId string) error {
 		runArgs = append(runArgs, tenantId)
 	}
 
-	if config.Debug() {
+	if common.IsDebug() {
 		notify.Debug("User Login Run Arguments: %v", fmt.Sprintf("%v", runArgs))
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	output, err := executer.ExecuteWithNoOutputContext(ctx, configuration.GetAzureCliPath(), runArgs...)
+	output, err := executer.ExecuteWithNoOutputContext(ctx, helpers.GetAzureCliPath(), runArgs...)
 
 	if err != nil {
 		notify.FromError(err, "Something wrong running azure cli user login")
@@ -242,7 +243,6 @@ func (svc *AzureCliWrapper) UserLogin(subscriptionId, tenantId string) error {
 }
 
 func (svc *AzureCliWrapper) Logout() error {
-	config := configuration.Get()
 	notify.Rocket("Running Azure Cli Logout...")
 
 	runArgs := make([]string, 0)
@@ -253,11 +253,11 @@ func (svc *AzureCliWrapper) Logout() error {
 		return nil
 	}
 
-	if config.Debug() {
+	if common.IsDebug() {
 		notify.Debug("Logout Run Arguments: %v", fmt.Sprintf("%v", runArgs))
 	}
 
-	output, err := executer.ExecuteWithNoOutput(configuration.GetAzureCliPath(), runArgs...)
+	output, err := executer.ExecuteWithNoOutput(helpers.GetAzureCliPath(), runArgs...)
 
 	if err != nil {
 		notify.FromError(err, "Something wrong running azure cli logout")
@@ -277,7 +277,6 @@ func (svc *AzureCliWrapper) Logout() error {
 }
 
 func (svc *AzureCliWrapper) ListApps(displayName string) (*AzureAdAppList, error) {
-	config := configuration.Get()
 	notify.Rocket("Running Azure Cli List AD Apps...")
 
 	envSvc := environment.Get()
@@ -293,11 +292,11 @@ func (svc *AzureCliWrapper) ListApps(displayName string) (*AzureAdAppList, error
 		runArgs = append(runArgs, "--all")
 	}
 
-	if config.Debug() {
+	if common.IsDebug() {
 		notify.Debug("Logout Run Arguments: %v", fmt.Sprintf("%v", runArgs))
 	}
 
-	output, err := executer.ExecuteWithNoOutput(configuration.GetAzureCliPath(), runArgs...)
+	output, err := executer.ExecuteWithNoOutput(helpers.GetAzureCliPath(), runArgs...)
 
 	if err != nil {
 		notify.FromError(err, "Something wrong running azure cli list apps")
@@ -338,11 +337,11 @@ func (svc *AzureCliWrapper) CreateServicePrincipal(displayName string, subscript
 		runArgs = append(runArgs, fmt.Sprintf("/subscriptions/%s", subscriptionId))
 	}
 
-	if config.Debug() {
+	if common.IsDebug() {
 		notify.Debug("Run Arguments: %v", fmt.Sprintf("%v", runArgs))
 	}
 
-	output, err := executer.ExecuteWithNoOutput(configuration.GetAzureCliPath(), runArgs...)
+	output, err := executer.ExecuteWithNoOutput(helpers.GetAzureCliPath(), runArgs...)
 
 	if err != nil {
 		notify.FromError(err, "Something wrong running azure cli ad service principal")
@@ -365,7 +364,8 @@ func (svc *AzureCliWrapper) CreateServicePrincipal(displayName string, subscript
 		TenantId:       spResponse.TenantId,
 	}
 
-	configuration.AddAzureCredential(&credential)
+	ctx := config.GetCurrentContext()
+	ctx.AddAzureCredential(&credential)
 	cc := config.GetCurrentContext()
 	if err := cc.SaveCredentials(); err != nil {
 		return nil, err
@@ -380,7 +380,6 @@ func (svc *AzureCliWrapper) CreateServicePrincipal(displayName string, subscript
 }
 
 func (svc *AzureCliWrapper) UpsertResourceGroup(resourceGroupName string, subscriptionId string, location string) error {
-	config := configuration.Get()
 	envSvc := environment.Get()
 	resourceGroupName = envSvc.Replace(resourceGroupName)
 	subscriptionId = envSvc.Replace(subscriptionId)
@@ -415,11 +414,11 @@ func (svc *AzureCliWrapper) UpsertResourceGroup(resourceGroupName string, subscr
 	runArgs = append(runArgs, "--query")
 	runArgs = append(runArgs, fmt.Sprintf("[?name=='%s'].{name: name}", resourceGroupName))
 
-	if config.Debug() {
+	if common.IsDebug() {
 		notify.Debug("Run Parameters: %v", fmt.Sprintf("%v", runArgs))
 	}
 
-	output, err := executer.ExecuteWithNoOutput(configuration.GetAzureCliPath(), runArgs...)
+	output, err := executer.ExecuteWithNoOutput(helpers.GetAzureCliPath(), runArgs...)
 
 	if err != nil {
 		notify.FromError(err, "Something wrong running azure cli querying resource")
@@ -449,11 +448,11 @@ func (svc *AzureCliWrapper) UpsertResourceGroup(resourceGroupName string, subscr
 	createRunArgs = append(createRunArgs, "--name")
 	createRunArgs = append(createRunArgs, resourceGroupName)
 
-	if config.Debug() {
+	if common.IsDebug() {
 		notify.Debug("Run Parameters: %v", fmt.Sprintf("%v", runArgs))
 	}
 
-	createOutput, err := executer.ExecuteWithNoOutput(configuration.GetAzureCliPath(), createRunArgs...)
+	createOutput, err := executer.ExecuteWithNoOutput(helpers.GetAzureCliPath(), createRunArgs...)
 
 	if err != nil {
 		notify.FromError(err, "Something wrong running azure cli creating resource")
@@ -468,7 +467,6 @@ func (svc *AzureCliWrapper) UpsertResourceGroup(resourceGroupName string, subscr
 }
 
 func (svc *AzureCliWrapper) UpsertStorageAccount(name, resourceGroupName, subscriptionId string) error {
-	config := configuration.Get()
 	envSvc := environment.Get()
 	name = envSvc.Replace(name)
 	resourceGroupName = envSvc.Replace(resourceGroupName)
@@ -508,11 +506,11 @@ func (svc *AzureCliWrapper) UpsertStorageAccount(name, resourceGroupName, subscr
 	runArgs = append(runArgs, "--query")
 	runArgs = append(runArgs, fmt.Sprintf("[?name=='%s'].{name: name}", name))
 
-	if config.Debug() {
+	if common.IsDebug() {
 		notify.Debug("Run Parameters: %v", fmt.Sprintf("%v", runArgs))
 	}
 
-	output, err := executer.ExecuteWithNoOutput(configuration.GetAzureCliPath(), runArgs...)
+	output, err := executer.ExecuteWithNoOutput(helpers.GetAzureCliPath(), runArgs...)
 
 	if err != nil {
 		notify.FromError(err, "Something wrong running azure cli querying resource")
@@ -549,11 +547,11 @@ func (svc *AzureCliWrapper) UpsertStorageAccount(name, resourceGroupName, subscr
 	createRunArgs = append(createRunArgs, "--encryption-services")
 	createRunArgs = append(createRunArgs, "blob")
 
-	if config.Debug() {
+	if common.IsDebug() {
 		notify.Debug("Run Parameters: %v", fmt.Sprintf("%v", runArgs))
 	}
 
-	createOutput, err := executer.ExecuteWithNoOutput(configuration.GetAzureCliPath(), createRunArgs...)
+	createOutput, err := executer.ExecuteWithNoOutput(helpers.GetAzureCliPath(), createRunArgs...)
 
 	if err != nil {
 		notify.FromError(err, "Something wrong running azure cli creating resource")
@@ -568,7 +566,6 @@ func (svc *AzureCliWrapper) UpsertStorageAccount(name, resourceGroupName, subscr
 }
 
 func (svc *AzureCliWrapper) GetStorageAccountKey(name, resourceGroupName, subscriptionId string) (string, error) {
-	config := configuration.Get()
 	envSvc := environment.Get()
 	name = envSvc.Replace(name)
 	resourceGroupName = envSvc.Replace(resourceGroupName)
@@ -611,11 +608,11 @@ func (svc *AzureCliWrapper) GetStorageAccountKey(name, resourceGroupName, subscr
 	runArgs = append(runArgs, "--query")
 	runArgs = append(runArgs, "[0].value")
 
-	if config.Debug() {
+	if common.IsDebug() {
 		notify.Debug("Run Parameters: %v", fmt.Sprintf("%v", runArgs))
 	}
 
-	output, err := executer.ExecuteWithNoOutput(configuration.GetAzureCliPath(), runArgs...)
+	output, err := executer.ExecuteWithNoOutput(helpers.GetAzureCliPath(), runArgs...)
 
 	if err != nil {
 		notify.FromError(err, "Something wrong running azure cli querying resource")
@@ -639,7 +636,6 @@ func (svc *AzureCliWrapper) GetStorageAccountKey(name, resourceGroupName, subscr
 }
 
 func (svc *AzureCliWrapper) UpsertStorageAccountContainer(name, storageAccountName, storageAccountKey string) error {
-	config := configuration.Get()
 	envSvc := environment.Get()
 	name = envSvc.Replace(name)
 	storageAccountName = envSvc.Replace(storageAccountName)
@@ -667,11 +663,11 @@ func (svc *AzureCliWrapper) UpsertStorageAccountContainer(name, storageAccountNa
 	runArgs = append(runArgs, "--query")
 	runArgs = append(runArgs, fmt.Sprintf("[?name=='%s'].{name: name}", name))
 
-	if config.Debug() {
+	if common.IsDebug() {
 		notify.Debug("Run Parameters: %v", fmt.Sprintf("%v", runArgs))
 	}
 
-	output, err := executer.ExecuteWithNoOutput(configuration.GetAzureCliPath(), runArgs...)
+	output, err := executer.ExecuteWithNoOutput(helpers.GetAzureCliPath(), runArgs...)
 
 	if err != nil {
 		notify.FromError(err, "Something wrong running azure cli querying resource")
@@ -704,11 +700,11 @@ func (svc *AzureCliWrapper) UpsertStorageAccountContainer(name, storageAccountNa
 	createRunArgs = append(createRunArgs, "--account-key")
 	createRunArgs = append(createRunArgs, storageAccountKey)
 
-	if config.Debug() {
+	if common.IsDebug() {
 		notify.Debug("Run Parameters: %v", fmt.Sprintf("%v", runArgs))
 	}
 
-	createOutput, err := executer.ExecuteWithNoOutput(configuration.GetAzureCliPath(), createRunArgs...)
+	createOutput, err := executer.ExecuteWithNoOutput(helpers.GetAzureCliPath(), createRunArgs...)
 
 	if err != nil {
 		notify.FromError(err, "Something wrong running azure cli creating resource")
@@ -723,7 +719,6 @@ func (svc *AzureCliWrapper) UpsertStorageAccountContainer(name, storageAccountNa
 }
 
 func (svc *AzureCliWrapper) SetSubscription(subscriptionId string) error {
-	config := configuration.Get()
 	envSvc := environment.Get()
 	subscriptionId = envSvc.Replace(subscriptionId)
 
@@ -740,11 +735,11 @@ func (svc *AzureCliWrapper) SetSubscription(subscriptionId string) error {
 	runArgs = append(runArgs, "--subscription")
 	runArgs = append(runArgs, subscriptionId)
 
-	if config.Debug() {
+	if common.IsDebug() {
 		notify.Debug("run parameters: %v", fmt.Sprintf("%v", runArgs))
 	}
 
-	output, err := executer.ExecuteWithNoOutput(configuration.GetAzureCliPath(), runArgs...)
+	output, err := executer.ExecuteWithNoOutput(helpers.GetAzureCliPath(), runArgs...)
 
 	if err != nil {
 		notify.FromError(err, "Something wrong running setting the subscription")
@@ -779,7 +774,6 @@ func (svc *AzureCliWrapper) IsLoggedIn(subscriptionId, tenantId string) bool {
 }
 
 func (svc *AzureCliWrapper) GetAcrRefreshToken(acr, subscriptionId, tenantId string) (string, error) {
-	config := configuration.Get()
 	env := environment.Get()
 
 	if subscriptionId != "" {
@@ -802,7 +796,7 @@ func (svc *AzureCliWrapper) GetAcrRefreshToken(acr, subscriptionId, tenantId str
 	acr = strings.TrimPrefix(acr, "https://")
 	acr = strings.TrimPrefix(acr, "http://")
 
-	encodedAcrName := configuration.EncodeName(acr)
+	encodedAcrName := common.EncodeName(acr)
 	token := os.Getenv(fmt.Sprintf("locally_AZURE_%s_%s_%s_ACR_TOKEN", subscriptionId, tenantId, encodedAcrName))
 	notify.Debug("Token value: %s", token)
 
@@ -841,11 +835,11 @@ func (svc *AzureCliWrapper) GetAcrRefreshToken(acr, subscriptionId, tenantId str
 	}
 	runArgs = append(runArgs, "--expose-token")
 
-	if config.Debug() {
+	if common.IsDebug() {
 		notify.Debug("run parameters: %v", fmt.Sprintf("%v", runArgs))
 	}
 
-	output, err := executer.ExecuteWithNoOutput(configuration.GetAzureCliPath(), runArgs...)
+	output, err := executer.ExecuteWithNoOutput(helpers.GetAzureCliPath(), runArgs...)
 
 	if err != nil {
 		notify.FromError(err, "Something wrong running setting the subscription")

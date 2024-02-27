@@ -1,10 +1,11 @@
 package operations
 
 import (
-	"github.com/cjlapao/locally-cli/azure_keyvault"
+	"os"
+
 	"github.com/cjlapao/locally-cli/common"
 	"github.com/cjlapao/locally-cli/help"
-	"os"
+	"github.com/cjlapao/locally-cli/vaults/azure_keyvault"
 
 	"github.com/cjlapao/common-go/helper"
 )

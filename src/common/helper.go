@@ -47,3 +47,11 @@ func GetExeDirectoryPath() string {
 
 	return filepath.Dir(ex)
 }
+
+func EncodeName(name string) string {
+	folderName := strings.ReplaceAll(name, "\\", "/")
+	folderName = strings.ReplaceAll(folderName, " ", "_")
+	folderName = strings.ReplaceAll(folderName, ".", "_")
+
+	return strings.ToLower(folderName)
+}
