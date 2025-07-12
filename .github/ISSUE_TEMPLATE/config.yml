@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Ask a question or provide feedback about locally
+    about: For general Q&A and feedback, see the Discussions tab.
+    url: https://github.com/cjlapao/locally/discussions
+  - name: Ask a question or provide feedback about locally
+    about: Please check out the GitHub community forum for discussions about locally
+    url: https://github.com/cjlapao/locally-cli/discussions/categories/q-a

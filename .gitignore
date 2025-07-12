@@ -1,7 +1,7 @@
 **/bin
 *.personal.*
 **/*.personal.*
-**/.env
+**/*.env
 /.local
 **/ssl
 *.exe
@@ -11,3 +11,4 @@
 */locally.exe
 **/__debug_bin
 **/*.bck
+*.db

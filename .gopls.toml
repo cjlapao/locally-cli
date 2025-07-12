@@ -1,0 +1,6 @@
+# gopls configuration file
+[ui.diagnostic.analyses]
+ST1003 = false
+
+[ui.diagnostic.staticcheck]
+checks = ["all", "-ST1003"] 
