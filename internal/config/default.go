@@ -12,20 +12,29 @@ func DefaultConfig() *Config {
 			{Key: ServerAPIPrefixKey, Value: "/api", EnvName: ServerAPIPrefixEnvKey, FlagName: FlagAPIPrefix},
 			{Key: AuthRootPasswordKey, Value: "root", EnvName: AuthRootPasswordEnvKey, FlagName: FlagRootPassword},
 			{Key: JwtAuthSecretKey, Value: "secret", EnvName: JwtAuthSecretEnvKey, FlagName: FlagJwtAuthSecret},
+			{Key: JwtIssuerKey, Value: "locally-cli", EnvName: JwtIssuerEnvKey, FlagName: FlagJwtIssuer},
 			{Key: EncryptionMasterSecretKey, Value: "default-master-secret-change-in-production", EnvName: EncryptionMasterSecretEnvKey, FlagName: FlagEncryptionMasterSecret},
 			{Key: EncryptionGlobalSecretKey, Value: "default-global-secret-change-in-production", EnvName: EncryptionGlobalSecretEnvKey, FlagName: FlagEncryptionGlobalSecret},
+
 			// Root User Default Values
 			{Key: RootUserUsernameKey, Value: "root", EnvName: RootUserUsernameEnvKey, FlagName: FlagRootUserUsername},
 			{Key: RootUserPasswordKey, Value: "root", EnvName: RootUserPasswordEnvKey, FlagName: FlagRootUserPassword},
+
 			// Seeding Default Values
 			{Key: SeedDemoDataKey, Value: "false", EnvName: SeedDemoDataEnvKey, FlagName: FlagSeedDemoData},
+
+			// Pagination Default Values
+			{Key: PaginationDefaultPageSizeKey, Value: "20", EnvName: PaginationDefaultPageSizeEnvKey, FlagName: FlagPaginationDefaultPageSize},
+
 			// API Key
-			{Key: APIKey, Value: "sk-pde-"},
+			{Key: APIKey, Value: "sk-locally-"},
+
 			// Cors
 			{Key: CorsAllowOriginsKey, Value: "http://localhost:3000, http://127.0.0.1:3000", EnvName: CorsAllowOriginsEnvKey, FlagName: FlagCorsAllowOrigins},
 			{Key: CorsAllowMethodsKey, Value: "GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD", EnvName: CorsAllowMethodsEnvKey, FlagName: FlagCorsAllowMethods},
 			{Key: CorsAllowHeadersKey, Value: "Accept, Accept-Language, Content-Type, Content-Language, Origin, Authorization, X-Requested-With, X-Request-ID, X-HTTP-Method-Override, Cache-Control", EnvName: CorsAllowHeadersEnvKey, FlagName: FlagCorsAllowHeaders},
 			{Key: CorsExposeHeadersKey, Value: "Content-Length, Content-Type, X-Request-ID", EnvName: CorsExposeHeadersEnvKey, FlagName: FlagCorsExposeHeaders},
+
 			// Database Default Values
 			{Key: DatabaseTypeKey, Value: "sqlite", EnvName: DatabaseTypeEnvKey, FlagName: FlagDatabaseType},
 			{Key: DatabaseStoragePathKey, Value: "locally.db", EnvName: DatabaseStoragePathEnvKey, FlagName: FlagDatabaseStoragePath},

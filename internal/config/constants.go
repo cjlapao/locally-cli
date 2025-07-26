@@ -1,8 +1,17 @@
 package config
 
 const (
-	GlobalTenantID = "global"
-	SuperUserRole  = "su"
+	GlobalTenantID              = "global"
+	GlobalTenantName            = "Global Tenant"
+	SuperUserRole               = "su"
+	RootCertificateSlug         = "locally-root"
+	IntermediateCertificateSlug = "locally-ca"
+	ApiKeyPrefix                = "sk-locally-"
+)
+
+const (
+	DefaultStoragePath = ".locally-cli"
+	DefaultStorageFile = "locally.db"
 )
 
 const (
@@ -16,13 +25,11 @@ const (
 	ServerAPIPrefixKey   = "server.api_prefix"
 	AuthRootPasswordKey  = "auth.root_password"
 	JwtAuthSecretKey     = "jwt.auth_secret"
+	JwtIssuerKey         = "jwt.issuer"
 
 	// Encryption configuration keys
 	EncryptionMasterSecretKey = "encryption.master_secret"
 	EncryptionGlobalSecretKey = "encryption.global_secret"
-
-	// Jamf configuration keys
-	JamfCloudBaseURLKey = "jamf.cloud.base_url"
 
 	// Root User configuration keys
 	RootUserUsernameKey = "root_user.username"
@@ -50,6 +57,9 @@ const (
 	DatabasePasswordKey    = "database.password"
 	DatabaseSSLModeKey     = "database.ssl_mode"
 	DatabaseMigrateKey     = "database.migrate"
+
+	// Pagination configuration keys
+	PaginationDefaultPageSizeKey = "pagination.default_page_size"
 
 	// Message Processor configuration keys
 	MessageProcessorPollIntervalKey         = "message_processor.poll_interval"
@@ -86,6 +96,7 @@ const (
 	ServerAPIPrefixEnvKey        = EnvPrefix + "SERVER_API_PREFIX"
 	AuthRootPasswordEnvKey       = EnvPrefix + "AUTH_ROOT_PASSWORD"
 	JwtAuthSecretEnvKey          = EnvPrefix + "JWT_AUTH_SECRET"
+	JwtIssuerEnvKey              = EnvPrefix + "JWT_ISSUER"
 	EncryptionMasterSecretEnvKey = EnvPrefix + "ENCRYPTION_MASTER_SECRET"
 	EncryptionGlobalSecretEnvKey = EnvPrefix + "ENCRYPTION_GLOBAL_SECRET"
 
@@ -123,6 +134,9 @@ const (
 	MessageProcessorCleanupIntervalEnvKey      = EnvPrefix + "MESSAGE_PROCESSOR_CLEANUP_INTERVAL"
 	MessageProcessorKeepCompleteMessagesEnvKey = EnvPrefix + "MESSAGE_PROCESSOR_KEEP_COMPLETE_MESSAGES"
 	MessageProcessorDebugEnvKey                = EnvPrefix + "MESSAGE_PROCESSOR_DEBUG"
+
+	// Pagination configuration keys
+	PaginationDefaultPageSizeEnvKey = EnvPrefix + "PAGINATION_DEFAULT_PAGE_SIZE"
 )
 
 // Flags
@@ -135,9 +149,9 @@ const (
 	FlagAPIPrefix              = "api-prefix"
 	FlagRootPassword           = "root-password"
 	FlagJwtAuthSecret          = "jwt-auth-secret"
+	FlagJwtIssuer              = "jwt-issuer"
 	FlagEncryptionMasterSecret = "encryption-master-secret"
 	FlagEncryptionGlobalSecret = "encryption-global-secret"
-	FlagJamfCloudBaseURL       = "jamf-cloud-base-url"
 	FlagRootUserUsername       = "root-user-username"
 	FlagRootUserPassword       = "root-user-password"
 	FlagSeedDemoData           = "seed-demo-data"
@@ -166,4 +180,7 @@ const (
 	FlagMessageProcessorCleanupInterval      = "message-processor-cleanup-interval"
 	FlagMessageProcessorKeepCompleteMessages = "message-processor-keep-complete-messages"
 	FlagMessageProcessorDebug                = "message-processor-debug"
+
+	// Pagination flags
+	FlagPaginationDefaultPageSize = "pagination-default-page-size"
 )

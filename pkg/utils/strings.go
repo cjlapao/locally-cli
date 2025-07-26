@@ -7,10 +7,10 @@ import (
 	"strings"
 )
 
-// ObfuscatePassword obfuscates a password string for display purposes
+// ObfuscateString obfuscates a password string for display purposes
 // If the string is 5 characters or less, returns "***"
 // If the string is longer than 5 characters, returns first char + "***" + last char
-func ObfuscatePassword(password string) string {
+func ObfuscateString(password string) string {
 	if len(password) <= 5 {
 		return "***"
 	}

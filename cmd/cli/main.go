@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
 
+	"github.com/cjlapao/locally-cli/internal/appctx"
 	"github.com/cjlapao/locally-cli/internal/common"
 	"github.com/cjlapao/locally-cli/internal/configuration"
 	"github.com/cjlapao/locally-cli/internal/environment"
@@ -13,7 +15,6 @@ import (
 	"github.com/cjlapao/locally-cli/internal/notifications"
 	"github.com/cjlapao/locally-cli/internal/operations"
 	"github.com/cjlapao/locally-cli/internal/system"
-	"github.com/cjlapao/locally-cli/internal/tester"
 
 	"github.com/cjlapao/common-go/helper"
 	"github.com/cjlapao/common-go/log"
@@ -32,6 +33,7 @@ var (
 
 func main() {
 	SetVersion()
+	ctx := appctx.NewContext(context.Background())
 	getVersion := helper.GetFlagSwitch("version", false)
 	if getVersion {
 		PrintVersion()
@@ -71,7 +73,8 @@ func main() {
 
 	switch command {
 	case "test":
-		tester.TestOperations(subCommand)
+		fmt.Println("Test operations are disabled")
+		// tester.TestOperations(subCommand)
 	case "keyvault":
 		operations.AzureKeyvaultOperations(subCommand)
 	case "nuget":
@@ -91,7 +94,7 @@ func main() {
 	case "lanes":
 		lanes.Operations(subCommand)
 	case "env":
-		environment.Operations(subCommand)
+		environment.Operations(ctx, subCommand)
 	case "infrastructure":
 		stack := common.VerifyCommand(helper.GetArgumentAt(2))
 		operations.InfrastructureOperations(subCommand, stack, nil)

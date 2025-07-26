@@ -18,7 +18,7 @@ func (c *GitParameters) Validate() bool {
 }
 
 func (c *GitParameters) Decode() {
-	env := environment.Get()
+	env := environment.GetInstance()
 
 	c.RepoUrl = env.Replace(c.RepoUrl)
 	c.Destination = env.Replace(c.Destination)

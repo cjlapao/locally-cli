@@ -83,7 +83,7 @@ func (svc *TerraformService) base(operation, name string) (*configuration.Config
 }
 
 func (svc *TerraformService) generateTerraformBackendConfig(context *context.Context, stack *infrastructure_component.InfrastructureStack) (string, error) {
-	env := environment.Get()
+	env := environment.GetInstance()
 	notify.Wrench("Setting up %s stack backend configuration", stack.Name)
 	outputPath := helper.JoinPath(context.Configuration.OutputPath, common.INFRASTRUCTURE_PATH)
 
@@ -803,7 +803,7 @@ func (svc *TerraformService) DestroyStack(options *TerraformServiceOptions) {
 }
 
 func (svc *TerraformService) OutputStack(options *TerraformServiceOptions) {
-	env := environment.Get()
+	env := environment.GetInstance()
 	config, context := svc.base("Output", options.Name)
 	if context.Infrastructure == nil {
 		return
@@ -1010,7 +1010,7 @@ func (svc *TerraformService) CanClone(stack *infrastructure_component.Infrastruc
 }
 
 func (svc *TerraformService) clone(stack *infrastructure_component.InfrastructureStack) (string, error) {
-	env := environment.Get()
+	env := environment.GetInstance()
 
 	destination := env.Replace(stack.Repository.Destination)
 	if helper.DirectoryExists(destination) {
@@ -1041,7 +1041,7 @@ func (svc *TerraformService) clone(stack *infrastructure_component.Infrastructur
 }
 
 func (svc *TerraformService) getPath(stack *infrastructure_component.InfrastructureStack, options *TerraformServiceOptions) (string, error) {
-	env := environment.Get()
+	env := environment.GetInstance()
 	returnPath := ""
 
 	if options == nil {

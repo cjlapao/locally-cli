@@ -176,7 +176,7 @@ func (h *APIHandler) HandleGetStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// If user has admin role, include all tenant statistics
-	if claims.Role == "admin" {
+	if claims.IsSuperUser {
 		response.AllTenantConnections = h.eventService.GetAllConnectedClients()
 	}
 

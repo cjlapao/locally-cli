@@ -1102,7 +1102,7 @@ func (svc *DockerService) RunDotnetContainer(command, context, baseImage, imageN
 
 func (svc *DockerService) PullImage(options *DockerServiceOptions) error {
 	dockerWrapper := GetWrapper()
-	env := environment.Get()
+	env := environment.GetInstance()
 	if options == nil {
 		return errors.New("options cannot be nil")
 	}
@@ -1167,7 +1167,7 @@ func (svc *DockerService) PullImage(options *DockerServiceOptions) error {
 }
 
 func (worker DockerService) GetLatestImageTag(registry, imagePath, username, password, subscriptionId, tenantId string) (string, error) {
-	env := environment.Get()
+	env := environment.GetInstance()
 	azureCli := azure_cli.Get()
 	registry = env.Replace(registry)
 	imagePath = env.Replace(imagePath)
@@ -1255,7 +1255,7 @@ func (worker DockerService) GetLatestImageTag(registry, imagePath, username, pas
 }
 
 func (svc *DockerService) generateDockerComposeServiceOverride(component *docker_component.DockerContainer) string {
-	env := environment.Get()
+	env := environment.GetInstance()
 	context := config.GetCurrentContext()
 	notify.Hammer("Building %s container fragment", component.Name)
 	caddyFragment := ""
@@ -1335,7 +1335,7 @@ func (svc *DockerService) generateDockerComposeServiceOverride(component *docker
 }
 
 func (svc *DockerService) generateContainerDockerCompose(container *docker_component.DockerContainer) string {
-	env := environment.Get()
+	env := environment.GetInstance()
 
 	dockerCompose := container.DockerCompose
 	dockerRegistry := container.DockerRegistry
@@ -1580,7 +1580,7 @@ func (svc *DockerService) generateEfMigrationDockerFile(baseImage, imageName, re
 }
 
 func (svc *DockerService) generateEfMigrationDockerComposeFile(name, imageName string, environmentVars map[string]string) string {
-	env := environment.Get()
+	env := environment.GetInstance()
 	notify.Hammer("Building %s ef migration container fragment", name)
 	dockerComposeFile := ""
 	dockerComposeFile += "version: '3.7'\n"
@@ -1695,7 +1695,7 @@ func (svc *DockerService) generateDotnetContainerDockerFile(command, baseImage, 
 }
 
 func (svc *DockerService) generateDotnetContainerComposeFile(name, imageName string, environmentVars map[string]string) string {
-	env := environment.Get()
+	env := environment.GetInstance()
 	notify.Hammer("Building %s build and run container fragment", name)
 	dockerComposeFile := ""
 	dockerComposeFile += "version: '3.7'\n"
@@ -1742,7 +1742,7 @@ func (svc *DockerService) getPath(container *docker_component.DockerContainer, o
 	notify.Debug(container.Name)
 	returnPath := ""
 
-	env := environment.Get()
+	env := environment.GetInstance()
 	if options == nil {
 		err := fmt.Errorf("options cannot be nil")
 		return "", err
@@ -1851,7 +1851,7 @@ func (svc *DockerService) CanClone(container *docker_component.DockerContainer) 
 }
 
 func (svc *DockerService) clone(container *docker_component.DockerContainer) (string, error) {
-	env := environment.Get()
+	env := environment.GetInstance()
 
 	if container.Repository == nil {
 		return "", nil

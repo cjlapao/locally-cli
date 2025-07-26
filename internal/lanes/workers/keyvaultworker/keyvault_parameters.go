@@ -15,7 +15,7 @@ func (c *KeyvaultParameters) Validate() bool {
 }
 
 func (c *KeyvaultParameters) Decode() {
-	env := environment.Get()
+	env := environment.GetInstance()
 
 	c.KeyvaultUrl = env.Replace(c.KeyvaultUrl)
 	c.Name = env.Replace(c.Name)

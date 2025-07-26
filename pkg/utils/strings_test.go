@@ -87,7 +87,7 @@ func TestObfuscatePassword(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := ObfuscatePassword(tt.input)
+			result := ObfuscateString(tt.input)
 			if result != tt.expected {
 				t.Errorf("Expected '%s', got '%s' - %s", tt.expected, result, tt.description)
 			}
@@ -619,7 +619,7 @@ func TestStringToObject_DifferentTypes(t *testing.T) {
 func BenchmarkObfuscatePassword(b *testing.B) {
 	password := "verylongpassword123"
 	for i := 0; i < b.N; i++ {
-		ObfuscatePassword(password)
+		ObfuscateString(password)
 	}
 }
 

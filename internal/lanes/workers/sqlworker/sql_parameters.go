@@ -14,7 +14,7 @@ func (c *SqlParameters) Validate() bool {
 }
 
 func (c *SqlParameters) Decode() {
-	env := environment.Get()
+	env := environment.GetInstance()
 
 	c.ConnectionString = env.Replace(c.ConnectionString)
 	c.Query = env.Replace(c.Query)

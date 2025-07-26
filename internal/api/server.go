@@ -14,24 +14,30 @@ import (
 
 // Server represents the HTTP server
 type Server struct {
-	server         *http.Server
-	port           int
-	hostname       string
-	prefix         string
-	handler        *Handler
-	router         *mux.Router
-	middleware     []Middleware
-	routeGroups    []RouteGroup
-	authMiddleware Middleware
+	server              *http.Server
+	port                int
+	hostname            string
+	prefix              string
+	handler             *Handler
+	router              *mux.Router
+	middlewareChain     *MiddlewareChain
+	routeGroups         []RouteGroup
+	authMiddleware      PreMiddleware
+	superUserMiddleware PreMiddleware
+	roleMiddleware      PreMiddleware
+	claimMiddleware     PreMiddleware
 }
 
 // Config represents the server configuration
 type Config struct {
-	Port           int
-	Hostname       string
-	Prefix         string
-	AuthMiddleware Middleware
-	CORSConfig     *CORSConfig // Optional CORS configuration
+	Port                int
+	Hostname            string
+	Prefix              string
+	AuthMiddleware      PreMiddleware
+	SuperUserMiddleware PreMiddleware
+	RoleMiddleware      PreMiddleware
+	ClaimMiddleware     PreMiddleware
+	CORSConfig          *CORSConfig // Optional CORS configuration
 }
 
 // NewServer creates a new HTTP server
@@ -74,15 +80,25 @@ func NewServer(cfg Config, handler *Handler) *Server {
 		}
 	}
 
+	// Create middleware chain with default middlewares
+	middlewareChain := NewMiddlewareChain()
+	middlewareChain.AddPreMiddleware(CORSMiddleware(corsConfig))
+	middlewareChain.AddPreMiddleware(RequestIDMiddleware())
+	middlewareChain.AddPreMiddleware(RequestLoggingMiddleware())
+	middlewareChain.AddPostMiddleware(ResponseLoggingMiddleware())
+
 	return &Server{
-		handler:        handler,
-		port:           cfg.Port,
-		hostname:       cfg.Hostname,
-		prefix:         cfg.Prefix,
-		router:         mux.NewRouter(),
-		middleware:     []Middleware{RequestIDMiddleware, CORSMiddleware(corsConfig), LoggingMiddleware},
-		routeGroups:    make([]RouteGroup, 0),
-		authMiddleware: cfg.AuthMiddleware,
+		handler:             handler,
+		port:                cfg.Port,
+		hostname:            cfg.Hostname,
+		prefix:              cfg.Prefix,
+		router:              mux.NewRouter(),
+		middlewareChain:     middlewareChain,
+		routeGroups:         make([]RouteGroup, 0),
+		authMiddleware:      cfg.AuthMiddleware,
+		superUserMiddleware: cfg.SuperUserMiddleware,
+		roleMiddleware:      cfg.RoleMiddleware,
+		claimMiddleware:     cfg.ClaimMiddleware,
 	}
 }
 
@@ -99,21 +115,60 @@ func (s *Server) RegisterRouteGroup(group RouteGroup) {
 	s.routeGroups = append(s.routeGroups, group)
 }
 
+// AddPreMiddleware adds a pre-middleware to the global chain
+func (s *Server) AddPreMiddleware(middleware PreMiddleware) {
+	s.middlewareChain.AddPreMiddleware(middleware)
+}
+
+// AddPostMiddleware adds a post-middleware to the global chain
+func (s *Server) AddPostMiddleware(middleware PostMiddleware) {
+	s.middlewareChain.AddPostMiddleware(middleware)
+}
+
 // registerRoute registers a single route with the server
 func (s *Server) registerRoute(route Route) {
 	handler := route.Handler
 
+	// Apply route-specific middleware first
 	for i := len(route.Middleware) - 1; i >= 0; i-- {
 		handler = route.Middleware[i](handler)
 	}
 
-	if route.AuthRequired && s.authMiddleware != nil {
-		handler = s.authMiddleware(handler)
+	// Create a custom middleware chain for this route
+	routeChain := NewMiddlewareChain()
+
+	// Add global pre-middlewares
+	for _, middleware := range s.middlewareChain.preMiddlewares {
+		routeChain.AddPreMiddleware(middleware)
 	}
 
-	for i := len(s.middleware) - 1; i >= 0; i-- {
-		handler = s.middleware[i](handler)
+	// Add auth middleware if required
+	if route.AuthRequired && s.authMiddleware != nil {
+		routeChain.AddPreMiddleware(s.authMiddleware)
 	}
+
+	// Add super user middleware if required
+	if route.SuperUserRequired && s.superUserMiddleware != nil {
+		routeChain.AddPreMiddleware(s.superUserMiddleware)
+	}
+
+	// Add role middleware if required
+	if len(route.Roles) > 0 {
+		routeChain.AddPreMiddleware(NewRequireRolePreMiddleware(route.Roles))
+	}
+
+	// Add claim middleware if required
+	if len(route.Claims) > 0 {
+		routeChain.AddPreMiddleware(NewRequireClaimPreMiddleware(route.Claims))
+	}
+
+	// Add global post-middlewares
+	for _, middleware := range s.middlewareChain.postMiddlewares {
+		routeChain.AddPostMiddleware(middleware)
+	}
+
+	// Execute the middleware chain
+	finalHandler := routeChain.Execute(handler)
 
 	if s.prefix != "" {
 		if !strings.HasPrefix(route.Path, "/") {
@@ -121,13 +176,13 @@ func (s *Server) registerRoute(route Route) {
 		}
 		route.Path = s.prefix + route.Path
 
-		s.router.HandleFunc(route.Path, handler).Methods(route.Method)
+		s.router.HandleFunc(route.Path, finalHandler).Methods(route.Method)
 
 		if route.Method != http.MethodOptions {
 			s.router.HandleFunc(route.Path, s.createOptionsHandler()).Methods(http.MethodOptions)
 		}
 	} else {
-		s.router.HandleFunc(route.Path, handler).Methods(route.Method)
+		s.router.HandleFunc(route.Path, finalHandler).Methods(route.Method)
 
 		if route.Method != http.MethodOptions {
 			s.router.HandleFunc(route.Path, s.createOptionsHandler()).Methods(http.MethodOptions)
@@ -135,29 +190,28 @@ func (s *Server) registerRoute(route Route) {
 	}
 
 	logging.WithFields(logrus.Fields{
-		"method":        route.Method,
-		"path":          route.Path,
-		"description":   route.Description,
-		"auth_required": route.AuthRequired,
+		"method":              route.Method,
+		"path":                route.Path,
+		"description":         route.Description,
+		"auth_required":       route.AuthRequired,
+		"super_user_required": route.SuperUserRequired,
 	}).Info("Registered route")
 }
 
 // createOptionsHandler creates a handler for OPTIONS requests
 func (s *Server) createOptionsHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Apply only the global middleware chain (which includes CORS)
+		// Create a minimal middleware chain for OPTIONS (just CORS)
+		optionsChain := NewMiddlewareChain()
+		optionsChain.AddPreMiddleware(CORSMiddleware(DefaultCORSConfig()))
+
+		// Create a simple handler that returns 204 No Content
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// The CORS middleware will handle the OPTIONS request
-			// and return early, so this should never be reached
 			w.WriteHeader(http.StatusNoContent)
 		})
 
-		// Apply global middleware
-		for i := len(s.middleware) - 1; i >= 0; i-- {
-			handler = s.middleware[i](handler)
-		}
-
-		handler(w, r)
+		// Execute the chain
+		optionsChain.Execute(handler)(w, r)
 	}
 }
 
@@ -168,33 +222,65 @@ func (s *Server) Start() error {
 
 		for _, route := range group.Routes {
 			handler := route.Handler
+
+			// Apply route-specific middleware first
 			for i := len(route.Middleware) - 1; i >= 0; i-- {
 				handler = route.Middleware[i](handler)
 			}
 
+			// Apply group middleware
 			for i := len(group.Middleware) - 1; i >= 0; i-- {
 				handler = group.Middleware[i](handler)
 			}
 
+			// Create a custom middleware chain for this route
+			routeChain := NewMiddlewareChain()
+
+			// Add global pre-middlewares
+			for _, middleware := range s.middlewareChain.preMiddlewares {
+				routeChain.AddPreMiddleware(middleware)
+			}
+
+			// Add auth middleware if required
 			if route.AuthRequired && s.authMiddleware != nil {
-				handler = s.authMiddleware(handler)
+				routeChain.AddPreMiddleware(s.authMiddleware)
 			}
 
-			for i := len(s.middleware) - 1; i >= 0; i-- {
-				handler = s.middleware[i](handler)
+			// Add super user middleware if required
+			if route.SuperUserRequired && s.superUserMiddleware != nil {
+				routeChain.AddPreMiddleware(s.superUserMiddleware)
 			}
 
-			subrouter.HandleFunc(route.Path, handler).Methods(route.Method)
+			// Add role middleware if required
+			if len(route.Roles) > 0 {
+				routeChain.AddPreMiddleware(s.roleMiddleware)
+			}
+
+			// Add claim middleware if required
+			if len(route.Claims) > 0 {
+				routeChain.AddPreMiddleware(s.claimMiddleware)
+			}
+
+			// Add global post-middlewares
+			for _, middleware := range s.middlewareChain.postMiddlewares {
+				routeChain.AddPostMiddleware(middleware)
+			}
+
+			// Execute the middleware chain
+			finalHandler := routeChain.Execute(handler)
+
+			subrouter.HandleFunc(route.Path, finalHandler).Methods(route.Method)
 
 			if route.Method != http.MethodOptions {
 				subrouter.HandleFunc(route.Path, s.createOptionsHandler()).Methods(http.MethodOptions)
 			}
 
 			logging.WithFields(logrus.Fields{
-				"method":        route.Method,
-				"path":          group.Prefix + route.Path,
-				"description":   route.Description,
-				"auth_required": route.AuthRequired,
+				"method":              route.Method,
+				"path":                group.Prefix + route.Path,
+				"description":         route.Description,
+				"auth_required":       route.AuthRequired,
+				"super_user_required": route.SuperUserRequired,
 			}).Info("Registered group route")
 		}
 	}
@@ -209,8 +295,10 @@ func (s *Server) Start() error {
 	return s.server.ListenAndServe()
 }
 
-// Stop gracefully stops the HTTP server
+// Stop gracefully shuts down the server
 func (s *Server) Stop(ctx context.Context) error {
-	logging.Info("Stopping server...")
-	return s.server.Shutdown(ctx)
+	if s.server != nil {
+		return s.server.Shutdown(ctx)
+	}
+	return nil
 }

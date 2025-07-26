@@ -105,7 +105,7 @@ func (worker CurlPipelineWorker) Validate(task *pipeline_component.PipelineTask)
 
 func (worker CurlPipelineWorker) runTask(task *pipeline_component.PipelineTask) entities.PipelineWorkerResult {
 	result := entities.PipelineWorkerResult{}
-	env := environment.Get()
+	env := environment.GetInstance()
 
 	inputs, err := worker.parseParameters(task)
 	if err != nil {

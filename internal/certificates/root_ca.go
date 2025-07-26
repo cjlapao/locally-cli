@@ -8,6 +8,7 @@ import (
 	"encoding/asn1"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"io/fs"
 	"net"
 	"os"
@@ -15,20 +16,31 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cjlapao/locally-cli/internal/configuration"
+	"github.com/cjlapao/locally-cli/internal/appctx"
+	"github.com/cjlapao/locally-cli/pkg/diagnostics"
+	"github.com/cjlapao/locally-cli/pkg/models"
 
 	"github.com/cjlapao/common-go/helper"
 )
 
 type X509RootCertificate struct {
+	ctx                      *appctx.AppContext
 	Name                     string
 	PrivateKey               *rsa.PrivateKey
 	Certificate              *x509.Certificate
-	Configuration            configuration.CertificateConfig
-	IntermediateCertificates []configuration.RootCertificate
+	Configuration            models.CertificateConfig
+	IntermediateCertificates []models.RootCertificate
 	Pem                      []byte
 	Csr                      []byte
 	PrivateKeyPem            []byte
+}
+
+func NewX509RootCertificate(ctx *appctx.AppContext, name string, config models.CertificateConfig) *X509RootCertificate {
+	return &X509RootCertificate{
+		ctx:           ctx,
+		Name:          name,
+		Configuration: config,
+	}
 }
 
 func (rootCA *X509RootCertificate) baseFileName() string {
@@ -54,25 +66,26 @@ func (rootCA *X509RootCertificate) CertificateRequestFileName() string {
 	return certificateRequestFileName
 }
 
-func (rootCA *X509RootCertificate) Generate(config *configuration.CertificateConfig) (*x509.Certificate, []byte, *rsa.PrivateKey) {
-	logger.Debug("Starting to generate root certificate")
+func (rootCA *X509RootCertificate) Generate(ctx *appctx.AppContext) (*models.RootCertificate, *diagnostics.Diagnostics) {
+	ctx.Log().Debug("Starting to generate root certificate")
+	diag := diagnostics.New("generate_root_certificate")
 
 	subject := pkix.Name{
-		Country:            []string{config.Country},
-		Organization:       []string{config.Organization},
-		OrganizationalUnit: []string{config.OrganizationalUnit},
-		Province:           []string{config.State},
-		Locality:           []string{config.City},
-		CommonName:         config.CommonName,
+		Country:            []string{rootCA.Configuration.Country},
+		Organization:       []string{rootCA.Configuration.Organization},
+		OrganizationalUnit: []string{rootCA.Configuration.OrganizationalUnit},
+		Province:           []string{rootCA.Configuration.State},
+		Locality:           []string{rootCA.Configuration.City},
+		CommonName:         rootCA.Configuration.CommonName,
 	}
 
-	if config.AdminEmailAddress != "" {
+	if rootCA.Configuration.AdminEmailAddress != "" {
 		subject.ExtraNames = []pkix.AttributeTypeAndValue{
 			{
 				Type: oidEmailAddress,
 				Value: asn1.RawValue{
 					Tag:   asn1.TagIA5String,
-					Bytes: []byte(config.AdminEmailAddress),
+					Bytes: []byte(rootCA.Configuration.AdminEmailAddress),
 				},
 			},
 		}
@@ -82,7 +95,7 @@ func (rootCA *X509RootCertificate) Generate(config *configuration.CertificateCon
 		SerialNumber: generateSerialNumber(),
 		Subject:      subject,
 		NotBefore:    time.Now().Add(-10 * time.Second),
-		NotAfter:     time.Now().AddDate(config.ExpiresInYears, 0, 0),
+		NotAfter:     time.Now().AddDate(rootCA.Configuration.ExpiresInYears, 0, 0),
 		KeyUsage:     x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
 		ExtKeyUsage: []x509.ExtKeyUsage{
 			x509.ExtKeyUsageClientAuth,
@@ -97,8 +110,8 @@ func (rootCA *X509RootCertificate) Generate(config *configuration.CertificateCon
 		},
 		IsCA:                  true,
 		MaxPathLen:            2,
-		SignatureAlgorithm:    config.SignatureAlgorithm.ToX509SignatureAlgorithm(),
-		DNSNames:              config.FQDNs,
+		SignatureAlgorithm:    rootCA.Configuration.SignatureAlgorithm.ToX509SignatureAlgorithm(),
+		DNSNames:              rootCA.Configuration.FQDNs,
 		BasicConstraintsValid: true,
 		PolicyIdentifiers: []asn1.ObjectIdentifier{
 			policy5,
@@ -108,20 +121,21 @@ func (rootCA *X509RootCertificate) Generate(config *configuration.CertificateCon
 		},
 	}
 
-	if config.FQDNs != nil && len(config.FQDNs) > 0 {
-		rootCertificateTemplate.DNSNames = config.FQDNs
+	if len(rootCA.Configuration.FQDNs) > 0 {
+		rootCertificateTemplate.DNSNames = rootCA.Configuration.FQDNs
 	}
 
-	if config.IpAddresses != nil && len(config.IpAddresses) > 0 {
-		for _, ip := range config.IpAddresses {
+	if len(rootCA.Configuration.IpAddresses) > 0 {
+		for _, ip := range rootCA.Configuration.IpAddresses {
 			rootCertificateTemplate.IPAddresses = append(rootCertificateTemplate.IPAddresses, net.ParseIP(ip))
 		}
 	}
 
-	logger.Debug("Starting to generate private key")
-	priv, err := rsa.GenerateKey(rand.Reader, int(config.KeySize))
+	ctx.Log().Debug("Starting to generate root certificate private key")
+	priv, err := rsa.GenerateKey(rand.Reader, int(rootCA.Configuration.KeySize))
 	if err != nil {
-		panic(err)
+		diag.AddError("generate_root_certificate", fmt.Sprintf("found error while generating private key, err %v", err.Error()), CertificateComponent)
+		return nil, diag
 	}
 
 	subjectKeyId, err := generateSubjectKeyId(priv)
@@ -135,30 +149,40 @@ func (rootCA *X509RootCertificate) Generate(config *configuration.CertificateCon
 
 	rootCA.PrivateKey = priv
 	rootCA.Certificate = rootCertificate
-	rootCA.Configuration = *config
 	rootCA.Pem = rootPemCertificate
 	rootCA.Csr = csr
 	rootCA.PrivateKeyPem = generatePemPrivateKey(priv)
 
-	return rootCertificate, rootPemCertificate, priv
+	response := &models.RootCertificate{
+		Name:           rootCA.Name,
+		Config:         &rootCA.Configuration,
+		PemCertificate: string(rootCA.Pem),
+		PemPrivateKey:  string(rootCA.PrivateKeyPem),
+		Csr:            string(rootCA.Csr),
+	}
+
+	return response, diag
 }
 
 func (rootCA *X509RootCertificate) LoadFromFile() error {
 	return nil
 }
 
-func (rootCA *X509RootCertificate) Parse(certificate string, privateKey string) error {
+func (rootCA *X509RootCertificate) Parse(ctx *appctx.AppContext, certificate string, privateKey string) *diagnostics.Diagnostics {
+	diag := diagnostics.New("parse_certificate")
 	if certificate != "" {
 		certBlock, _ := pem.Decode([]byte(certificate))
 		if certBlock == nil {
 			err := errors.New("no valid certificate block found")
-			logger.Error("found error while parsing  pem certificate block, err %v", err.Error())
-			return err
+			ctx.Log().Errorf("found error while parsing  pem certificate block, err %v", err.Error())
+			diag.AddError("parse_certificate", fmt.Sprintf("no valid certificate block found, err %v", err.Error()), CertificateComponent)
+			return diag
 		}
 		cert, err := x509.ParseCertificate(certBlock.Bytes)
 		if err != nil {
-			logger.Error("found error while parsing certificate block, err %v", err.Error())
-			return err
+			ctx.Log().Errorf("found error while parsing certificate block, err %v", err.Error())
+			diag.AddError("parse_certificate", fmt.Sprintf("found error while parsing certificate block, err %v", err.Error()), CertificateComponent)
+			return diag
 		}
 
 		rootCA.Certificate = cert
@@ -169,25 +193,29 @@ func (rootCA *X509RootCertificate) Parse(certificate string, privateKey string) 
 		privBlock, _ := pem.Decode([]byte(privateKey))
 		if privBlock == nil {
 			err := errors.New("no valid private key block found")
-			logger.Error("found error while parsing  pem private key block, err %v", err.Error())
-			return err
+			ctx.Log().Errorf("found error while parsing  pem private key block, err %v", err.Error())
+			diag.AddError("parse_certificate", fmt.Sprintf("found error while parsing  pem private key block, err %v", err.Error()), CertificateComponent)
+			return diag
 		}
 		priv, err := x509.ParsePKCS1PrivateKey(privBlock.Bytes)
 		if err != nil {
-			logger.Error("found error while parsing private key block, err %v", err.Error())
-			return err
+			ctx.Log().Errorf("found error while parsing private key block, err %v", err.Error())
+			diag.AddError("parse_certificate", fmt.Sprintf("found error while parsing private key block, err %v", err.Error()), CertificateComponent)
+			return diag
 		}
 
 		rootCA.PrivateKey = priv
 		rootCA.PrivateKeyPem = []byte(privateKey)
 	}
-	return nil
+	return diag
 }
 
-func (rootCA *X509RootCertificate) SaveToFile() error {
+func (rootCA *X509RootCertificate) SaveToFile(ctx *appctx.AppContext) *diagnostics.Diagnostics {
+	diag := diagnostics.New("save_certificate")
 	ex, err := os.Executable()
 	if err != nil {
-		panic(err)
+		diag.AddError("save_certificate", fmt.Sprintf("found error while getting executable path, err %v", err.Error()), CertificateComponent)
+		return diag
 	}
 
 	exPath := filepath.Dir(ex)
@@ -201,33 +229,35 @@ func (rootCA *X509RootCertificate) SaveToFile() error {
 	rootPrivateKeyFileName := helper.JoinPath(exPath, rootCA.PrivateKeyFileName())
 	rootCsrFileName := helper.JoinPath(exPath, rootCA.CertificateRequestFileName())
 
-	logger.Debug("Exporting Certificate")
+	ctx.Log().Debug("Exporting Certificate")
 	if helper.FileExists(rootCertificateFileName) {
 		helper.DeleteFile(rootCertificateFileName)
 	}
 
 	helper.WriteToFile(string(rootCA.Pem), rootCertificateFileName)
 
-	logger.Debug("Exporting Private Key")
+	ctx.Log().Debug("Exporting Private Key")
 	if helper.FileExists(rootPrivateKeyFileName) {
 		helper.DeleteFile(rootPrivateKeyFileName)
 	}
 
 	helper.WriteToFile(string(rootCA.PrivateKeyPem), rootPrivateKeyFileName)
 
-	logger.Debug("Exporting CSR")
+	ctx.Log().Debug("Exporting CSR")
 	if helper.FileExists(rootCsrFileName) {
 		helper.DeleteFile(rootCsrFileName)
 	}
 
 	helper.WriteToFile(string(rootCA.Csr), rootCsrFileName)
-	return nil
+	return diag
 }
 
-func (rootCA *X509RootCertificate) Install() error {
+func (rootCA *X509RootCertificate) Install(ctx *appctx.AppContext) *diagnostics.Diagnostics {
+	diag := diagnostics.New("install_certificate")
 	ex, err := os.Executable()
 	if err != nil {
-		panic(err)
+		diag.AddError("install_certificate", fmt.Sprintf("found error while getting executable path, err %v", err.Error()), CertificateComponent)
+		return diag
 	}
 
 	exPath := filepath.Dir(ex)
@@ -240,6 +270,6 @@ func (rootCA *X509RootCertificate) Install() error {
 	rootCertificateFileName := helper.JoinPath(exPath, rootCA.CertificateFileName())
 
 	instalSvc := Installer{}
-	instalSvc.InstallCertificate(rootCertificateFileName, RootStore)
-	return nil
+	instalSvc.InstallCertificate(rootCA.ctx, rootCertificateFileName, RootStore)
+	return diag
 }

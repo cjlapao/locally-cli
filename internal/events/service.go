@@ -46,7 +46,7 @@ func newSSEService(eventService *EventService, authService *auth.AuthService) *S
 	}
 }
 
-func (h *SseService) validateJWTFromRequest(r *http.Request) (*auth.Claims, error) {
+func (h *SseService) validateJWTFromRequest(r *http.Request) (*auth.AuthClaims, error) {
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
 		return nil, fmt.Errorf("authorization header required")

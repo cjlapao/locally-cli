@@ -10,15 +10,26 @@ import (
 
 	"github.com/cjlapao/common-go/version"
 	"github.com/cjlapao/locally-cli/internal/api"
+	"github.com/cjlapao/locally-cli/internal/appctx"
 	"github.com/cjlapao/locally-cli/internal/auth"
+	"github.com/cjlapao/locally-cli/internal/auth/handlers"
+	"github.com/cjlapao/locally-cli/internal/certificates"
 	"github.com/cjlapao/locally-cli/internal/config"
 	"github.com/cjlapao/locally-cli/internal/database"
+	"github.com/cjlapao/locally-cli/internal/database/seeds"
+	"github.com/cjlapao/locally-cli/internal/database/seeds/migrations"
 	"github.com/cjlapao/locally-cli/internal/database/stores"
+	"github.com/cjlapao/locally-cli/internal/database/types"
 	"github.com/cjlapao/locally-cli/internal/encryption"
+	"github.com/cjlapao/locally-cli/internal/environment"
 	"github.com/cjlapao/locally-cli/internal/events"
 	"github.com/cjlapao/locally-cli/internal/logging"
-	"github.com/cjlapao/locally-cli/internal/messages"
+	"github.com/cjlapao/locally-cli/internal/tenant"
 	"github.com/cjlapao/locally-cli/internal/validation"
+	"github.com/cjlapao/locally-cli/internal/vaults/configvault"
+	"github.com/cjlapao/locally-cli/internal/workers"
+	"github.com/cjlapao/locally-cli/pkg/diagnostics"
+	"github.com/cjlapao/locally-cli/pkg/interfaces"
 )
 
 var versionSvc = version.Get()
@@ -58,9 +69,9 @@ func initializeDatabase(cfg *config.Config) error {
 	if err != nil {
 		return fmt.Errorf("failed to get storage path: %w", err)
 	}
-	var dbConfig database.Config
+	var dbConfig types.Config
 	if cfg.Get(config.DatabaseTypeKey).GetString() == "postgres" {
-		dbConfig.Type = database.PostgreSQL
+		dbConfig.Type = types.PostgreSQL
 		dbConfig.Host = cfg.Get(config.DatabaseHostKey).GetString()
 		dbConfig.Port = cfg.Get(config.DatabasePortKey).GetInt()
 		dbConfig.Database = cfg.Get(config.DatabaseDatabaseKey).GetString()
@@ -83,7 +94,7 @@ func initializeDatabase(cfg *config.Config) error {
 			dbConfig.Port = 5432
 		}
 	} else {
-		dbConfig.Type = database.SQLite
+		dbConfig.Type = types.SQLite
 		dbConfig.StoragePath = storagePath
 
 	}
@@ -94,6 +105,18 @@ func initializeDatabase(cfg *config.Config) error {
 	}
 	logging.Info("Database service initialized successfully")
 	return nil
+}
+
+// initializeConfigurationStore initializes the configuration store
+func initializeConfigurationStore() (*stores.ConfigurationDataStore, *diagnostics.Diagnostics) {
+	diag := diagnostics.New("initialize_configuration_store")
+	logging.Info("Initializing configuration store...")
+	if initDiag := stores.InitializeConfigurationDataStore(); initDiag.HasErrors() {
+		diag.Append(initDiag)
+		return nil, diag
+	}
+	logging.Info("Configuration store initialized successfully")
+	return stores.GetConfigurationDataStoreInstance(), diag
 }
 
 // initializeAuthStore initializes the auth store
@@ -116,6 +139,31 @@ func initializeMessageStore() (*stores.MessageDataStore, error) {
 	return stores.GetMessageDataStoreInstance(), nil
 }
 
+// initializeCertificatesStore initializes the certificates store
+func initializeCertificatesStore() (*stores.CertificatesDataStore, *diagnostics.Diagnostics) {
+	logging.Info("Initializing certificates store...")
+	diag := diagnostics.New("initialize_certificates_store")
+	if initDiag := stores.InitializeCertificatesDataStore(); initDiag.HasErrors() {
+		diag.Append(initDiag)
+		return nil, diag
+	}
+	logging.Info("Certificates store initialized successfully")
+	return stores.GetCertificatesDataStoreInstance(), diag
+}
+
+// initializeTenantStore initializes the tenant store
+
+func initializeTenantStore() (stores.TenantDataStoreInterface, *diagnostics.Diagnostics) {
+	logging.Info("Initializing tenant store...")
+	diag := diagnostics.New("initialize_tenant_store")
+	if initDiag := stores.InitializeTenantDataStore(); initDiag.HasErrors() {
+		diag.Append(initDiag)
+		return nil, diag
+	}
+	logging.Info("Tenant store initialized successfully")
+	return stores.GetTenantDataStoreInstance(), diag
+}
+
 // initializeValidationService initializes the validation service
 func initializeValidationService() {
 	logging.Info("Initializing validation service...")
@@ -124,9 +172,9 @@ func initializeValidationService() {
 }
 
 // initializeMessageProcessorService initializes the message processor service
-func initializeMessageProcessorService(store *stores.MessageDataStore) (*messages.SystemMessageService, error) {
+func initializeMessageProcessorService(store *stores.MessageDataStore) (*workers.SystemWorkerMessageService, error) {
 	logging.Info("Initializing system messages service...")
-	svc, err := messages.Initialize(store)
+	svc, err := workers.Initialize(store)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize system messages service: %w", err)
 	}
@@ -150,24 +198,47 @@ func initializeEncryptionService(cfg *config.Config) (*encryption.EncryptionServ
 }
 
 // initializeAuthService initializes the auth service
-func initializeAuthService(cfg *config.Config, authDataStore *stores.AuthDataStore) *auth.AuthService {
+func initializeAuthService(cfg *config.Config, authDataStore *stores.AuthDataStore) (*auth.AuthService, *diagnostics.Diagnostics) {
 	logging.Info("Initializing auth service...")
 
-	authService := auth.NewService(auth.AuthServiceConfig{
-		SecretKey: cfg.Get(config.JwtAuthSecretKey).GetString(),
+	authService, diag := auth.Initialize(auth.AuthServiceConfig{
+		SecretKey: []byte(cfg.Get(config.JwtAuthSecretKey).GetString()),
+		Issuer:    cfg.Get(config.JwtIssuerKey).GetString(),
 	}, authDataStore)
+
 	logging.Info("Auth service initialized successfully")
-	return authService
+	return authService, diag
+}
+
+// initializeCertificateService initializes the certificate service
+func initializeCertificateService(store *stores.CertificatesDataStore) *certificates.CertificateService {
+	logging.Info("Initializing certificate service...")
+	certificateService := certificates.Initialize(store)
+	if certificateService == nil {
+		logging.Error("Certificate service not initialized")
+		panic("Certificate service not initialized")
+	}
+	logging.Info("Certificate service initialized successfully")
+	return certificateService
+}
+
+// initializeTenantService initializes the tenant service
+func initializeTenantService(tenantStore stores.TenantDataStoreInterface) tenant.TenantServiceInterface {
+	logging.Info("Initializing tenant service...")
+	tenantService := tenant.Initialize(tenantStore)
+	logging.Info("Tenant service initialized successfully")
+	return tenantService
 }
 
 // initializeAPIServer initializes the API server
 func initializeAPIServer(cfg *config.Config, authService *auth.AuthService) (*api.Server, error) {
 	logging.Info("Initializing API server...")
 	server := api.NewServer(api.Config{
-		Port:           cfg.Get(config.ServerAPIPortKey).GetInt(),
-		Hostname:       cfg.Get(config.ServerBindAddressKey).GetString(),
-		Prefix:         cfg.Get(config.ServerAPIPrefixKey).GetString(),
-		AuthMiddleware: auth.NewRequireAuthMiddleware(authService),
+		Port:                cfg.Get(config.ServerAPIPortKey).GetInt(),
+		Hostname:            cfg.Get(config.ServerBindAddressKey).GetString(),
+		Prefix:              cfg.Get(config.ServerAPIPrefixKey).GetString(),
+		AuthMiddleware:      api.NewRequireAuthPreMiddleware(authService),
+		SuperUserMiddleware: api.NewRequireSuperUserPreMiddleware(authService),
 	}, nil)
 	logging.Info("API server initialized successfully")
 	return server, nil
@@ -182,7 +253,7 @@ func initializeEventService() *events.EventService {
 }
 
 // startEventService starts the event service in the background
-func startEventService(eventService *events.EventService, ctx api.ApiContext) error {
+func startEventService(ctx *appctx.AppContext, eventService *events.EventService) error {
 	logging.Info("Starting event service...")
 	if err := eventService.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start event service: %w", err)
@@ -191,8 +262,78 @@ func startEventService(eventService *events.EventService, ctx api.ApiContext) er
 	return nil
 }
 
+func initializeEnvironmentService(ctx *appctx.AppContext, vaults []interfaces.EnvironmentVault) *environment.Environment {
+	logging.Info("Initializing environment service...")
+	environmentService := environment.Initialize()
+	for _, vault := range vaults {
+		diag := environmentService.RegisterVault(ctx, vault)
+		if diag.HasErrors() {
+			logging.Errorf("Error registering vault: %v", diag.GetSummary())
+		}
+	}
+	logging.Info("Environment service initialized successfully")
+	return environmentService
+}
+
+func seedDatabaseMigrations(ctx *appctx.AppContext, configSvc *config.ConfigService) *diagnostics.Diagnostics {
+	logging.Info("Seeding database migrations...")
+	diag := diagnostics.New("seed_database_migrations")
+
+	// Getting dependencies
+	db := database.GetInstance()
+	if db == nil {
+		diag.AddError("database_service_not_initialized", "database service not initialized", "seed_database_migrations", nil)
+		return diag
+	}
+	// Getting the auth store
+	authStore := stores.GetAuthDataStoreInstance()
+	if authStore == nil {
+		diag.AddError("auth_store_not_initialized", "auth store not initialized", "seed_database_migrations", nil)
+		return diag
+	}
+	tenantStore := stores.GetTenantDataStoreInstance()
+	if tenantStore == nil {
+		diag.AddError("tenant_store_not_initialized", "tenant store not initialized", "seed_database_migrations", nil)
+		return diag
+	}
+
+	certificateService := certificates.GetInstance()
+	if certificateService == nil {
+		diag.AddError("certificate_service_not_initialized", "certificate service not initialized", "seed_database_migrations", nil)
+		return diag
+	}
+
+	// Initializing the migration service
+	service := seeds.NewMigrationService(db.GetDB())
+	// migrations workers
+	defaultClaimsMigrationWorker := migrations.NewDefaultClaimsMigrationWorker(db.GetDB(), configSvc.Get())
+	defaultRolesMigrationWorker := migrations.NewDefaultRolesMigrationWorker(db.GetDB(), configSvc.Get())
+	defaultTenantMigrationWorker := migrations.NewDefaultTenantMigrationWorker(db.GetDB(), tenantStore)
+	defaultUsersMigrationWorker := migrations.NewDefaultUsersMigrationWorker(db.GetDB(), configSvc.Get(), authStore, tenantStore)
+	rootCertificateMigrationWorker := migrations.NewRootCertificateMigrationWorker(db.GetDB(), certificateService)
+	intermediateCertificateMigrationWorker := migrations.NewIntermediateCertificateMigrationWorker(db.GetDB(), certificateService)
+
+	service.Register(defaultClaimsMigrationWorker)
+	service.Register(defaultRolesMigrationWorker)
+	service.Register(defaultTenantMigrationWorker)
+	service.Register(defaultUsersMigrationWorker)
+	service.Register(rootCertificateMigrationWorker)
+	service.Register(intermediateCertificateMigrationWorker)
+
+	// Running the migrations
+	migrationsDiag := service.RunAll(ctx)
+	if migrationsDiag.HasErrors() {
+		diag.Append(migrationsDiag)
+	} else {
+		logging.Info("Database migrations seeded successfully")
+	}
+
+	return diag
+}
+
 func run() error {
 	setVersion()
+	ctx := appctx.NewContext(context.Background())
 	versionSvc.PrintAnsiHeader()
 	configSvc, err := config.Initialize()
 	if err != nil {
@@ -215,6 +356,11 @@ func run() error {
 	}
 
 	// initializing Database Stores
+	_, configStoreDiag := initializeConfigurationStore()
+	if configStoreDiag.HasErrors() {
+		return fmt.Errorf("failed to initialize configuration store: %s", configStoreDiag.GetSummary())
+	}
+
 	authDataStore, err := initializeAuthStore()
 	if err != nil {
 		return err
@@ -224,20 +370,46 @@ func run() error {
 		return err
 	}
 
+	certificatesStore, certificatesStoreDiag := initializeCertificatesStore()
+	if certificatesStoreDiag.HasErrors() {
+		return err
+	}
+
+	tenantStore, tenantStoreDiag := initializeTenantStore()
+	if tenantStoreDiag.HasErrors() {
+		return err
+	}
+
+	// initialize environment service
+	vaults := make([]interfaces.EnvironmentVault, 0)
+
+	// Add config vault
+	configVault := configvault.New()
+	vaults = append(vaults, configVault)
+
+	// Initializing Services
+
+	// initialize environment service
+	environmentService := initializeEnvironmentService(ctx, vaults)
 	// initializing validation service
 	initializeValidationService()
-
 	// initializing event service
 	eventService := initializeEventService()
-
 	// Initialize message processor service
 	messageService, err := initializeMessageProcessorService(messageDataStore)
 	if err != nil {
 		return err
 	}
-
+	// initialize certificate service
+	certificateService := initializeCertificateService(certificatesStore)
 	// initialize auth service
-	authService := initializeAuthService(configSvc.Get(), authDataStore)
+	authService, authServiceDiag := initializeAuthService(configSvc.Get(), authDataStore)
+	if authServiceDiag.HasErrors() {
+		logging.Errorf("Error initializing auth service: %v", authServiceDiag.GetSummary())
+		panic(authServiceDiag.GetSummary())
+	}
+	// initialize tenant service
+	tenantService := initializeTenantService(tenantStore)
 
 	// initialize API server
 	apiServer, err := initializeAPIServer(configSvc.Get(), authService)
@@ -250,24 +422,34 @@ func run() error {
 	// Register health check routes
 	apiServer.RegisterRoutes(api.NewHandler())
 	// Register auth routes
-	apiServer.RegisterRoutes(auth.NewApiHandler(authService, authDataStore))
+	apiServer.RegisterRoutes(handlers.NewApiHandler(authService, authDataStore))
 	// Register event routes using the global singleton
 	apiServer.RegisterRoutes(events.NewApiHandler(events.GetInstance(), authService))
 	// Register message routes
-	apiServer.RegisterRoutes(messages.NewApiHandler(messageService))
+	apiServer.RegisterRoutes(workers.NewApiHandler(messageService))
+	// Register environment routes
+	apiServer.RegisterRoutes(environment.NewApiHandler(environmentService))
+	// Register certificate routes
+	apiServer.RegisterRoutes(certificates.NewApiHandlers(certificateService, certificatesStore))
+	// Register tenant routes
+	apiServer.RegisterRoutes(tenant.NewApiHandler(tenantService))
 
 	logging.Info("Starting event service...")
-	ctx := api.NewContext(context.Background())
-	// Start event service
-	if err := startEventService(eventService, *ctx); err != nil {
+	if err := startEventService(ctx, eventService); err != nil {
 		return err
 	}
 
 	// Registering workers
 	logging.Info("Registering message workers...")
-	messageService.RegisterWorker(messages.NewEmailWorker())
-	messageService.RegisterWorker(messages.NewNotificationWorker())
-	messageService.Start(*ctx)
+	messageService.RegisterWorker(workers.NewEmailWorker())
+	messageService.RegisterWorker(workers.NewNotificationWorker())
+	messageService.Start(ctx)
+
+	// Seeding database migrations
+	seedDiag := seedDatabaseMigrations(ctx, configSvc)
+	if seedDiag.HasErrors() {
+		panic(seedDiag.GetSummary())
+	}
 
 	// Start server in a goroutine
 	go func() {

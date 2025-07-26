@@ -1,3 +1,12 @@
+// Package dependency_tree provides functionality to build and analyze dependency graphs.
+// It includes functions to detect cycles, self-dependencies, and topological sorting.
+// The package also includes utility functions for shifting dependencies and updating dependency trees.
+// The main entry point is BuildDependencyTree, which takes a list of services and returns a sorted list
+// based on their dependencies.
+//
+// The package uses Kahn's algorithm for topological sorting, which is a linear-time algorithm for
+// directed acyclic graphs (DAGs). It ensures that dependencies are resolved in a valid order,
+// avoiding cycles and self-dependencies.
 package dependency_tree
 
 import (
@@ -7,8 +16,8 @@ import (
 
 	"github.com/cjlapao/locally-cli/internal/common"
 	"github.com/cjlapao/locally-cli/internal/context"
-	"github.com/cjlapao/locally-cli/internal/interfaces"
 	"github.com/cjlapao/locally-cli/internal/notifications"
+	"github.com/cjlapao/locally-cli/pkg/interfaces"
 )
 
 var notify = notifications.Get()
@@ -26,6 +35,11 @@ func ReverseDependency[T interfaces.LocallyService](s []T) {
 }
 
 func BuildDependencyTree[T interfaces.LocallyService](values []T) ([]T, error) {
+	// Detect cycles/self-dependencies before proceeding
+	if err := detectCycles(values); err != nil {
+		return nil, err
+	}
+
 	if common.IsDebug() {
 		notify.Debug("Dependency Tree Before:")
 		for idx, service := range values {
@@ -33,38 +47,60 @@ func BuildDependencyTree[T interfaces.LocallyService](values []T) ([]T, error) {
 		}
 	}
 
-	// Initial Pass to flatten our dependency tree based on linear dependency
-	values, err := buildRightDependency(values)
-	if err != nil {
-		return values, err
+	// Topological sort (Kahn's algorithm)
+	nameToService := make(map[string]T)
+	inDegree := make(map[string]int)
+	graph := make(map[string][]string)
+
+	for _, svc := range values {
+		name := strings.ToLower(svc.GetName())
+		nameToService[name] = svc
+		inDegree[name] = 0
+	}
+	for _, svc := range values {
+		name := strings.ToLower(svc.GetName())
+		for _, dep := range svc.GetDependencies() {
+			depName := strings.ToLower(dep)
+			if _, ok := nameToService[depName]; ok {
+				graph[depName] = append(graph[depName], name)
+				inDegree[name]++
+			}
+		}
 	}
 
-	// Reordering dependencies for stragglers (left shift)
-	// First pass we ordered all of the dependencies in a forward method
-	// putting it all in an order of a -> b -> c kind of dependency
-	// we also might have services that might need sifting as they didn't fall into this like
-	// a late service that has only dependency on b but not on c
-	// }
-
-	values, err = buildLeftDependency(values)
-	if err != nil {
-		return values, err
+	// Collect nodes with in-degree 0
+	var queue []string
+	for name, deg := range inDegree {
+		if deg == 0 {
+			queue = append(queue, name)
+		}
 	}
 
-	// Last pass to make sure the left dependency did not make further issues
-	values, err = buildRightDependency(values)
-	if err != nil {
-		return values, err
+	var sorted []T
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+		sorted = append(sorted, nameToService[current])
+		for _, neighbor := range graph[current] {
+			inDegree[neighbor]--
+			if inDegree[neighbor] == 0 {
+				queue = append(queue, neighbor)
+			}
+		}
+	}
+
+	if len(sorted) != len(values) {
+		return nil, fmt.Errorf("dependency tree could not be resolved (possible cycle or missing node)")
 	}
 
 	if common.IsDebug() {
 		notify.Debug("Dependency Tree After:")
-		for idx, service := range values {
+		for idx, service := range sorted {
 			notify.Debug("[%s] %s", strconv.Itoa(idx), service.GetName())
 		}
 	}
 
-	return values, nil
+	return sorted, nil
 }
 
 func BuildDependencyGraph[T interfaces.LocallyService](ctx *context.Context, values []T, persist bool) error {
@@ -307,4 +343,75 @@ func updateTree[T interfaces.LocallyService](s []T) map[string]TreeItem {
 	}
 
 	return tree
+}
+
+// detectCycles returns an error if there is a cycle or self-dependency in the dependency graph
+func detectCycles[T interfaces.LocallyService](services []T) error {
+	// Build a map for quick lookup
+	serviceMap := make(map[string]T)
+	for _, svc := range services {
+		serviceMap[strings.ToLower(svc.GetName())] = svc
+	}
+
+	visited := make(map[string]bool)
+	stack := make(map[string]bool)
+
+	var visit func(string) error
+	visit = func(name string) error {
+		lname := strings.ToLower(name)
+		if stack[lname] {
+			return fmt.Errorf("circular dependency detected involving service '%s'", name)
+		}
+		if visited[lname] {
+			return nil
+		}
+		visited[lname] = true
+		stack[lname] = true
+		svc, ok := serviceMap[lname]
+		if !ok {
+			return fmt.Errorf("service '%s' not found in dependency graph", name)
+		}
+		for _, dep := range svc.GetDependencies() {
+			if strings.EqualFold(dep, name) {
+				return fmt.Errorf("self-dependency detected for service '%s'", name)
+			}
+			if err := visit(dep); err != nil {
+				return err
+			}
+		}
+		stack[lname] = false
+		return nil
+	}
+
+	for _, svc := range services {
+		if err := visit(svc.GetName()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// PrintDependencyGraph prints the dependency graph in a readable format for debugging
+func PrintDependencyGraph[T interfaces.LocallyService](services []T) string {
+	var b strings.Builder
+	serviceMap := make(map[string]T)
+	for _, svc := range services {
+		serviceMap[svc.GetName()] = svc
+	}
+	b.WriteString("Dependency Graph:\n")
+	for _, svc := range services {
+		b.WriteString(fmt.Sprintf("- %s\n", svc.GetName()))
+		deps := svc.GetDependencies()
+		if len(deps) > 0 {
+			b.WriteString("    depends on: ")
+			for i, dep := range deps {
+				b.WriteString(dep)
+				if i != len(deps)-1 {
+					b.WriteString(", ")
+				}
+			}
+			b.WriteString("\n")
+		}
+	}
+	return b.String()
 }

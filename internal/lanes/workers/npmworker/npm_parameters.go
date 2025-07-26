@@ -36,7 +36,7 @@ func (c *NpmPipelineWorkerParameters) Validate() bool {
 }
 
 func (c *NpmPipelineWorkerParameters) Decode() {
-	env := environment.Get()
+	env := environment.GetInstance()
 
 	c.Command = env.Replace(c.Command)
 	c.CustomCommand = env.Replace(c.CustomCommand)

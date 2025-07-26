@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 
 	"github.com/cjlapao/locally-cli/internal/config"
@@ -288,6 +289,9 @@ type CustomFormatter struct {
 }
 
 func (f *CustomFormatter) Format(entry *logrus.Entry) ([]byte, error) {
+	if entry == nil {
+		return nil, fmt.Errorf("log entry is nil")
+	}
 	// Build the log line manually to avoid duplication
 	var b strings.Builder
 
@@ -332,16 +336,58 @@ func (f *CustomFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 		}
 	}
 
-	// Add message
+	// Add message first
 	if entry.Message != "" {
 		b.WriteString(" msg=\"")
 		b.WriteString(entry.Message)
 		b.WriteString("\"")
 	}
 
-	// Add fields with colors
-	if len(entry.Data) > 0 {
-		for key, value := range entry.Data {
+	// Define the preferred order for main fields
+	orderedFields := []string{"request_id", "user_id", "tenant_id", "duration"}
+	printed := map[string]bool{}
+
+	// Print main fields in order
+	for _, key := range orderedFields {
+		if value, ok := entry.Data[key]; ok && value != "" {
+			b.WriteString(" ")
+			if f.ForceColors {
+				color := ""
+				switch key {
+				case "request_id":
+					color = "\033[34m" // Blue
+				case "user_id":
+					color = "\033[32m" // Green
+				case "tenant_id":
+					color = "\033[33m" // Yellow
+				case "duration":
+					color = "\033[36m" // Cyan
+				}
+				b.WriteString(color)
+				b.WriteString(key)
+				b.WriteString("=")
+				b.WriteString(fmt.Sprintf("%v", value))
+				b.WriteString("\033[0m")
+			} else {
+				b.WriteString(key)
+				b.WriteString("=")
+				b.WriteString(fmt.Sprintf("%v", value))
+			}
+			printed[key] = true
+		}
+	}
+
+	// Print remaining fields alphabetically
+	var extraKeys []string
+	for key := range entry.Data {
+		if !printed[key] {
+			extraKeys = append(extraKeys, key)
+		}
+	}
+	if len(extraKeys) > 0 {
+		sort.Strings(extraKeys)
+		for _, key := range extraKeys {
+			value := entry.Data[key]
 			b.WriteString(" ")
 			if f.ForceColors {
 				b.WriteString("\033[36m") // Cyan for field keys

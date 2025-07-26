@@ -1,14 +1,13 @@
 package certificates
 
 import (
-	"bytes"
-	"errors"
-	"os/exec"
-
-	"github.com/cjlapao/common-go/helper"
+	"github.com/cjlapao/locally-cli/internal/appctx"
+	"github.com/cjlapao/locally-cli/internal/services/executer"
+	"github.com/cjlapao/locally-cli/internal/utils"
+	"github.com/cjlapao/locally-cli/pkg/diagnostics"
 )
 
-//certutil -enterprise -f -v -AddStore \"Root\"  " + config.baseDir + name + ".crt
+// certutil -enterprise -f -v -AddStore \"Root\"  " + config.baseDir + name + ".crt
 
 type Installer struct{}
 
@@ -33,43 +32,39 @@ const (
 	WebHosting
 )
 
-func (i Installer) InstallCertificate(filepath string, store CertificateStore) {
-	os := helper.GetOperatingSystem()
-	logger.Debug("Starting to install certificate %v on %v", filepath, os.String())
+func (i Installer) InstallCertificate(ctx *appctx.AppContext, filepath string, store CertificateStore) *diagnostics.Diagnostics {
+	diag := diagnostics.New("install_certificate")
+	os := utils.GetOperatingSystem()
+	ctx.Log().Debugf("Starting to install certificate %v on %v", filepath, os.String())
 	switch os {
-	case helper.LinuxOs:
-		logger.Debug("Not implemented yet")
-	case helper.WindowsOs:
-		output, err := execute("certutil", "-enterprise", "-f", "-v", "-AddStore", store.String(), filepath)
-		if err != nil {
-			logger.Error("there was an error running root install on %v", filepath)
-			logger.Error(output)
+	case utils.LinuxOperatingSystem:
+		ctx.Log().Debug("Not implemented yet")
+	case utils.WindowsOperatingSystem:
+		output, err := executer.ExecuteSimple(ctx, "certutil", "-enterprise", "-f", "-v", "-AddStore", store.String(), filepath)
+		if err.HasErrors() {
+			ctx.LogWithFields(map[string]interface{}{
+				"filepath": filepath,
+				"store":    store.String(),
+				"output":   output.StdOut,
+			}).Error("there was an error installing the certificate")
+			diag.Append(err)
+			return diag
 		}
 
-		logger.Debug(output)
-	}
-}
+		diag.AddPathEntry("install_certificate", "installer", map[string]interface{}{
+			"filepath": filepath,
+			"store":    store.String(),
+			"output":   output.StdOut,
+		})
 
-func execute(command string, args ...string) (string, error) {
-	cmd := exec.Command(command, args...)
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	var err bytes.Buffer
-	cmd.Stderr = &err
-	var in bytes.Buffer
-	cmd.Stdin = &in
+		ctx.LogWithFields(map[string]interface{}{
+			"filepath": filepath,
+			"store":    store.String(),
+			"output":   output.StdOut,
+		}).Info("certificate installed successfully")
 
-	cmd.Start()
-	cmd.Wait()
-
-	errString := err.String()
-	if errString == "" && cmd.ProcessState.ExitCode() > 0 {
-		errString = out.String()
+		return diag
 	}
 
-	if len(errString) > 0 {
-		return out.String(), errors.New(errString)
-	}
-
-	return out.String(), nil
+	return diag
 }

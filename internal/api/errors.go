@@ -5,7 +5,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/cjlapao/locally-cli/internal/config"
 	"github.com/cjlapao/locally-cli/internal/logging"
+	"github.com/cjlapao/locally-cli/pkg/diagnostics"
 )
 
 // APIError represents a standardized API error response
@@ -15,11 +17,18 @@ type APIError struct {
 	Path      string       `json:"path,omitempty"`
 }
 
-// ErrorDetails contains the specific error information
-type ErrorDetails struct {
+type ErrorDetailsError struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
-	Details string `json:"details,omitempty"`
+}
+
+// ErrorDetails contains the specific error information
+type ErrorDetails struct {
+	Code        string                   `json:"code"`
+	Message     string                   `json:"message"`
+	Details     string                   `json:"details,omitempty"`
+	Errors      []ErrorDetailsError      `json:"errors,omitempty"`
+	Diagnostics *diagnostics.Diagnostics `json:"diagnostics,omitempty"`
 }
 
 // Predefined error codes
@@ -96,6 +105,62 @@ func WriteError(w http.ResponseWriter, r *http.Request, statusCode int, errorCod
 	// Add details if provided
 	if len(details) > 0 {
 		errorDetails.Details = details[0]
+	}
+
+	apiError := APIError{
+		Error:     errorDetails,
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Path:      r.URL.Path,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	err := json.NewEncoder(w).Encode(apiError)
+	if err != nil {
+		logging.WithError(err).Error("Failed to encode error")
+	}
+}
+
+// WriteErrorWithDiagnostics writes a standardized error response
+func WriteErrorWithDiagnostics(w http.ResponseWriter, r *http.Request, statusCode int, errorCode, message string, diag *diagnostics.Diagnostics) {
+	// Use default error code if not provided
+	cfg := config.GetInstance().Get()
+	if errorCode == "" {
+		errorCode = getDefaultErrorCode(statusCode)
+	}
+
+	// Use default status code if error code is provided but status is 0
+	if statusCode == 0 && errorCode != "" {
+		if defaultStatus, exists := errorCodeToStatus[errorCode]; exists {
+			statusCode = defaultStatus
+		} else {
+			statusCode = http.StatusInternalServerError
+		}
+	}
+
+	// Default status code if nothing is provided
+	if statusCode == 0 {
+		statusCode = http.StatusInternalServerError
+	}
+
+	errorDetails := ErrorDetails{
+		Code:    errorCode,
+		Message: message,
+	}
+
+	// Add details if provided
+	if diag != nil {
+		if cfg.IsDebug() {
+			errorDetails.Diagnostics = diag
+		} else {
+			errorDetails.Errors = make([]ErrorDetailsError, 0)
+			for _, err := range diag.Errors {
+				errorDetails.Errors = append(errorDetails.Errors, ErrorDetailsError{
+					Code:    err.Code,
+					Message: err.Message,
+				})
+			}
+		}
 	}
 
 	apiError := APIError{

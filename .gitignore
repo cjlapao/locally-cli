@@ -12,3 +12,6 @@
 **/__debug_bin
 **/*.bck
 *.db
+coverage.*
+
+test-api

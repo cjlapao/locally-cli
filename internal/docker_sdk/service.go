@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cjlapao/locally-cli/internal/api"
+	"github.com/cjlapao/locally-cli/internal/appctx"
 	"github.com/cjlapao/locally-cli/pkg/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
@@ -76,7 +76,7 @@ func (s *DockerService) WithSocketPath(path string) *DockerService {
 	return s
 }
 
-func (s *DockerService) ListContainers(ctx api.ApiContext) ([]container.Summary, error) {
+func (s *DockerService) ListContainers(ctx *appctx.AppContext) ([]container.Summary, error) {
 	ctx.Log().Info("Listing containers")
 	containers, err := s.client.ContainerList(ctx, container.ListOptions{
 		All: true,
@@ -93,7 +93,7 @@ func (s *DockerService) ListContainers(ctx api.ApiContext) ([]container.Summary,
 	return containers, nil
 }
 
-func (s *DockerService) CreateContainer(ctx api.ApiContext, name string, config *container.Config, hostConfig *container.HostConfig, networkConfig *network.NetworkingConfig) (*container.CreateResponse, error) {
+func (s *DockerService) CreateContainer(ctx *appctx.AppContext, name string, config *container.Config, hostConfig *container.HostConfig, networkConfig *network.NetworkingConfig) (*container.CreateResponse, error) {
 	ctx.Log().Info("Creating container")
 	container, err := s.client.ContainerCreate(ctx, config, hostConfig, networkConfig, nil, name)
 	if err != nil {
@@ -102,7 +102,7 @@ func (s *DockerService) CreateContainer(ctx api.ApiContext, name string, config 
 	return &container, nil
 }
 
-func (s *DockerService) StartContainer(ctx api.ApiContext, id string, options container.StartOptions) error {
+func (s *DockerService) StartContainer(ctx *appctx.AppContext, id string, options container.StartOptions) error {
 	ctx.Log().WithField("container_id", id).Info("Starting container")
 	err := s.client.ContainerStart(ctx, id, options)
 	if err != nil {
@@ -111,7 +111,7 @@ func (s *DockerService) StartContainer(ctx api.ApiContext, id string, options co
 	return nil
 }
 
-func (s *DockerService) StopContainer(ctx api.ApiContext, id string, options container.StopOptions) error {
+func (s *DockerService) StopContainer(ctx *appctx.AppContext, id string, options container.StopOptions) error {
 	ctx.Log().WithField("container_id", id).Info("Stopping container")
 	err := s.client.ContainerStop(ctx, id, options)
 	if err != nil {
@@ -120,7 +120,7 @@ func (s *DockerService) StopContainer(ctx api.ApiContext, id string, options con
 	return nil
 }
 
-func (s *DockerService) RemoveContainer(ctx api.ApiContext, id string, options container.RemoveOptions) error {
+func (s *DockerService) RemoveContainer(ctx *appctx.AppContext, id string, options container.RemoveOptions) error {
 	ctx.Log().WithField("container_id", id).Info("Removing container from docker")
 	err := s.client.ContainerRemove(ctx, id, options)
 	if err != nil {

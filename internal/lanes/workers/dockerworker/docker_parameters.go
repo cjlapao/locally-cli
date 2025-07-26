@@ -38,7 +38,7 @@ func (c *DockerParameters) Validate() bool {
 }
 
 func (c *DockerParameters) Decode() {
-	env := environment.Get()
+	env := environment.GetInstance()
 
 	c.Registry = env.Replace(c.Registry)
 	c.ImagePath = env.Replace(c.ImagePath)

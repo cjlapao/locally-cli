@@ -19,7 +19,7 @@ func (c *BashParameters) Validate() bool {
 }
 
 func (c *BashParameters) Decode() {
-	env := environment.Get()
+	env := environment.GetInstance()
 
 	parts := strings.Split(c.Command, " ")
 	if len(parts) > 1 {

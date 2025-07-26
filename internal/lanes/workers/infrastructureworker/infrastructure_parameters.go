@@ -19,7 +19,7 @@ func (c *InfrastructureParameters) Validate() bool {
 }
 
 func (c *InfrastructureParameters) Decode() {
-	env := environment.Get()
+	env := environment.GetInstance()
 
 	parts := strings.Split(c.Command, " ")
 	if len(parts) > 1 {

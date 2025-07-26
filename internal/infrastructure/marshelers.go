@@ -18,7 +18,7 @@ func MarshalVariables(values map[string]interface{}, indentation string) string 
 }
 
 func marshalValue(value interface{}, level int, indent string) string {
-	env := environment.Get()
+	env := environment.GetInstance()
 	switch t := value.(type) {
 	case string:
 		t = env.Replace(t)

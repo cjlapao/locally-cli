@@ -1,3 +1,4 @@
+// Package certificates provides a service for generating and managing certificates
 package certificates
 
 import (
@@ -8,23 +9,41 @@ import (
 	"encoding/asn1"
 	"encoding/pem"
 	"math/big"
+	"sync"
 
-	"github.com/cjlapao/locally-cli/internal/configuration"
+	"github.com/cjlapao/locally-cli/internal/appctx"
+	"github.com/cjlapao/locally-cli/internal/database/stores"
+	"github.com/cjlapao/locally-cli/internal/logging"
+	"github.com/cjlapao/locally-cli/pkg/diagnostics"
+	"github.com/cjlapao/locally-cli/pkg/models"
+	"github.com/cjlapao/locally-cli/pkg/types"
 
-	"github.com/cjlapao/common-go/log"
 	"software.sslmate.com/src/go-pkcs12"
 )
 
 var (
-	logger          = log.Get()
-	oidEmailAddress = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 9, 1}
+	certificateService     *CertificateService
+	certificateServiceOnce sync.Once
+	CertificateComponent   = "Certificates Service"
+)
+
+type CertificateType string
+
+const (
+	RootCertificate         CertificateType = "Root"
+	IntermediateCertificate CertificateType = "Intermediate"
+	ServerCertificate       CertificateType = "Server"
+	ClientCertificate       CertificateType = "Client"
 )
 
 // var policy1 = asn1.ObjectIdentifier{1, 2, 4, 5}
 // var policy2 = asn1.ObjectIdentifier{1, 1, 3, 4}
+// var policy3 = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 11129, 2, 5, 2}
 
-// Keys
+// Certificate Keys
 var (
+	oidEmailAddress = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 9, 1}
+
 	ServerAuthentication      = asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 3, 1}
 	ClientAuthentication      = asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 3, 2}
 	CodeSigning               = asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 3, 3}
@@ -33,16 +52,11 @@ var (
 	OCSPSigning               = asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 3, 9}
 	MicrosoftTrustListSigning = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 311, 10, 3, 1}
 	EncryptingFileSystem      = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 311, 10, 3, 4}
-)
 
-// var policy3 = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 11129, 2, 5, 2}
-var (
 	policy4 = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 11129, 2, 5, 3}
 	policy5 = asn1.ObjectIdentifier{2, 23, 140, 1, 2, 1}
 	policy6 = asn1.ObjectIdentifier{2, 23, 140, 1, 2, 2}
-)
 
-var (
 	rootPolicy3 = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 11129, 2, 5, 3, 2}
 	rootPolicy4 = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 11129, 2, 5, 3, 3}
 )
@@ -127,101 +141,175 @@ func generatePfx(certificate *x509.Certificate, privateKey *rsa.PrivateKey, pass
 	return pfxBytes, nil
 }
 
-func GenerateCertificates() {
-	config := configuration.Get()
+// func GenerateCertificates(ctx *appctx.AppContext) {
+// 	config := configuration.Get()
 
-	if config.GlobalConfiguration.CertificateGenerator != nil {
-		logger.Info("|- Root")
-		needsSaving := false
-		if config.GlobalConfiguration.CertificateGenerator.Root != nil && len(config.GlobalConfiguration.CertificateGenerator.Root) > 0 {
-			for _, rootCert := range config.GlobalConfiguration.CertificateGenerator.Root {
-				x509RootCert := X509RootCertificate{}
-				x509RootCert.Name = rootCert.Name
-				if rootCert.PemCertificate == "" {
-					x509RootCert.Generate(rootCert.Config)
-					rootCert.PemCertificate = string(x509RootCert.Pem)
-					rootCert.PemPrivateKey = string(x509RootCert.PrivateKeyPem)
-					needsSaving = true
-					logger.Info("|  |- %s", rootCert.Name)
-				} else {
-					x509RootCert.Configuration = *rootCert.Config
-					x509RootCert.Parse(rootCert.PemCertificate, rootCert.PemPrivateKey)
-					logger.Info("|  |- %s [Cached]", rootCert.Name)
-				}
+// 	if config.GlobalConfiguration.CertificateGenerator != nil {
+// 		ctx.Log().Info("|- Root")
+// 		needsSaving := false
+// 		if config.GlobalConfiguration.CertificateGenerator.Root != nil && len(config.GlobalConfiguration.CertificateGenerator.Root) > 0 {
+// 			for _, rootCert := range config.GlobalConfiguration.CertificateGenerator.Root {
+// 				x509RootCert := X509RootCertificate{}
+// 				x509RootCert.Name = rootCert.Name
+// 				if rootCert.PemCertificate == "" {
+// 					x509RootCert.Generate(ctx, rootCert.Config)
+// 					rootCert.PemCertificate = string(x509RootCert.Pem)
+// 					rootCert.PemPrivateKey = string(x509RootCert.PrivateKeyPem)
+// 					needsSaving = true
+// 					ctx.Log().Info("|  |- %s", rootCert.Name)
+// 				} else {
+// 					x509RootCert.Configuration = *rootCert.Config
+// 					x509RootCert.Parse(ctx, rootCert.PemCertificate, rootCert.PemPrivateKey)
+// 					ctx.Log().Info("|  |- %s [Cached]", rootCert.Name)
+// 				}
 
-				if config.GlobalConfiguration.CertificateGenerator.OutputToFile {
-					x509RootCert.SaveToFile()
-				}
-				x509RootCert.Install()
-				for _, intermediateCA := range rootCert.IntermediateCertificates {
-					x509IntermediateCert := X509IntermediateCertificate{}
-					x509IntermediateCert.Name = intermediateCA.Name
-					if intermediateCA.PemCertificate == "" {
-						x509IntermediateCert.Generate(&x509RootCert, intermediateCA.Config)
-						intermediateCA.PemCertificate = string(x509IntermediateCert.Pem)
-						intermediateCA.PemPrivateKey = string(x509IntermediateCert.PrivateKeyPem)
-						needsSaving = true
-						logger.Info("|  |  |- %s", intermediateCA.Name)
-					} else {
-						x509IntermediateCert.Configuration = *intermediateCA.Config
-						x509IntermediateCert.Parse(intermediateCA.PemCertificate, intermediateCA.PemPrivateKey)
-						logger.Info("|  |  |- %s [Cached]", intermediateCA.Name)
-					}
-					if config.GlobalConfiguration.CertificateGenerator.OutputToFile {
-						x509IntermediateCert.SaveToFile()
-					}
-					x509IntermediateCert.Install()
+// 				if config.GlobalConfiguration.CertificateGenerator.OutputToFile {
+// 					x509RootCert.SaveToFile(ctx)
+// 				}
+// 				x509RootCert.Install(ctx)
+// 				for _, intermediateCA := range rootCert.IntermediateCertificates {
+// 					x509IntermediateCert := X509IntermediateCertificate{}
+// 					x509IntermediateCert.Name = intermediateCA.Name
+// 					if intermediateCA.PemCertificate == "" {
+// 						x509IntermediateCert.Generate(ctx, &x509RootCert, intermediateCA.Config)
+// 						intermediateCA.PemCertificate = string(x509IntermediateCert.Pem)
+// 						intermediateCA.PemPrivateKey = string(x509IntermediateCert.PrivateKeyPem)
+// 						needsSaving = true
+// 						ctx.Log().Info("|  |  |- %s", intermediateCA.Name)
+// 					} else {
+// 						x509IntermediateCert.Configuration = *intermediateCA.Config
+// 						x509IntermediateCert.Parse(ctx, intermediateCA.PemCertificate, intermediateCA.PemPrivateKey)
+// 						ctx.Log().Info("|  |  |- %s [Cached]", intermediateCA.Name)
+// 					}
+// 					if config.GlobalConfiguration.CertificateGenerator.OutputToFile {
+// 						x509IntermediateCert.SaveToFile(ctx)
+// 					}
+// 					x509IntermediateCert.Install(ctx)
 
-					for _, serverCert := range intermediateCA.Certificates {
-						x509ServerCert := X509ServerCertificate{}
-						x509ServerCert.Name = serverCert.Name
-						if serverCert.PemCertificate == "" {
-							x509ServerCert.Generate(&x509IntermediateCert, serverCert.Config)
-							serverCert.PemCertificate = string(x509ServerCert.Pem)
-							serverCert.PemPrivateKey = string(x509ServerCert.PrivateKeyPem)
-							needsSaving = true
-							logger.Info("|  |  |  |- %s", serverCert.Name)
-						} else {
-							x509ServerCert.Configuration = *serverCert.Config
-							x509ServerCert.Parse(serverCert.PemCertificate, serverCert.PemPrivateKey)
-							logger.Info("|  |  |  |- %s [Cached]", serverCert.Name)
-						}
-						if config.GlobalConfiguration.CertificateGenerator.OutputToFile {
-							x509ServerCert.SaveToFile()
-						}
-						x509ServerCert.Install()
-					}
-				}
-			}
+// 					for _, serverCert := range intermediateCA.Certificates {
+// 						x509ServerCert := X509ServerCertificate{}
+// 						x509ServerCert.Name = serverCert.Name
+// 						if serverCert.PemCertificate == "" {
+// 							x509ServerCert.Generate(ctx, &x509IntermediateCert, serverCert.Config)
+// 							serverCert.PemCertificate = string(x509ServerCert.Pem)
+// 							serverCert.PemPrivateKey = string(x509ServerCert.PrivateKeyPem)
+// 							needsSaving = true
+// 							ctx.Log().Info("|  |  |  |- %s", serverCert.Name)
+// 						} else {
+// 							x509ServerCert.Configuration = *serverCert.Config
+// 							x509ServerCert.Parse(ctx, serverCert.PemCertificate, serverCert.PemPrivateKey)
+// 							ctx.Log().Info("|  |  |  |- %s [Cached]", serverCert.Name)
+// 						}
+// 						if config.GlobalConfiguration.CertificateGenerator.OutputToFile {
+// 							x509ServerCert.SaveToFile(ctx)
+// 						}
+// 						x509ServerCert.Install(ctx)
+// 					}
+// 				}
+// 			}
+// 		}
+
+// 		if needsSaving {
+// 			config.SaveConfigFile()
+// 		}
+// 	} else {
+// 		ctx.Log().Warn("No Certificate Generator configuration found, exiting")
+// 	}
+// }
+
+type CertificateService struct {
+	store *stores.CertificatesDataStore
+}
+
+func (s *CertificateService) GetName() string {
+	return "CertificateService"
+}
+
+func Initialize(store *stores.CertificatesDataStore) *CertificateService {
+	logging.Info("Initializing Certificate Service")
+	certificateServiceOnce.Do(func() {
+		if store == nil {
+			logging.Error("Certificate Service not initialized, store is nil")
+			return
 		}
+		certificateService = New(store)
+		logging.Info("Certificate Service initialized")
+	})
 
-		if needsSaving {
-			config.SaveConfigFile()
-		}
-	} else {
-		logger.Warn("No Certificate Generator configuration found, exiting")
+	return certificateService
+}
+
+func GetInstance() *CertificateService {
+	if certificateService == nil {
+		logging.Error("Certificate Service not initialized, returning nil")
+		return nil
+	}
+
+	return certificateService
+}
+
+func New(store *stores.CertificatesDataStore) *CertificateService {
+	return &CertificateService{
+		store: store,
 	}
 }
 
-func CleanConfig() {
-	config := configuration.Get()
+func (s *CertificateService) GenerateRootCertificate(ctx *appctx.AppContext) (*models.RootCertificate, *diagnostics.Diagnostics) {
+	diag := diagnostics.New("generate_certificate")
 
-	if config.GlobalConfiguration.CertificateGenerator != nil {
-		if config.GlobalConfiguration.CertificateGenerator.Root != nil && len(config.GlobalConfiguration.CertificateGenerator.Root) > 0 {
-			for _, rootCert := range config.GlobalConfiguration.CertificateGenerator.Root {
-				rootCert.PemCertificate = ""
-				rootCert.PemPrivateKey = ""
-				for _, intermediateCert := range rootCert.IntermediateCertificates {
-					intermediateCert.PemCertificate = ""
-					intermediateCert.PemPrivateKey = ""
-					for _, serverCert := range intermediateCert.Certificates {
-						serverCert.PemCertificate = ""
-						serverCert.PemPrivateKey = ""
-					}
-				}
-			}
-		}
+	rootCA := NewX509RootCertificate(ctx, "root", models.CertificateConfig{
+		CommonName:         "Locally Root CA",
+		Country:            "UK",
+		State:              "London",
+		City:               "London",
+		Organization:       "Locally",
+		OrganizationalUnit: "Locally",
+		ExpiresInYears:     10,
+		KeySize:            types.Key2048,
+		SignatureAlgorithm: types.SHA512,
+	})
+
+	certificate, certDiag := rootCA.Generate(ctx)
+	if certDiag.HasErrors() {
+		ctx.Log().WithField("component", CertificateComponent).Error("Error generating root certificate", certDiag.Errors)
+		diag.Append(certDiag)
+		return nil, certDiag
 	}
 
-	config.SaveConfigFile()
+	ctx.Log().Debug("Generated Root Certificate")
+	ctx.Log().Debugf("\nPem: %s", certificate.PemCertificate)
+	ctx.Log().Debugf("\nPrivate Key: %s", certificate.PemPrivateKey)
+	ctx.Log().Debugf("\nCSR: %s", certificate.Csr)
+	ctx.Log().Debugf("\nConfig: %v", certificate.Config)
+
+	return certificate, diag
+}
+
+func (s *CertificateService) GenerateIntermediateCertificate(ctx *appctx.AppContext, rootCA *models.RootCertificate) (*models.IntermediateCertificate, *diagnostics.Diagnostics) {
+	diag := diagnostics.New("generate_certificate")
+
+	intermediateCA := NewX509IntermediateCertificate(ctx, "intermediate", models.CertificateConfig{
+		CommonName:         "Locally Intermediate CA",
+		Country:            "UK",
+		State:              "London",
+		City:               "London",
+		Organization:       "Locally",
+		OrganizationalUnit: "Locally",
+		ExpiresInYears:     10,
+		KeySize:            types.Key2048,
+		SignatureAlgorithm: types.SHA512,
+	})
+
+	rootCertificate := X509RootCertificate{}
+	rootCertificate.Parse(ctx, rootCA.PemCertificate, rootCA.PemPrivateKey)
+
+	certificate, certDiag := intermediateCA.Generate(ctx, &rootCertificate)
+
+	if certDiag.HasErrors() {
+		ctx.Log().WithField("component", CertificateComponent).Error("Error generating intermediate certificate", certDiag.Errors)
+		diag.Append(certDiag)
+		return nil, certDiag
+	}
+
+	return certificate, diag
 }

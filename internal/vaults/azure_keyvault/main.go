@@ -45,7 +45,7 @@ func (c AzureKeyVault) Name() string {
 }
 
 func (c AzureKeyVault) Sync() (map[string]interface{}, error) {
-	env := environment.Get()
+	env := environment.GetInstance()
 	config := configuration.Get()
 	configContext := config.GetCurrentContext()
 	result := make(map[string]interface{})

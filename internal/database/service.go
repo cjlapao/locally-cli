@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cjlapao/locally-cli/internal/database/types"
 	"github.com/cjlapao/locally-cli/internal/logging"
 	_ "github.com/lib/pq"
 	"github.com/sirupsen/logrus"
@@ -28,7 +29,7 @@ var (
 // Service represents the database service
 type Service struct {
 	db     *gorm.DB
-	config *Config
+	config *types.Config
 }
 
 // GetInstance returns the singleton instance of the database service
@@ -37,7 +38,7 @@ func GetInstance() *Service {
 }
 
 // Initialize initializes the database service singleton with the given config
-func Initialize(config *Config) error {
+func Initialize(config *types.Config) error {
 	var initErr error
 	once.Do(func() {
 		// Configure logging
@@ -55,9 +56,9 @@ func Initialize(config *Config) error {
 
 		// Initialize database based on type
 		switch config.Type {
-		case SQLite:
+		case types.SQLite:
 			db, err = initializeSQLite(config, gormConfig)
-		case PostgreSQL:
+		case types.PostgreSQL:
 			db, err = initializePostgreSQL(config, gormConfig)
 		default:
 			initErr = fmt.Errorf("unsupported database type: %s", config.Type)
@@ -81,7 +82,7 @@ func Initialize(config *Config) error {
 }
 
 // initializeSQLite initializes SQLite database connection
-func initializeSQLite(config *Config, gormConfig *gorm.Config) (*gorm.DB, error) {
+func initializeSQLite(config *types.Config, gormConfig *gorm.Config) (*gorm.DB, error) {
 	// Convert to absolute path if relative
 	absPath, err := filepath.Abs(config.StoragePath)
 	if err != nil {
@@ -105,7 +106,7 @@ func initializeSQLite(config *Config, gormConfig *gorm.Config) (*gorm.DB, error)
 }
 
 // initializePostgreSQL initializes PostgreSQL database connection
-func initializePostgreSQL(config *Config, gormConfig *gorm.Config) (*gorm.DB, error) {
+func initializePostgreSQL(config *types.Config, gormConfig *gorm.Config) (*gorm.DB, error) {
 	// test the connection to the postgres server
 	if err := testConnection(config); err != nil {
 		return nil, fmt.Errorf("failed to test PostgreSQL connection: %w", err)
@@ -163,11 +164,7 @@ func (s *Service) Close() error {
 // Migrate runs database migrations
 func (s *Service) Migrate() error {
 	// Add all models here
-	return s.db.AutoMigrate(
-		&Device{},
-		&Authentication{},
-		&Configuration{},
-	)
+	return nil
 }
 
 // ensureDir creates the directory for the database file if it doesn't exist
@@ -190,7 +187,7 @@ func createDirIfNotExists(dir string) error {
 }
 
 // buildPostgresConnectionString creates a PostgreSQL connection string
-func buildPostgresConnectionString(config *Config, dbName string) string {
+func buildPostgresConnectionString(config *types.Config, dbName string) string {
 	if config.Host == "" {
 		config.Host = "localhost"
 	}
@@ -201,9 +198,9 @@ func buildPostgresConnectionString(config *Config, dbName string) string {
 	sslMode := "disable"
 	if config.SSLMode {
 		switch config.Type {
-		case SQLite:
+		case types.SQLite:
 			sslMode = "disable"
-		case PostgreSQL:
+		case types.PostgreSQL:
 			sslMode = "prefer"
 		}
 	}
@@ -223,13 +220,13 @@ func buildPostgresConnectionString(config *Config, dbName string) string {
 }
 
 // checkDatabaseExists checks if the specified database exists
-func checkDatabaseExists(config *Config) (bool, error) {
+func checkDatabaseExists(config *types.Config) (bool, error) {
 	// Connect to PostgreSQL server without specifying a database
 	var dialector gorm.Dialector
 	switch config.Type {
-	case SQLite:
+	case types.SQLite:
 		return true, nil
-	case PostgreSQL:
+	case types.PostgreSQL:
 		dsn := buildPostgresConnectionString(config, "postgres")
 		dialector = postgres.Open(dsn)
 	default:
@@ -244,9 +241,9 @@ func checkDatabaseExists(config *Config) (bool, error) {
 	// Check if database exists
 	var exists int
 	switch config.Type {
-	case PostgreSQL:
+	case types.PostgreSQL:
 		srv.Raw("SELECT 1 FROM pg_database WHERE datname = ?", config.Database).Scan(&exists)
-	case SQLite:
+	case types.SQLite:
 		exists = 1
 	default:
 		return false, fmt.Errorf("unsupported database type: %s", config.Type)
@@ -262,12 +259,12 @@ func checkDatabaseExists(config *Config) (bool, error) {
 }
 
 // createDatabase creates the specified database
-func createDatabase(config *Config) error {
+func createDatabase(config *types.Config) error {
 	var dial gorm.Dialector
 	switch config.Type {
-	case SQLite:
+	case types.SQLite:
 		return nil
-	case PostgreSQL:
+	case types.PostgreSQL:
 		dsn := buildPostgresConnectionString(config, "postgres")
 		dial = postgres.Open(dsn)
 	default:
@@ -282,7 +279,7 @@ func createDatabase(config *Config) error {
 	// creating the database
 	var stmt string
 	switch config.Type {
-	case PostgreSQL:
+	case types.PostgreSQL:
 		stmt = fmt.Sprintf("CREATE DATABASE \"%s\"", config.Database)
 	default:
 		return fmt.Errorf("unsupported database type: %s", config.Type)
@@ -297,7 +294,7 @@ func createDatabase(config *Config) error {
 	// Setting up initial privileges
 	var privs string
 	switch config.Type {
-	case PostgreSQL:
+	case types.PostgreSQL:
 		privs = "GRANT ALL PRIVILEGES ON DATABASE " + config.Database + " TO " + config.Username
 	default:
 		return fmt.Errorf("unsupported database type: %s", config.Type)
@@ -311,12 +308,12 @@ func createDatabase(config *Config) error {
 }
 
 // testConnection tests the connection to the postgres server
-func testConnection(config *Config) error {
+func testConnection(config *types.Config) error {
 	var dial gorm.Dialector
 	switch config.Type {
-	case SQLite:
+	case types.SQLite:
 		return nil
-	case PostgreSQL:
+	case types.PostgreSQL:
 		dsn := buildPostgresConnectionString(config, "postgres")
 		dial = postgres.Open(dsn)
 	default:

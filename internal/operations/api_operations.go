@@ -20,9 +20,9 @@ type ApiOperation struct {
 func NewApiOperation() *ApiOperation {
 	if globalApiOperations == nil {
 		listener := restapi.GetHttpListener()
-		env := environment.Get()
-		listener.Options.ApiPrefix = env.GetString("env", common.API_PREFIX_VAR)
-		port := env.GetString("env", common.API_PORT_VAR)
+		env := environment.GetInstance()
+		listener.Options.ApiPrefix, _ = env.GetString("env", common.API_PREFIX_VAR, "")
+		port, _ := env.GetString("env", common.API_PORT_VAR, "")
 		if port == "" {
 			port = "7750"
 		}

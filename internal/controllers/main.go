@@ -9,11 +9,10 @@ import (
 )
 
 func RegisterControllers(listener *restapi.HttpListener) {
-
 	// Context Controller
-	listener.AddController(GetCurrentContext(), http_helper.JoinUrl("contexts", "current"), "GET")
-	listener.AddController(GetAllContexts(), http_helper.JoinUrl("contexts"), "GET")
-	listener.AddController(AddNewContext(), http_helper.JoinUrl("contexts"), "POST")
+	// listener.AddController(GetCurrentContext(), http_helper.JoinUrl("contexts", "current"), "GET")
+	// listener.AddController(GetAllContexts(), http_helper.JoinUrl("contexts"), "GET")
+	// listener.AddController(AddNewContext(), http_helper.JoinUrl("contexts"), "POST")
 
 	listener.AddController(TestAzureConnectionController(), http_helper.JoinUrl("test", "azure", "credentials"), "GET")
 	listener.AddController(TestAwsConnectionController(), http_helper.JoinUrl("test", "aws", "credentials"), "GET")
@@ -24,7 +23,6 @@ func RegisterControllers(listener *restapi.HttpListener) {
 
 func MapBodyFromRequest(request *http.Request, target interface{}) error {
 	err := http_helper.MapRequestBody(request, target)
-
 	if err != nil {
 		return err
 	}

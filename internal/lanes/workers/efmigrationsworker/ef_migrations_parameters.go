@@ -36,7 +36,7 @@ func (c *EfMigrationsPipelineWorkerParameters) Validate() bool {
 }
 
 func (c *EfMigrationsPipelineWorkerParameters) Decode() {
-	env := environment.Get()
+	env := environment.GetInstance()
 
 	c.RepoUrl = env.Replace(c.RepoUrl)
 	if c.RepoAccessToken != "" {

@@ -44,7 +44,7 @@ func (c *DotnetPipelineWorkerParameters) Validate() bool {
 }
 
 func (c *DotnetPipelineWorkerParameters) Decode() {
-	env := environment.Get()
+	env := environment.GetInstance()
 
 	c.RepoUrl = env.Replace(c.RepoUrl)
 	if c.RepoAccessToken != "" {

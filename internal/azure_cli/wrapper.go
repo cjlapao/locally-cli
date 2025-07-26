@@ -44,7 +44,7 @@ func GetWrapper() *AzureCliWrapper {
 }
 
 func (svc *AzureCliWrapper) Login(credentials *WrapperCredentials) error {
-	envSvc := environment.Get()
+	envSvc := environment.GetInstance()
 	notify.Rocket("Running Azure Cli Login...")
 
 	if credentials != nil {
@@ -160,7 +160,7 @@ func (svc *AzureCliWrapper) Login(credentials *WrapperCredentials) error {
 }
 
 func (svc *AzureCliWrapper) UserLogin(subscriptionId, tenantId string) error {
-	env := environment.Get()
+	env := environment.GetInstance()
 	msg := "Running Azure Cli User Login"
 	if tenantId != "" {
 		msg += fmt.Sprintf(" for tenant %s", tenantId)
@@ -276,7 +276,7 @@ func (svc *AzureCliWrapper) Logout() error {
 func (svc *AzureCliWrapper) ListApps(displayName string) (*AzureAdAppList, error) {
 	notify.Rocket("Running Azure Cli List AD Apps...")
 
-	envSvc := environment.Get()
+	envSvc := environment.GetInstance()
 	displayName = envSvc.Replace(displayName)
 
 	runArgs := make([]string, 0)
@@ -315,7 +315,7 @@ func (svc *AzureCliWrapper) ListApps(displayName string) (*AzureAdAppList, error
 func (svc *AzureCliWrapper) CreateServicePrincipal(displayName string, subscriptionId string) (*ServicePrincipalResponse, error) {
 	config := configuration.Get()
 	notify.Rocket("Running Azure Cli Create Service Principal...")
-	envSvc := environment.Get()
+	envSvc := environment.GetInstance()
 
 	displayName = envSvc.Replace(displayName)
 	subscriptionId = envSvc.Replace(subscriptionId)
@@ -366,7 +366,7 @@ func (svc *AzureCliWrapper) CreateServicePrincipal(displayName string, subscript
 		return nil, err
 	}
 
-	env := environment.Get()
+	env := environment.GetInstance()
 	env.SyncVault("credentials")
 
 	svc.CommandOutput = output.GetAllOutput()
@@ -375,7 +375,7 @@ func (svc *AzureCliWrapper) CreateServicePrincipal(displayName string, subscript
 }
 
 func (svc *AzureCliWrapper) UpsertResourceGroup(resourceGroupName string, subscriptionId string, location string) error {
-	envSvc := environment.Get()
+	envSvc := environment.GetInstance()
 	resourceGroupName = envSvc.Replace(resourceGroupName)
 	subscriptionId = envSvc.Replace(subscriptionId)
 	location = envSvc.Replace(location)
@@ -460,7 +460,7 @@ func (svc *AzureCliWrapper) UpsertResourceGroup(resourceGroupName string, subscr
 }
 
 func (svc *AzureCliWrapper) UpsertStorageAccount(name, resourceGroupName, subscriptionId string) error {
-	envSvc := environment.Get()
+	envSvc := environment.GetInstance()
 	name = envSvc.Replace(name)
 	resourceGroupName = envSvc.Replace(resourceGroupName)
 	subscriptionId = envSvc.Replace(subscriptionId)
@@ -557,7 +557,7 @@ func (svc *AzureCliWrapper) UpsertStorageAccount(name, resourceGroupName, subscr
 }
 
 func (svc *AzureCliWrapper) GetStorageAccountKey(name, resourceGroupName, subscriptionId string) (string, error) {
-	envSvc := environment.Get()
+	envSvc := environment.GetInstance()
 	name = envSvc.Replace(name)
 	resourceGroupName = envSvc.Replace(resourceGroupName)
 	subscriptionId = envSvc.Replace(subscriptionId)
@@ -626,7 +626,7 @@ func (svc *AzureCliWrapper) GetStorageAccountKey(name, resourceGroupName, subscr
 }
 
 func (svc *AzureCliWrapper) UpsertStorageAccountContainer(name, storageAccountName, storageAccountKey string) error {
-	envSvc := environment.Get()
+	envSvc := environment.GetInstance()
 	name = envSvc.Replace(name)
 	storageAccountName = envSvc.Replace(storageAccountName)
 	storageAccountKey = envSvc.Replace(storageAccountKey)
@@ -707,7 +707,7 @@ func (svc *AzureCliWrapper) UpsertStorageAccountContainer(name, storageAccountNa
 }
 
 func (svc *AzureCliWrapper) SetSubscription(subscriptionId string) error {
-	envSvc := environment.Get()
+	envSvc := environment.GetInstance()
 	subscriptionId = envSvc.Replace(subscriptionId)
 
 	notify.Rocket("Running Azure Cli Set Subscription to %s...", subscriptionId)
@@ -742,7 +742,7 @@ func (svc *AzureCliWrapper) SetSubscription(subscriptionId string) error {
 }
 
 func (svc *AzureCliWrapper) IsLoggedIn(subscriptionId, tenantId string) bool {
-	env := environment.Get()
+	env := environment.GetInstance()
 	if subscriptionId != "" {
 		subscriptionId = env.Replace(subscriptionId)
 	}
@@ -761,7 +761,7 @@ func (svc *AzureCliWrapper) IsLoggedIn(subscriptionId, tenantId string) bool {
 }
 
 func (svc *AzureCliWrapper) GetAcrRefreshToken(acr, subscriptionId, tenantId string) (string, error) {
-	env := environment.Get()
+	env := environment.GetInstance()
 
 	if subscriptionId != "" {
 		subscriptionId = env.Replace(subscriptionId)

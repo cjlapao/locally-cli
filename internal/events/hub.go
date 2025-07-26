@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cjlapao/locally-cli/internal/api"
+	"github.com/cjlapao/locally-cli/internal/appctx"
 	"github.com/cjlapao/locally-cli/internal/logging"
 	"github.com/sirupsen/logrus"
 )
@@ -161,7 +161,7 @@ func randomString(length int) string {
 }
 
 // Start begins the hub's background processing
-func (s *EventService) Start(ctx api.ApiContext) error {
+func (s *EventService) Start(ctx *appctx.AppContext) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -285,7 +285,7 @@ func (s *EventService) GetClientInfo(clientID string) *Client {
 }
 
 // runHub is the main event loop that manages connections and broadcasts
-func (s *EventService) runHub(ctx api.ApiContext) {
+func (s *EventService) runHub(ctx *appctx.AppContext) {
 	logging.Info("Event hub starting main loop")
 
 	// Statistics ticker for periodic logging

@@ -31,7 +31,7 @@ type CurlContent struct {
 }
 
 func (c *CurlParameters) Decode() {
-	env := environment.Get()
+	env := environment.GetInstance()
 
 	c.Host = env.Replace(c.Host)
 	for key, value := range c.Headers {

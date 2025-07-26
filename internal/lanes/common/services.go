@@ -13,7 +13,7 @@ import (
 )
 
 func RequestOpsToken(baseurl string) (string, error) {
-	env := environment.Get()
+	env := environment.GetInstance()
 
 	var ops_request *http.Request
 	_opsurl := baseurl + "/ops/connect/token"

@@ -110,7 +110,7 @@ func (s *ConfigService) GetStoragePath() (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("failed to get home directory: %w", err)
 		}
-		s.config.Set(DatabaseStoragePathKey, filepath.Join(homeDir, ".jamf-integrator", "jamf.db"))
+		s.config.Set(DatabaseStoragePathKey, filepath.Join(homeDir, DefaultStoragePath, DefaultStorageFile))
 	}
 
 	return storagePath.Value, nil

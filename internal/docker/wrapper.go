@@ -27,7 +27,7 @@ func GetWrapper() *DockerCommandWrapper {
 }
 
 func (svc *DockerCommandWrapper) Build(path string, serviceName string, componentName string) error {
-	env := environment.Get()
+	env := environment.GetInstance()
 
 	path = env.Replace(path)
 	serviceName = env.Replace(serviceName)
@@ -82,7 +82,7 @@ func (svc *DockerCommandWrapper) Build(path string, serviceName string, componen
 }
 
 func (svc *DockerCommandWrapper) Up(path string, serviceName string, componentName string) error {
-	env := environment.Get()
+	env := environment.GetInstance()
 	path = env.Replace(path)
 	serviceName = env.Replace(serviceName)
 	componentName = env.Replace(componentName)
@@ -154,7 +154,7 @@ func (svc *DockerCommandWrapper) Down(path string, serviceName string, component
 }
 
 func (svc *DockerCommandWrapper) Start(path string, serviceName string, componentName string) error {
-	env := environment.Get()
+	env := environment.GetInstance()
 
 	path = env.Replace(path)
 	serviceName = env.Replace(serviceName)
@@ -225,7 +225,7 @@ func (svc *DockerCommandWrapper) Stop(path string, serviceName string, component
 }
 
 func (svc *DockerCommandWrapper) Pause(path string, serviceName string, componentName string) error {
-	env := environment.Get()
+	env := environment.GetInstance()
 
 	path = env.Replace(path)
 	serviceName = env.Replace(serviceName)
@@ -263,7 +263,7 @@ func (svc *DockerCommandWrapper) Pause(path string, serviceName string, componen
 }
 
 func (svc *DockerCommandWrapper) Resume(path string, serviceName string, componentName string) error {
-	env := environment.Get()
+	env := environment.GetInstance()
 
 	path = env.Replace(path)
 	serviceName = env.Replace(serviceName)
@@ -301,7 +301,7 @@ func (svc *DockerCommandWrapper) Resume(path string, serviceName string, compone
 }
 
 func (svc *DockerCommandWrapper) Status(path string, serviceName string, componentName string) error {
-	env := environment.Get()
+	env := environment.GetInstance()
 
 	path = env.Replace(path)
 	serviceName = env.Replace(serviceName)
@@ -341,7 +341,7 @@ func (svc *DockerCommandWrapper) Status(path string, serviceName string, compone
 }
 
 func (svc *DockerCommandWrapper) IsRunning(imageName string) (bool, error) {
-	env := environment.Get()
+	env := environment.GetInstance()
 	var output executer.ExecuteOutput
 	var err error
 
@@ -390,7 +390,7 @@ func (svc *DockerCommandWrapper) IsRunning(imageName string) (bool, error) {
 }
 
 func (svc *DockerCommandWrapper) List(serviceName string) error {
-	env := environment.Get()
+	env := environment.GetInstance()
 
 	serviceName = env.Replace(serviceName)
 	var output executer.ExecuteOutput
@@ -422,7 +422,7 @@ func (svc *DockerCommandWrapper) List(serviceName string) error {
 }
 
 func (svc *DockerCommandWrapper) Logs(path string, serviceName string, componentName string) error {
-	env := environment.Get()
+	env := environment.GetInstance()
 
 	path = env.Replace(path)
 	serviceName = env.Replace(serviceName)
@@ -465,7 +465,7 @@ func (svc *DockerCommandWrapper) Logs(path string, serviceName string, component
 }
 
 func (svc *DockerCommandWrapper) GetServiceImages(path string, serviceName string, componentName string) ([]ContainerImage, error) {
-	env := environment.Get()
+	env := environment.GetInstance()
 
 	path = env.Replace(path)
 	serviceName = env.Replace(serviceName)
@@ -546,7 +546,7 @@ func (svc *DockerCommandWrapper) GetServiceImages(path string, serviceName strin
 }
 
 func (svc *DockerCommandWrapper) RemoveImage(imageName string, tagName string) error {
-	env := environment.Get()
+	env := environment.GetInstance()
 	var output executer.ExecuteOutput
 	var err error
 
@@ -603,7 +603,7 @@ func (svc *DockerCommandWrapper) BuildImage(options BuildImageOptions) error {
 }
 
 func (svc *DockerCommandWrapper) Login(crName, username, password, subscriptionId, tenantId string) error {
-	env := environment.Get()
+	env := environment.GetInstance()
 	var output executer.ExecuteOutput
 	var err error
 
@@ -658,7 +658,7 @@ func (svc *DockerCommandWrapper) Login(crName, username, password, subscriptionI
 }
 
 func (svc *DockerCommandWrapper) Pull(crName, imagePath, tag string) error {
-	env := environment.Get()
+	env := environment.GetInstance()
 
 	crName = env.Replace(crName)
 	imagePath = env.Replace(imagePath)

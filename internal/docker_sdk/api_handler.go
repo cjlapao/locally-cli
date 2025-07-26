@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/cjlapao/locally-cli/internal/api"
+	"github.com/cjlapao/locally-cli/internal/appctx"
 	"github.com/cjlapao/locally-cli/internal/validation"
 	"github.com/cjlapao/locally-cli/pkg/types"
 	"github.com/docker/docker/api/types/container"
@@ -62,8 +63,8 @@ func (h *APIHandler) Routes() []api.Route {
 }
 
 func (h *APIHandler) GetAllContainers(w http.ResponseWriter, r *http.Request) {
-	ctx := api.FromContext(r.Context())
-	containers, err := h.service.ListContainers(*ctx)
+	ctx := appctx.FromContext(r.Context())
+	containers, err := h.service.ListContainers(ctx)
 	if err != nil {
 		api.WriteBadRequest(w, r, "Failed to list containers", err.Error())
 		return
@@ -80,7 +81,7 @@ func (h *APIHandler) GetAllContainers(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *APIHandler) CreateContainer(w http.ResponseWriter, r *http.Request) {
-	ctx := api.FromContext(r.Context())
+	ctx := appctx.FromContext(r.Context())
 	var request types.ContainerCreateRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		api.WriteBadRequest(w, r, "Failed to decode request", err.Error())
@@ -92,7 +93,7 @@ func (h *APIHandler) CreateContainer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	createdContainer, err := h.service.CreateContainer(*ctx, request.Name, &container.Config{
+	createdContainer, err := h.service.CreateContainer(ctx, request.Name, &container.Config{
 		Image: request.Image,
 	}, &container.HostConfig{
 		PortBindings: nat.PortMap{
@@ -110,7 +111,7 @@ func (h *APIHandler) CreateContainer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if request.RunOnCreate {
-		err = h.service.StartContainer(*ctx, createdContainer.ID, container.StartOptions{})
+		err = h.service.StartContainer(ctx, createdContainer.ID, container.StartOptions{})
 		if err != nil {
 			api.WriteBadRequest(w, r, "Failed to start container", err.Error())
 			return
@@ -123,9 +124,9 @@ func (h *APIHandler) CreateContainer(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *APIHandler) StartContainer(w http.ResponseWriter, r *http.Request) {
-	ctx := api.FromContext(r.Context())
+	ctx := appctx.FromContext(r.Context())
 	containerID := mux.Vars(r)["id"]
-	err := h.service.StartContainer(*ctx, containerID, container.StartOptions{})
+	err := h.service.StartContainer(ctx, containerID, container.StartOptions{})
 	if err != nil {
 		api.WriteBadRequest(w, r, "Failed to start container", err.Error())
 		return
@@ -140,10 +141,10 @@ func (h *APIHandler) StartContainer(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *APIHandler) StopContainer(w http.ResponseWriter, r *http.Request) {
-	ctx := api.FromContext(r.Context())
+	ctx := appctx.FromContext(r.Context())
 	containerID := mux.Vars(r)["id"]
 
-	err := h.service.StopContainer(*ctx, containerID, container.StopOptions{})
+	err := h.service.StopContainer(ctx, containerID, container.StopOptions{})
 	if err != nil {
 		api.WriteBadRequest(w, r, "Failed to stop container", err.Error())
 		return
@@ -158,7 +159,7 @@ func (h *APIHandler) StopContainer(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *APIHandler) RemoveContainer(w http.ResponseWriter, r *http.Request) {
-	ctx := api.FromContext(r.Context())
+	ctx := appctx.FromContext(r.Context())
 	var request types.ContainerRemoveRequest
 	containerID := mux.Vars(r)["id"]
 
@@ -177,7 +178,7 @@ func (h *APIHandler) RemoveContainer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.service.RemoveContainer(*ctx, containerID, container.RemoveOptions{
+	err := h.service.RemoveContainer(ctx, containerID, container.RemoveOptions{
 		Force:         request.Force,
 		RemoveVolumes: request.RemoveVolumes,
 		RemoveLinks:   request.RemoveLinks,
