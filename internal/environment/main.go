@@ -1,0 +1,45 @@
+// Package environment provides a generic environment variable management system
+package environment
+
+import "github.com/cjlapao/locally-cli/internal/notifications"
+
+var notify = notifications.Get()
+
+const (
+	ErrorCodeVaultNotFound           = "VAULT_NOT_FOUND"
+	ErrorCodeVariableNotFound        = "VARIABLE_NOT_FOUND"
+	ErrorCodeInvalidReference        = "INVALID_REFERENCE"
+	ErrorCodeInvalidArgument         = "INVALID_ARGUMENT"
+	ErrorCodeExecutionError          = "EXECUTION_ERROR"
+	ErrorCodeVaultNotSynced          = "VAULT_NOT_SYNCED"
+	ErrorCodeVaultAlreadySynced      = "VAULT_ALREADY_SYNCED"
+	ErrorCodeVaultNotRegistered      = "VAULT_NOT_REGISTERED"
+	ErrorCodeVaultAlreadyRegistered  = "VAULT_ALREADY_REGISTERED"
+	ErrorCodeVaultNotUnregistered    = "VAULT_NOT_UNREGISTERED"
+	ErrorCodeFunctionNotFound        = "FUNCTION_NOT_FOUND"
+	ErrorCodeFunctionNotRegistered   = "FUNCTION_NOT_REGISTERED"
+	ErrorCodeFunctionNotUnregistered = "FUNCTION_NOT_UNREGISTERED"
+	ErrorCodeFunctionNotUpdated      = "FUNCTION_NOT_UPDATED"
+	ErrorCodeFunctionNotDeleted      = "FUNCTION_NOT_DELETED"
+	ErrorCodeFunctionNotCreated      = "FUNCTION_NOT_CREATED"
+	ErrorCodeFunctionNotExecuted     = "FUNCTION_NOT_EXECUTED"
+	ErrorCodeFunctionNotCalled       = "FUNCTION_NOT_CALLED"
+	ErrorCodeFunctionNotAdded        = "FUNCTION_NOT_ADDED"
+	ErrorCodeKeyNotFound             = "KEY_NOT_FOUND"
+	ErrorCodeKeyAlreadyExists        = "KEY_ALREADY_EXISTS"
+	ErrorCodeKeyNotRemoved           = "KEY_NOT_REMOVED"
+	ErrorCodeKeyNotSet               = "KEY_NOT_SET"
+	ErrorCodeKeyNotGet               = "KEY_NOT_GET"
+	ErrorCodeKeyNotDelete            = "KEY_NOT_DELETE"
+	ErrorCodeKeyNotUpdate            = "KEY_NOT_UPDATE"
+	ErrorCodeKeyNotAdd               = "KEY_NOT_ADD"
+	ErrorCodeValueNotFound           = "VALUE_NOT_FOUND"
+	ErrorCodeValueAlreadyExists      = "VALUE_ALREADY_EXISTS"
+	ErrorCodeValueNotRemoved         = "VALUE_NOT_REMOVED"
+	ErrorCodeValueNotSet             = "VALUE_NOT_SET"
+	ErrorCodeValueNotGet             = "VALUE_NOT_GET"
+	ErrorCodeValueNotDelete          = "VALUE_NOT_DELETE"
+	ErrorCodeValueNotUpdate          = "VALUE_NOT_UPDATE"
+	ErrorCodeValueNotAdd             = "VALUE_NOT_ADD"
+	ErrorCodeTypeConversionError     = "TYPE_CONVERSION_ERROR"
+)

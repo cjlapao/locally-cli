@@ -1,0 +1,33 @@
+{
+  "go.lintTool": "golangci-lint",
+  "go.lintFlags": [
+    "--config=.golangci.yml"
+  ],
+  "go.lintOnSave": "package",
+  "go.useLanguageServer": true,
+  "gopls": {
+    "ui.diagnostic.analyses": {
+      "ST1003": false,
+      "SA1012": false
+    }
+  },
+  "go.toolsManagement.checkForUpdates": "local",
+  "go.gopath": "",
+  "go.goroot": "",
+  "go.alternateTools": {},
+  "go.buildOnSave": "package",
+  "go.vetOnSave": "package",
+  "go.coverOnSave": false,
+  "go.testOnSave": false,
+  "go.testFlags": [],
+  "go.testTimeout": "30s",
+  "go.testEnvVars": {},
+  "go.testEnvFile": "${workspaceFolder}/.env",
+  "go.delveConfig": {
+    "apiVersion": 2,
+    "showGlobalVariables": false
+  },
+  "go.formatTool": "gofmt",
+  "go.formatFlags": [],
+  "go.gocodeAutoBuild": false
+}
