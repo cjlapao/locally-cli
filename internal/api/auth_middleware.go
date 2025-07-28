@@ -57,7 +57,8 @@ func NewRequireAuthPreMiddleware(authService *auth.AuthService) PreMiddleware {
 		// Add claims to context using AppContext
 		appCtx := appctx.FromContext(r.Context())
 		appCtx = appCtx.WithTenantID(claims.TenantID)
-		appCtx = appCtx.WithUserID(claims.Username)
+		appCtx = appCtx.WithUserID(claims.UserID)
+		appCtx = appCtx.WithUsername(claims.Username)
 
 		// Add claims to the underlying context for backward compatibility
 		// We need to update the AppContext's underlying context directly
@@ -70,7 +71,8 @@ func NewRequireAuthPreMiddleware(authService *auth.AuthService) PreMiddleware {
 		// Debug logging to verify claims are set
 		appCtx.LogWithFields(logrus.Fields{
 			"tenant_id":         claims.TenantID,
-			"user_id":           claims.Username,
+			"user_id":           claims.UserID,
+			"username":          claims.Username,
 			"roles":             claims.Roles,
 			"auth_context_addr": fmt.Sprintf("%p", appCtx),
 		}).Info("Auth middleware: Claims set in context")
@@ -169,7 +171,7 @@ func NewRequireRolePreMiddleware(requiredRoles []models.Role) PreMiddleware {
 
 		// Get user from database to validate roles
 		appCtx := appctx.FromContext(r.Context())
-		user, err := authService.AuthDataStore.GetUserByUsername(appCtx, claims.Username)
+		user, err := authService.UserStore.GetUserByUsername(appCtx, claims.TenantID, claims.Username)
 		if err != nil {
 			debugCtx.LogWithError(err).Error("Role middleware: Failed to get user from database")
 			writeForbiddenError(w, r, "Forbidden", "Failed to get user information")
@@ -265,7 +267,7 @@ func NewRequireClaimPreMiddleware(requiredClaims []models.Claim) PreMiddleware {
 
 		// Get user from database to validate claims
 		appCtx := appctx.FromContext(r.Context())
-		user, err := authService.AuthDataStore.GetUserByUsername(appCtx, claims.Username)
+		user, err := authService.UserStore.GetUserByUsername(appCtx, claims.TenantID, claims.Username)
 		if err != nil {
 			debugCtx.LogWithError(err).Error("Claim middleware: Failed to get user from database")
 			writeForbiddenError(w, r, "Forbidden", "Failed to get user information")

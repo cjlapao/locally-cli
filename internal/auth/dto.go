@@ -14,6 +14,7 @@ type AuthCredentials struct {
 
 type AuthClaims struct {
 	Username    string   `json:"username"`
+	UserID      string   `json:"user_id"`
 	ExpiresAt   int64    `json:"exp"`
 	IssuedAt    int64    `json:"iat"`
 	Issuer      string   `json:"iss"`

@@ -17,6 +17,10 @@ func GetTenantIDFromRequest(r *http.Request) (string, error) {
 	if contextTenantID == nil || contextTenantID == "" {
 		vars := mux.Vars(r)
 		tenantID = vars["tenant_id"]
+		if tenantID == "" {
+			// attempt to get tenant id from header
+			tenantID = r.Header.Get("X-Tenant-ID")
+		}
 	} else {
 		// Safely convert to string, fallback to URL if conversion fails
 		if strTenantID, ok := contextTenantID.(string); ok {

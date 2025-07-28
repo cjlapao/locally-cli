@@ -4,7 +4,7 @@ import "time"
 
 type User struct {
 	BaseModel
-	Name                  string    `gorm:"not null;type:text"`
+	Name                  string    `json:"name" gorm:"not null;type:text"`
 	Username              string    `json:"username" gorm:"not null;unique;type:text"`
 	Password              string    `json:"password" gorm:"not null;type:text"`
 	Email                 string    `json:"email" gorm:"not null;unique;type:text"`

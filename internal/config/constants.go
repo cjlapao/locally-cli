@@ -1,12 +1,13 @@
 package config
 
 const (
-	GlobalTenantID              = "global"
+	GlobalTenantID              = "global-tenant"
 	GlobalTenantName            = "Global Tenant"
 	SuperUserRole               = "su"
 	RootCertificateSlug         = "locally-root"
 	IntermediateCertificateSlug = "locally-ca"
 	ApiKeyPrefix                = "sk-locally-"
+	PasswordAllowedSpecialChars = "!@#$%.?"
 )
 
 const (
@@ -37,6 +38,12 @@ const (
 
 	// API Key configuration keys
 	APIKey = "api.key"
+
+	// Security configuration keys
+	SecurityPasswordMinLengthKey        = "security.password.min_length"
+	SecurityPasswordRequireNumberKey    = "security.password.require_number"
+	SecurityPasswordRequireSpecialKey   = "security.password.require_special"
+	SecurityPasswordRequireUppercaseKey = "security.password.require_uppercase"
 
 	// Seeding configuration keys
 	SeedDemoDataKey = "seeding.demo_data"
@@ -106,6 +113,12 @@ const (
 	SeedDemoDataEnvKey     = EnvPrefix + "SEED_DEMO_DATA"
 	APIKeyEnvKey           = EnvPrefix + "API_KEY"
 
+	// Security configuration keys
+	SecurityPasswordMinLengthEnvKey        = EnvPrefix + "SECURITY_PASSWORD_MIN_LENGTH"
+	SecurityPasswordRequireNumberEnvKey    = EnvPrefix + "SECURITY_PASSWORD_REQUIRE_NUMBER"
+	SecurityPasswordRequireSpecialEnvKey   = EnvPrefix + "SECURITY_PASSWORD_REQUIRE_SPECIAL"
+	SecurityPasswordRequireUppercaseEnvKey = EnvPrefix + "SECURITY_PASSWORD_REQUIRE_UPPERCASE"
+
 	// Cors configuration keys
 	CorsAllowOriginsEnvKey  = EnvPrefix + "CORS_ALLOW_ORIGINS"
 	CorsAllowMethodsEnvKey  = EnvPrefix + "CORS_ALLOW_METHODS"
@@ -141,33 +154,37 @@ const (
 
 // Flags
 const (
-	FlagDebug                  = "debug"
-	FlagLogLevel               = "log-level"
-	FlagAPIPort                = "api-port"
-	FlagBindTo                 = "bind-to"
-	FlagBaseURL                = "base-url"
-	FlagAPIPrefix              = "api-prefix"
-	FlagRootPassword           = "root-password"
-	FlagJwtAuthSecret          = "jwt-auth-secret"
-	FlagJwtIssuer              = "jwt-issuer"
-	FlagEncryptionMasterSecret = "encryption-master-secret"
-	FlagEncryptionGlobalSecret = "encryption-global-secret"
-	FlagRootUserUsername       = "root-user-username"
-	FlagRootUserPassword       = "root-user-password"
-	FlagSeedDemoData           = "seed-demo-data"
-	FlagCorsAllowOrigins       = "cors-allow-origins"
-	FlagCorsAllowMethods       = "cors-allow-methods"
-	FlagCorsAllowHeaders       = "cors-allow-headers"
-	FlagCorsExposeHeaders      = "cors-expose-headers"
-	FlagDatabaseType           = "database-type"
-	FlagDatabaseStoragePath    = "database-storage-path"
-	FlagDatabaseHost           = "database-host"
-	FlagDatabasePort           = "database-port"
-	FlagDatabaseDatabase       = "database-database"
-	FlagDatabaseUsername       = "database-username"
-	FlagDatabasePassword       = "database-password"
-	FlagDatabaseSSLMode        = "database-ssl-mode"
-	FlagDatabaseMigrate        = "database-migrate"
+	FlagDebug                            = "debug"
+	FlagLogLevel                         = "log-level"
+	FlagAPIPort                          = "api-port"
+	FlagBindTo                           = "bind-to"
+	FlagBaseURL                          = "base-url"
+	FlagAPIPrefix                        = "api-prefix"
+	FlagRootPassword                     = "root-password"
+	FlagJwtAuthSecret                    = "jwt-auth-secret"
+	FlagJwtIssuer                        = "jwt-issuer"
+	FlagEncryptionMasterSecret           = "encryption-master-secret"
+	FlagEncryptionGlobalSecret           = "encryption-global-secret"
+	FlagRootUserUsername                 = "root-user-username"
+	FlagRootUserPassword                 = "root-user-password"
+	FlagSecurityPasswordMinLength        = "security-password-min-length"
+	FlagSecurityPasswordRequireNumber    = "security-password-require-number"
+	FlagSecurityPasswordRequireSpecial   = "security-password-require-special"
+	FlagSecurityPasswordRequireUppercase = "security-password-require-uppercase"
+	FlagSeedDemoData                     = "seed-demo-data"
+	FlagCorsAllowOrigins                 = "cors-allow-origins"
+	FlagCorsAllowMethods                 = "cors-allow-methods"
+	FlagCorsAllowHeaders                 = "cors-allow-headers"
+	FlagCorsExposeHeaders                = "cors-expose-headers"
+	FlagDatabaseType                     = "database-type"
+	FlagDatabaseStoragePath              = "database-storage-path"
+	FlagDatabaseHost                     = "database-host"
+	FlagDatabasePort                     = "database-port"
+	FlagDatabaseDatabase                 = "database-database"
+	FlagDatabaseUsername                 = "database-username"
+	FlagDatabasePassword                 = "database-password"
+	FlagDatabaseSSLMode                  = "database-ssl-mode"
+	FlagDatabaseMigrate                  = "database-migrate"
 
 	// Message Processor flags
 	FlagMessageProcessorPollInterval         = "message-processor-poll-interval"

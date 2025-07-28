@@ -304,3 +304,178 @@ func TestPartialUpdateMap_NilPointers(t *testing.T) {
 		t.Errorf("Expected ptr to be nil, got %v (type: %T)", ptrValue, ptrValue)
 	}
 }
+
+func TestPartialUpdateMap_ReproduceIssue(t *testing.T) {
+	// Test case to reproduce the issue where a changed field is not detected
+	original := &TestUser{
+		ID:        "123",
+		Name:      "test tenant",
+		Email:     "test@example.com",
+		Age:       30,
+		Active:    true,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	updated := &TestUser{
+		ID:        "123",
+		Name:      "test tenant changed", // Changed from "test tenant"
+		Email:     "test@example.com",
+		Age:       30,
+		Active:    true,
+		CreatedAt: original.CreatedAt,
+		UpdatedAt: original.UpdatedAt,
+	}
+
+	updates := PartialUpdateMap(original, updated, "updated_at")
+
+	t.Logf("Updates map: %+v", updates)
+
+	// Should include the name field since it changed
+	if updates["name"] != "test tenant changed" {
+		t.Errorf("Expected name to be 'test tenant changed', got %v", updates["name"])
+	}
+
+	// Should have at least 2 fields (name + updated_at)
+	if len(updates) < 2 {
+		t.Errorf("Expected at least 2 updates, got %d", len(updates))
+	}
+}
+
+func TestPartialUpdateMap_NoJsonTag(t *testing.T) {
+	// Test with a field that has no json tag (like the Name field in User entity)
+	type BaseModel struct {
+		ID        string    `json:"id"`
+		Slug      string    `json:"slug"`
+		CreatedAt time.Time `json:"created_at"`
+		UpdatedAt time.Time `json:"updated_at"`
+	}
+
+	type User struct {
+		BaseModel
+		Name     string `gorm:"not null;type:text"` // No json tag!
+		Username string `json:"username"`
+		Email    string `json:"email"`
+	}
+
+	original := &User{
+		BaseModel: BaseModel{
+			ID:        "123",
+			Slug:      "test-tenant",
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		},
+		Name:     "test tenant",
+		Username: "testuser",
+		Email:    "test@example.com",
+	}
+
+	updated := &User{
+		BaseModel: BaseModel{
+			ID:        "123",
+			Slug:      "test-tenant",
+			CreatedAt: original.CreatedAt,
+			UpdatedAt: original.UpdatedAt,
+		},
+		Name:     "test tenant changed", // Changed from "test tenant"
+		Username: "testuser",
+		Email:    "test@example.com",
+	}
+
+	updates := PartialUpdateMap(original, updated, "updated_at")
+
+	// The Name field should now be included using the field name as fallback
+	if updates["Name"] != "test tenant changed" {
+		t.Errorf("Expected Name to be 'test tenant changed', got %v", updates["Name"])
+	}
+
+	// Should have at least 2 fields (Name + updated_at)
+	if len(updates) < 2 {
+		t.Errorf("Expected at least 2 updates, got %d", len(updates))
+	}
+}
+
+func TestPartialUpdateMap_ManyToManyRelationships(t *testing.T) {
+	// Test that many-to-many relationships are handled correctly
+	type BaseModel struct {
+		ID        string    `json:"id"`
+		Slug      string    `json:"slug"`
+		CreatedAt time.Time `json:"created_at"`
+		UpdatedAt time.Time `json:"updated_at"`
+	}
+
+	type Role struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+
+	type Claim struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+
+	type User struct {
+		BaseModel
+		Name     string  `json:"name"`
+		Username string  `json:"username"`
+		Email    string  `json:"email"`
+		Roles    []Role  `json:"roles"`
+		Claims   []Claim `json:"claims"`
+	}
+
+	// Create original user with roles and claims
+	original := &User{
+		BaseModel: BaseModel{
+			ID:        "123",
+			Slug:      "test-user",
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		},
+		Name:     "Test User",
+		Username: "testuser",
+		Email:    "test@example.com",
+		Roles: []Role{
+			{ID: "role1", Name: "admin"},
+			{ID: "role2", Name: "user"},
+		},
+		Claims: []Claim{
+			{ID: "claim1", Name: "read"},
+			{ID: "claim2", Name: "write"},
+		},
+	}
+
+	// Create updated user with only password change (no role/claim changes)
+	updated := &User{
+		BaseModel: BaseModel{
+			ID:        "123",
+			Slug:      "test-user",
+			CreatedAt: original.CreatedAt,
+			UpdatedAt: original.UpdatedAt,
+		},
+		Name:     "Test User Updated", // Only this field changed
+		Username: "testuser",
+		Email:    "test@example.com",
+		// Roles and Claims are not set, so they won't be included in updates
+	}
+
+	updates := PartialUpdateMap(original, updated, "updated_at")
+
+	// Should only include the name field and updated_at, not roles or claims
+	if updates["name"] != "Test User Updated" {
+		t.Errorf("Expected name to be 'Test User Updated', got %v", updates["name"])
+	}
+
+	// Should NOT include roles or claims in updates
+	if updates["roles"] != nil {
+		t.Errorf("Expected roles to NOT be in updates, but got %v", updates["roles"])
+	}
+
+	if updates["claims"] != nil {
+		t.Errorf("Expected claims to NOT be in updates, but got %v", updates["claims"])
+	}
+
+	// Should have at least 2 fields (name + updated_at)
+	if len(updates) < 2 {
+		t.Errorf("Expected at least 2 updates, got %d", len(updates))
+	}
+}

@@ -21,6 +21,7 @@ type AppContext struct {
 	context.Context
 	requestID   string
 	userID      string
+	username    string
 	tenantID    string
 	startTime   time.Time
 	metadata    map[string]interface{}
@@ -66,6 +67,21 @@ func (c *AppContext) WithUserID(userID string) *AppContext {
 
 	// Add to diagnostics
 	newCtx.diagnostics.AddMetadata("user_id", userID)
+
+	return newCtx
+}
+
+// WithUsername creates a new context with the given username
+
+func (c *AppContext) WithUsername(username string) *AppContext {
+	newCtx := c.clone()
+	newCtx.username = username
+
+	// Update the underlying context
+	newCtx.Context = context.WithValue(newCtx.Context, types.UsernameKey, username)
+
+	// Add to diagnostics
+	newCtx.diagnostics.AddMetadata("username", username)
 
 	return newCtx
 }
@@ -151,6 +167,14 @@ func (c *AppContext) GetUserID() string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.userID
+}
+
+// GetUsername returns the username from the context
+
+func (c *AppContext) GetUsername() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.username
 }
 
 // GetTenantID returns the tenant ID from the context
@@ -467,6 +491,7 @@ func (c *AppContext) clone() *AppContext {
 		Context:     c.Context,
 		requestID:   c.requestID,
 		userID:      c.userID,
+		username:    c.username,
 		tenantID:    c.tenantID,
 		startTime:   c.startTime,
 		metadata:    make(map[string]interface{}),
@@ -496,6 +521,8 @@ func (c *AppContext) Value(key interface{}) interface{} {
 			return c.GetRequestID()
 		case types.UserIDKey:
 			return c.GetUserID()
+		case types.UsernameKey:
+			return c.GetUsername()
 		case types.TenantIDKey:
 			return c.GetTenantID()
 		case types.StartTimeKey:

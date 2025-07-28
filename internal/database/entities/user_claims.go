@@ -1,9 +1,8 @@
 package entities
 
 type UserClaims struct {
-	BaseModel
-	UserID  string `json:"user_id" gorm:"not null;type:text;index"`
-	ClaimID string `json:"claim_id" gorm:"not null;type:text;index"`
+	UserID  string `json:"user_id" gorm:"not null;type:text;index;default:'00000000-0000-0000-0000-000000000000'"`
+	ClaimID string `json:"claim_id" gorm:"not null;type:text;index;default:'00000000-0000-0000-0000-000000000000'"`
 }
 
 func (UserClaims) TableName() string {

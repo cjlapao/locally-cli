@@ -118,7 +118,7 @@ func (s *TenantDataStore) GetTenants(ctx *appctx.AppContext) ([]entities.Tenant,
 }
 
 func (s *TenantDataStore) GetTenantsByFilter(ctx *appctx.AppContext, filterObj *filters.Filter) (*filters.FilterResponse[entities.Tenant], error) {
-	return utils.PaginatedQuery(s.GetDB(), filterObj, entities.Tenant{})
+	return utils.PaginatedQuery(s.GetDB(), "", filterObj, entities.Tenant{})
 }
 
 func (s *TenantDataStore) CreateTenant(ctx *appctx.AppContext, tenant *entities.Tenant) (*entities.Tenant, error) {

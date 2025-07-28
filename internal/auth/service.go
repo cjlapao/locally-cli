@@ -1,3 +1,4 @@
+// Package auth implements a service that authenticates users and manages tokens.
 package auth
 
 import (
@@ -12,6 +13,7 @@ import (
 	"github.com/cjlapao/locally-cli/internal/appctx"
 	"github.com/cjlapao/locally-cli/internal/config"
 	"github.com/cjlapao/locally-cli/internal/database/entities"
+	"github.com/cjlapao/locally-cli/internal/database/stores"
 	"github.com/cjlapao/locally-cli/internal/encryption"
 	"github.com/cjlapao/locally-cli/internal/mappers"
 	"github.com/cjlapao/locally-cli/pkg/diagnostics"
@@ -24,21 +26,6 @@ var (
 	authServiceOnce   sync.Once
 	authServiceMutex  sync.Mutex
 )
-
-// AuthDataStoreInterface defines the interface for auth data store operations
-type AuthDataStoreInterface interface {
-	CreateAPIKey(ctx *appctx.AppContext, apiKey *entities.APIKey) (*entities.APIKey, error)
-	GetAPIKeyByHash(ctx *appctx.AppContext, keyHash string) (*entities.APIKey, error)
-	GetAPIKeyByPrefix(ctx *appctx.AppContext, keyPrefix string) (*entities.APIKey, error)
-	GetAPIKeyByID(ctx *appctx.AppContext, id string) (*entities.APIKey, error)
-	GetUserByID(ctx *appctx.AppContext, id string) (*entities.User, error)
-	GetUserByUsername(ctx *appctx.AppContext, username string) (*entities.User, error)
-	UpdateAPIKeyLastUsed(ctx *appctx.AppContext, id string) error
-	ListAPIKeysByUserID(ctx *appctx.AppContext, userID string) ([]entities.APIKey, error)
-	RevokeAPIKey(ctx *appctx.AppContext, id string, revokedBy string, reason string) error
-	DeleteAPIKey(ctx *appctx.AppContext, id string) error
-	SetRefreshToken(ctx *appctx.AppContext, id string, refreshToken string) error
-}
 
 // AuthServiceConfig represents the authentication service configuration
 type AuthServiceConfig struct {
@@ -58,14 +45,16 @@ func (s *AuthServiceConfig) Validate() error {
 
 type AuthService struct {
 	authConfig    *AuthServiceConfig
-	AuthDataStore AuthDataStoreInterface
+	AuthDataStore stores.AuthDataStoreInterface
+	UserStore     stores.UserDataStoreInterface
+	TenantStore   stores.TenantDataStoreInterface
 }
 
-func Initialize(cfg AuthServiceConfig, authDataStore AuthDataStoreInterface) (*AuthService, *diagnostics.Diagnostics) {
+func Initialize(cfg AuthServiceConfig, authDataStore stores.AuthDataStoreInterface, userStore stores.UserDataStoreInterface, tenantStore stores.TenantDataStoreInterface) (*AuthService, *diagnostics.Diagnostics) {
 	diag := diagnostics.New("auth_service")
 	var newDiag *diagnostics.Diagnostics
 	authServiceOnce.Do(func() {
-		globalAuthService, newDiag = new(cfg, authDataStore)
+		globalAuthService, newDiag = new(cfg, authDataStore, userStore, tenantStore)
 		if newDiag.HasErrors() {
 			diag.AddError("auth_service", "failed to initialize auth service", newDiag.GetSummary())
 		}
@@ -90,7 +79,7 @@ func Reset() {
 }
 
 // NewService creates a new authentication service
-func new(cfg AuthServiceConfig, authDataStore AuthDataStoreInterface) (*AuthService, *diagnostics.Diagnostics) {
+func new(cfg AuthServiceConfig, authDataStore stores.AuthDataStoreInterface, userStore stores.UserDataStoreInterface, tenantStore stores.TenantDataStoreInterface) (*AuthService, *diagnostics.Diagnostics) {
 	diag := diagnostics.New("auth_service")
 	if err := cfg.Validate(); err != nil {
 		diag.AddError("auth_service", "failed to validate auth service configuration", err.Error())
@@ -100,6 +89,8 @@ func new(cfg AuthServiceConfig, authDataStore AuthDataStoreInterface) (*AuthServ
 	return &AuthService{
 		authConfig:    &cfg,
 		AuthDataStore: authDataStore,
+		UserStore:     userStore,
+		TenantStore:   tenantStore,
 	}, diag
 }
 
@@ -135,6 +126,7 @@ func (s *AuthService) GenerateToken(ctx *appctx.AppContext, user *models.User, t
 	// Create the Claims
 	claims := AuthClaims{
 		Username:  user.Username,
+		UserID:    user.ID,
 		ExpiresAt: expiresAt.Unix(),
 		IssuedAt:  time.Now().Unix(),
 		Issuer:    s.authConfig.Issuer,
@@ -146,6 +138,7 @@ func (s *AuthService) GenerateToken(ctx *appctx.AppContext, user *models.User, t
 
 	tokenClaims := jwt.MapClaims{
 		"username":  claims.Username,
+		"user_id":   claims.UserID,
 		"exp":       claims.ExpiresAt,
 		"iat":       claims.IssuedAt,
 		"iss":       claims.Issuer,
@@ -172,6 +165,7 @@ func (s *AuthService) GenerateToken(ctx *appctx.AppContext, user *models.User, t
 	if authType == "password" {
 		refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 			"username":  claims.Username,
+			"user_id":   claims.UserID,
 			"exp":       expiresAt.Add(24 * time.Hour).Unix(),
 			"iat":       time.Now().Unix(),
 			"iss":       s.authConfig.Issuer,
@@ -185,7 +179,7 @@ func (s *AuthService) GenerateToken(ctx *appctx.AppContext, user *models.User, t
 			return nil, diag
 		}
 
-		err = s.AuthDataStore.SetRefreshToken(ctx, user.ID, refreshTokenString)
+		err = s.UserStore.SetRefreshToken(ctx, tenantID, user.ID, refreshTokenString)
 		if err != nil {
 			diag.AddError("generate_token", "failed to set refresh token", err.Error())
 			return nil, diag
@@ -202,14 +196,28 @@ func (s *AuthService) GenerateToken(ctx *appctx.AppContext, user *models.User, t
 // AuthenticateWithPassword authenticates a user with username/password
 func (s *AuthService) AuthenticateWithPassword(ctx *appctx.AppContext, creds AuthCredentials) (*TokenResponse, *diagnostics.Diagnostics) {
 	diag := diagnostics.New("authenticate_with_password")
+
 	// Check if user exists and password matches
 	if creds.TenantID == "" {
 		creds.TenantID = config.GlobalTenantID
 	} else {
 		creds.TenantID = strings.TrimSpace(creds.TenantID)
 	}
+	if strings.EqualFold(creds.TenantID, config.GlobalTenantID) {
+		tenant, err := s.TenantStore.GetTenantBySlug(ctx, creds.TenantID)
+		if err != nil {
+			diag.AddError("authenticate_with_password", "failed to get tenant", err.Error())
+			return nil, diag
+		}
+		if tenant == nil {
+			diag.AddError("authenticate_with_password", "tenant not found", "")
+			return nil, diag
+		}
+
+		creds.TenantID = tenant.ID
+	}
 	// Get the user by username
-	dbUser, err := s.AuthDataStore.GetUserByUsername(ctx, creds.Username)
+	dbUser, err := s.UserStore.GetUserByUsername(ctx, creds.TenantID, creds.Username)
 	if err != nil {
 		diag.AddError("authenticate_with_password", "failed to get user", err.Error())
 		return nil, diag
@@ -292,7 +300,7 @@ func (s *AuthService) AuthenticateWithAPIKey(ctx *appctx.AppContext, creds APIKe
 	}
 
 	// Get the dbUser associated with this API key
-	dbUser, err := s.AuthDataStore.GetUserByID(ctx, apiKey.UserID)
+	dbUser, err := s.UserStore.GetUserByID(ctx, apiKey.TenantID, apiKey.UserID)
 	if err != nil {
 		diag.AddError("authenticate_with_api_key", "failed to get user", err.Error())
 		return nil, diag
@@ -495,6 +503,7 @@ func (s *AuthService) ValidateToken(tokenString string) (*AuthClaims, error) {
 
 		return &AuthClaims{
 			Username:    claims["username"].(string),
+			UserID:      claims["user_id"].(string),
 			ExpiresAt:   int64(claims["exp"].(float64)),
 			IssuedAt:    int64(claims["iat"].(float64)),
 			Issuer:      claims["iss"].(string),
@@ -528,7 +537,7 @@ func (s *AuthService) RefreshToken(ctx *appctx.AppContext, refreshTokenString st
 	var user *models.User
 	var tenantID string
 	if claims, ok := refreshToken.Claims.(jwt.MapClaims); ok {
-		dbUser, userErr := s.AuthDataStore.GetUserByID(ctx, claims["id"].(string))
+		dbUser, userErr := s.UserStore.GetUserByID(ctx, claims["tenant_id"].(string), claims["id"].(string))
 		if userErr != nil {
 			return nil, fmt.Errorf("failed to get user: %w", userErr)
 		}

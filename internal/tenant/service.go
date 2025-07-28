@@ -93,7 +93,7 @@ func (s *TenantService) GetTenantsByFilter(ctx *appctx.AppContext, filter *filte
 		Pagination: pagination,
 	}
 
-	return &response, nil
+	return &response, diag
 }
 
 func (s *TenantService) GetTenantByID(ctx *appctx.AppContext, idOrSlug string) (*models.Tenant, *diagnostics.Diagnostics) {
@@ -114,7 +114,7 @@ func (s *TenantService) GetTenantByID(ctx *appctx.AppContext, idOrSlug string) (
 
 	tenant := mappers.MapTenantToDto(dbTenant)
 
-	return tenant, nil
+	return tenant, diag
 }
 
 func (s *TenantService) CreateTenant(ctx *appctx.AppContext, tenant *models.Tenant) (*models.Tenant, *diagnostics.Diagnostics) {
@@ -133,7 +133,7 @@ func (s *TenantService) CreateTenant(ctx *appctx.AppContext, tenant *models.Tena
 
 	result := mappers.MapTenantToDto(createdTenant)
 
-	return result, nil
+	return result, diag
 }
 
 func (s *TenantService) UpdateTenant(ctx *appctx.AppContext, tenantRequest *TenantUpdateRequest) (*models.Tenant, *diagnostics.Diagnostics) {
@@ -159,7 +159,7 @@ func (s *TenantService) UpdateTenant(ctx *appctx.AppContext, tenantRequest *Tena
 		return nil, diag
 	}
 
-	return &tenant, nil
+	return &tenant, diag
 }
 
 func (s *TenantService) DeleteTenant(ctx *appctx.AppContext, idOrSlug string) *diagnostics.Diagnostics {

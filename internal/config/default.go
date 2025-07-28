@@ -26,6 +26,12 @@ func DefaultConfig() *Config {
 			// Pagination Default Values
 			{Key: PaginationDefaultPageSizeKey, Value: "20", EnvName: PaginationDefaultPageSizeEnvKey, FlagName: FlagPaginationDefaultPageSize},
 
+			// Security Default Values
+			{Key: SecurityPasswordMinLengthKey, Value: "8", EnvName: SecurityPasswordMinLengthEnvKey, FlagName: FlagSecurityPasswordMinLength},
+			{Key: SecurityPasswordRequireNumberKey, Value: "true", EnvName: SecurityPasswordRequireNumberEnvKey, FlagName: FlagSecurityPasswordRequireNumber},
+			{Key: SecurityPasswordRequireSpecialKey, Value: "true", EnvName: SecurityPasswordRequireSpecialEnvKey, FlagName: FlagSecurityPasswordRequireSpecial},
+			{Key: SecurityPasswordRequireUppercaseKey, Value: "true", EnvName: SecurityPasswordRequireUppercaseEnvKey, FlagName: FlagSecurityPasswordRequireUppercase},
+
 			// API Key
 			{Key: APIKey, Value: "sk-locally-"},
 

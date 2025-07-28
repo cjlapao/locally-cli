@@ -25,6 +25,7 @@ import (
 	"github.com/cjlapao/locally-cli/internal/events"
 	"github.com/cjlapao/locally-cli/internal/logging"
 	"github.com/cjlapao/locally-cli/internal/tenant"
+	"github.com/cjlapao/locally-cli/internal/user"
 	"github.com/cjlapao/locally-cli/internal/validation"
 	"github.com/cjlapao/locally-cli/internal/vaults/configvault"
 	"github.com/cjlapao/locally-cli/internal/workers"
@@ -120,7 +121,7 @@ func initializeConfigurationStore() (*stores.ConfigurationDataStore, *diagnostic
 }
 
 // initializeAuthStore initializes the auth store
-func initializeAuthStore() (*stores.AuthDataStore, error) {
+func initializeAuthStore() (stores.AuthDataStoreInterface, error) {
 	logging.Info("Initializing auth store...")
 	if err := stores.InitializeAuthDataStore(); err != nil {
 		return nil, fmt.Errorf("failed to initialize auth store: %w", err)
@@ -152,7 +153,6 @@ func initializeCertificatesStore() (*stores.CertificatesDataStore, *diagnostics.
 }
 
 // initializeTenantStore initializes the tenant store
-
 func initializeTenantStore() (stores.TenantDataStoreInterface, *diagnostics.Diagnostics) {
 	logging.Info("Initializing tenant store...")
 	diag := diagnostics.New("initialize_tenant_store")
@@ -162,6 +162,18 @@ func initializeTenantStore() (stores.TenantDataStoreInterface, *diagnostics.Diag
 	}
 	logging.Info("Tenant store initialized successfully")
 	return stores.GetTenantDataStoreInstance(), diag
+}
+
+// initializeUserStore initializes the user store
+func initializeUserStore() (stores.UserDataStoreInterface, *diagnostics.Diagnostics) {
+	logging.Info("Initializing user store...")
+	diag := diagnostics.New("initialize_user_store")
+	if initDiag := stores.InitializeUserDataStore(); initDiag.HasErrors() {
+		diag.Append(initDiag)
+		return nil, diag
+	}
+	logging.Info("User store initialized successfully")
+	return stores.GetUserDataStoreInstance(), diag
 }
 
 // initializeValidationService initializes the validation service
@@ -198,13 +210,13 @@ func initializeEncryptionService(cfg *config.Config) (*encryption.EncryptionServ
 }
 
 // initializeAuthService initializes the auth service
-func initializeAuthService(cfg *config.Config, authDataStore *stores.AuthDataStore) (*auth.AuthService, *diagnostics.Diagnostics) {
+func initializeAuthService(cfg *config.Config, authDataStore stores.AuthDataStoreInterface, userStore stores.UserDataStoreInterface, tenantStore stores.TenantDataStoreInterface) (*auth.AuthService, *diagnostics.Diagnostics) {
 	logging.Info("Initializing auth service...")
 
 	authService, diag := auth.Initialize(auth.AuthServiceConfig{
 		SecretKey: []byte(cfg.Get(config.JwtAuthSecretKey).GetString()),
 		Issuer:    cfg.Get(config.JwtIssuerKey).GetString(),
-	}, authDataStore)
+	}, authDataStore, userStore, tenantStore)
 
 	logging.Info("Auth service initialized successfully")
 	return authService, diag
@@ -228,6 +240,14 @@ func initializeTenantService(tenantStore stores.TenantDataStoreInterface) tenant
 	tenantService := tenant.Initialize(tenantStore)
 	logging.Info("Tenant service initialized successfully")
 	return tenantService
+}
+
+// initializeUserService initializes the user service
+func initializeUserService(userStore stores.UserDataStoreInterface) user.UserServiceInterface {
+	logging.Info("Initializing user service...")
+	userService := user.Initialize(userStore)
+	logging.Info("User service initialized successfully")
+	return userService
 }
 
 // initializeAPIServer initializes the API server
@@ -296,6 +316,11 @@ func seedDatabaseMigrations(ctx *appctx.AppContext, configSvc *config.ConfigServ
 		diag.AddError("tenant_store_not_initialized", "tenant store not initialized", "seed_database_migrations", nil)
 		return diag
 	}
+	userStore := stores.GetUserDataStoreInstance()
+	if userStore == nil {
+		diag.AddError("user_store_not_initialized", "user store not initialized", "seed_database_migrations", nil)
+		return diag
+	}
 
 	certificateService := certificates.GetInstance()
 	if certificateService == nil {
@@ -309,7 +334,7 @@ func seedDatabaseMigrations(ctx *appctx.AppContext, configSvc *config.ConfigServ
 	defaultClaimsMigrationWorker := migrations.NewDefaultClaimsMigrationWorker(db.GetDB(), configSvc.Get())
 	defaultRolesMigrationWorker := migrations.NewDefaultRolesMigrationWorker(db.GetDB(), configSvc.Get())
 	defaultTenantMigrationWorker := migrations.NewDefaultTenantMigrationWorker(db.GetDB(), tenantStore)
-	defaultUsersMigrationWorker := migrations.NewDefaultUsersMigrationWorker(db.GetDB(), configSvc.Get(), authStore, tenantStore)
+	defaultUsersMigrationWorker := migrations.NewDefaultUsersMigrationWorker(db.GetDB(), configSvc.Get(), userStore, tenantStore)
 	rootCertificateMigrationWorker := migrations.NewRootCertificateMigrationWorker(db.GetDB(), certificateService)
 	intermediateCertificateMigrationWorker := migrations.NewIntermediateCertificateMigrationWorker(db.GetDB(), certificateService)
 
@@ -380,6 +405,11 @@ func run() error {
 		return err
 	}
 
+	userStore, userStoreDiag := initializeUserStore()
+	if userStoreDiag.HasErrors() {
+		return err
+	}
+
 	// initialize environment service
 	vaults := make([]interfaces.EnvironmentVault, 0)
 
@@ -403,14 +433,15 @@ func run() error {
 	// initialize certificate service
 	certificateService := initializeCertificateService(certificatesStore)
 	// initialize auth service
-	authService, authServiceDiag := initializeAuthService(configSvc.Get(), authDataStore)
+	authService, authServiceDiag := initializeAuthService(configSvc.Get(), authDataStore, userStore, tenantStore)
 	if authServiceDiag.HasErrors() {
 		logging.Errorf("Error initializing auth service: %v", authServiceDiag.GetSummary())
 		panic(authServiceDiag.GetSummary())
 	}
 	// initialize tenant service
 	tenantService := initializeTenantService(tenantStore)
-
+	// initialize user service
+	userService := initializeUserService(userStore)
 	// initialize API server
 	apiServer, err := initializeAPIServer(configSvc.Get(), authService)
 	if err != nil {
@@ -433,7 +464,8 @@ func run() error {
 	apiServer.RegisterRoutes(certificates.NewApiHandlers(certificateService, certificatesStore))
 	// Register tenant routes
 	apiServer.RegisterRoutes(tenant.NewApiHandler(tenantService))
-
+	// Register user routes
+	apiServer.RegisterRoutes(user.NewApiHandler(userService))
 	logging.Info("Starting event service...")
 	if err := startEventService(ctx, eventService); err != nil {
 		return err

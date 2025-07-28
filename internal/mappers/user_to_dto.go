@@ -47,3 +47,11 @@ func MapUserToDto(user *entities.User) *models.User {
 
 	return result
 }
+
+func MapUsersToDto(users []entities.User) []models.User {
+	result := make([]models.User, len(users))
+	for i, user := range users {
+		result[i] = *MapUserToDto(&user)
+	}
+	return result
+}

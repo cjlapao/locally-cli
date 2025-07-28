@@ -23,13 +23,24 @@ var (
 	authDataStoreOnce     sync.Once
 )
 
+type AuthDataStoreInterface interface {
+	CreateAPIKey(ctx *appctx.AppContext, apiKey *entities.APIKey) (*entities.APIKey, error)
+	GetAPIKeyByHash(ctx *appctx.AppContext, keyHash string) (*entities.APIKey, error)
+	GetAPIKeyByPrefix(ctx *appctx.AppContext, keyPrefix string) (*entities.APIKey, error)
+	GetAPIKeyByID(ctx *appctx.AppContext, id string) (*entities.APIKey, error)
+	UpdateAPIKeyLastUsed(ctx *appctx.AppContext, id string) error
+	ListAPIKeysByUserID(ctx *appctx.AppContext, userID string) ([]entities.APIKey, error)
+	RevokeAPIKey(ctx *appctx.AppContext, id string, revokedBy string, reason string) error
+	DeleteAPIKey(ctx *appctx.AppContext, id string) error
+}
+
 // AuthDataStore handles auth-specific database operations
 type AuthDataStore struct {
 	database.BaseDataStore
 }
 
 // GetAuthDataStoreInstance returns the singleton instance of the auth store
-func GetAuthDataStoreInstance() *AuthDataStore {
+func GetAuthDataStoreInstance() AuthDataStoreInterface {
 	return authDataStoreInstance
 }
 
@@ -66,18 +77,6 @@ func InitializeAuthDataStore() error {
 
 // Migrate implements the DataStore interface
 func (s *AuthDataStore) Migrate() error {
-	if err := s.GetDB().AutoMigrate(&entities.Role{}); err != nil {
-		return fmt.Errorf("failed to migrate role table: %w", err)
-	}
-
-	if err := s.GetDB().AutoMigrate(&entities.Claim{}); err != nil {
-		return fmt.Errorf("failed to migrate claim table: %w", err)
-	}
-
-	if err := s.GetDB().AutoMigrate(&entities.User{}); err != nil {
-		return fmt.Errorf("failed to migrate user table: %w", err)
-	}
-
 	if err := s.GetDB().AutoMigrate(&entities.APIKey{}); err != nil {
 		return fmt.Errorf("failed to migrate api_keys table: %w", err)
 	}
@@ -88,134 +87,6 @@ func (s *AuthDataStore) Migrate() error {
 
 	return nil
 }
-
-// CreateUser creates a new user
-func (s *AuthDataStore) CreateUser(ctx *appctx.AppContext, user *entities.User) (*entities.User, error) {
-	user.ID = uuid.New().String()
-	user.CreatedAt = time.Now()
-	user.UpdatedAt = time.Now()
-
-	encryptionService := encryption.GetInstance()
-	encryptedPassword, err := encryptionService.HashPassword(user.Password)
-	if err != nil {
-		return nil, fmt.Errorf("failed to encrypt password: %w", err)
-	}
-	user.Password = encryptedPassword
-
-	result := s.GetDB().Create(user)
-	if result.Error != nil {
-		return nil, fmt.Errorf("failed to create user: %w", result.Error)
-	}
-
-	return user, nil
-}
-
-// GetUserByID retrieves a user by ID
-func (s *AuthDataStore) GetUserByID(ctx *appctx.AppContext, id string) (*entities.User, error) {
-	var user entities.User
-	result := s.GetDB().Preload("Roles").Preload("Claims").First(&user, "id = ?", id)
-	if result.Error != nil {
-		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			return nil, fmt.Errorf("user not found")
-		}
-		return nil, fmt.Errorf("failed to get user by id: %w", result.Error)
-	}
-	return &user, nil
-}
-
-// GetUserByUsername retrieves a user by username
-func (s *AuthDataStore) GetUserByUsername(ctx *appctx.AppContext, username string) (*entities.User, error) {
-	var user entities.User
-	result := s.GetDB().Preload("Roles").Preload("Claims").First(&user, "username = ?", username)
-	if result.Error != nil {
-		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("failed to get user by username: %w", result.Error)
-	}
-	return &user, nil
-}
-
-// UpdateUser updates an existing user
-func (s *AuthDataStore) UpdateUser(ctx *appctx.AppContext, user *entities.User) error {
-	user.UpdatedAt = time.Now()
-	currentUser, err := s.GetUserByID(ctx, user.ID)
-	if err != nil {
-		return fmt.Errorf("failed to get current user: %w", err)
-	}
-	if user.Password != currentUser.Password {
-		encryptionService := encryption.GetInstance()
-		encryptedPassword, err := encryptionService.HashPassword(user.Password)
-		if err != nil {
-			return fmt.Errorf("failed to encrypt password: %w", err)
-		}
-		user.Password = encryptedPassword
-	}
-	if user.Name != currentUser.Name {
-		user.Name = currentUser.Name
-	}
-	if user.Email != currentUser.Email {
-		user.Email = currentUser.Email
-	}
-	if len(user.Roles) != len(currentUser.Roles) {
-		user.Roles = currentUser.Roles
-	}
-	if user.Status != currentUser.Status {
-		user.Status = currentUser.Status
-	}
-	if user.Blocked != currentUser.Blocked {
-		user.Blocked = currentUser.Blocked
-	}
-	user.UpdatedAt = time.Now()
-	return s.GetDB().Save(currentUser).Error
-}
-
-func (s *AuthDataStore) UpdateUserPassword(ctx *appctx.AppContext, id string, password string) error {
-	user, err := s.GetUserByID(ctx, id)
-	if err != nil {
-		return fmt.Errorf("failed to get user: %w", err)
-	}
-	encryptionService := encryption.GetInstance()
-	encryptedPassword, err := encryptionService.HashPassword(password)
-	if err != nil {
-		return fmt.Errorf("failed to encrypt password: %w", err)
-	}
-	user.Password = encryptedPassword
-	user.UpdatedAt = time.Now()
-	return s.GetDB().Save(user).Error
-}
-
-func (s *AuthDataStore) BlockUser(ctx *appctx.AppContext, id string) error {
-	user, err := s.GetUserByID(ctx, id)
-	if err != nil {
-		return fmt.Errorf("failed to get user: %w", err)
-	}
-	user.Blocked = true
-	user.UpdatedAt = time.Now()
-	return s.GetDB().Save(user).Error
-}
-
-func (s *AuthDataStore) SetRefreshToken(ctx *appctx.AppContext, id string, refreshToken string) error {
-	user, err := s.GetUserByID(ctx, id)
-	if err != nil {
-		return fmt.Errorf("failed to get user: %w", err)
-	}
-	user.RefreshToken = refreshToken
-	user.RefreshTokenExpiresAt = time.Now().Add(24 * time.Hour)
-	user.UpdatedAt = time.Now()
-	return s.GetDB().Save(user).Error
-}
-
-// DeleteUser deletes a user
-func (s *AuthDataStore) DeleteUser(ctx *appctx.AppContext, id string) error {
-	user, err := s.GetUserByID(ctx, id)
-	if err != nil {
-		return fmt.Errorf("failed to get user: %w", err)
-	}
-	return s.GetDB().Delete(user).Error
-}
-
-// API Key Management Methods
 
 // CreateAPIKey creates a new API key for a user
 func (s *AuthDataStore) CreateAPIKey(ctx *appctx.AppContext, apiKey *entities.APIKey) (*entities.APIKey, error) {
@@ -294,7 +165,7 @@ func (s *AuthDataStore) ListAPIKeysByUserIDWithFilter(ctx *appctx.AppContext, us
 	filterObj.WithField("user_id", filters.FilterOperatorEqual, userID, filters.FilterJoinerAnd)
 
 	// Use the generic pagination helper
-	return utils.PaginatedQuery(s.GetDB(), filterObj, entities.APIKey{})
+	return utils.PaginatedQuery(s.GetDB(), "", filterObj, entities.APIKey{})
 }
 
 // UpdateAPIKeyLastUsed updates the last used timestamp for an API key

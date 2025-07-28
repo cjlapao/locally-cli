@@ -54,7 +54,8 @@ func PartialUpdateMap(original, updated interface{}, alwaysUpdateFields ...strin
 		// Get the JSON tag
 		jsonTag := fieldType.Tag.Get("json")
 		if jsonTag == "" {
-			continue
+			// If no json tag, use the field name as fallback
+			jsonTag = fieldType.Name
 		}
 
 		// Remove omitempty from the tag
@@ -107,7 +108,8 @@ func processEmbeddedStruct(originalField, updatedField reflect.Value, fieldType 
 		// Get the JSON tag
 		jsonTag := embeddedFieldType.Tag.Get("json")
 		if jsonTag == "" {
-			continue
+			// If no json tag, use the field name as fallback
+			jsonTag = embeddedFieldType.Name
 		}
 
 		// Remove omitempty from the tag
@@ -235,7 +237,8 @@ func partialUpdateMapZeroValue(updated interface{}, alwaysUpdateFields ...string
 		if !isZeroValue(field) {
 			jsonTag := fieldType.Tag.Get("json")
 			if jsonTag == "" {
-				continue
+				// If no json tag, use the field name as fallback
+				jsonTag = fieldType.Name
 			}
 
 			// Remove omitempty from the tag
