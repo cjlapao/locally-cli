@@ -1,0 +1,63 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+*.md
+docs/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+__debug_bin*
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test files
+*_test.go
+testdata/
+
+# Temporary files
+*.tmp
+*.temp
+
+# Logs
+*.log
+
+# Database files (will be mounted as volumes)
+*.db
+*.sqlite
+
+# Configuration files that should be mounted
+# config.yml
+# configuration/
+
+# Docker files
+Dockerfile*
+.dockerignore
+
+# CI/CD files
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Dependencies (will be downloaded during build)
+vendor/
+
+# Coverage reports
+coverage.out
+coverage.html
+
+# Profiling data
+*.prof
+*.pprof 

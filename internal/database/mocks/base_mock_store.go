@@ -93,52 +93,60 @@ func (m *BaseMockStore) Migrate() *diagnostics.Diagnostics {
 // Auth Store Methods
 // ============================================================================
 
-func (m *BaseMockStore) CreateUser(ctx *appctx.AppContext, user *entities.User) (*entities.User, error) {
-	args := m.Called(ctx, user)
+func (m *BaseMockStore) GetUsersByFilter(ctx *appctx.AppContext, tenantID string, filterObj *filters.Filter) (*filters.FilterResponse[entities.User], error) {
+	args := m.Called(ctx, tenantID, filterObj)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*filters.FilterResponse[entities.User]), args.Error(1)
+}
+
+func (m *BaseMockStore) CreateUser(ctx *appctx.AppContext, tenantID string, user *entities.User) (*entities.User, error) {
+	args := m.Called(ctx, tenantID, user)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*entities.User), args.Error(1)
 }
 
-func (m *BaseMockStore) GetUserByID(ctx *appctx.AppContext, id string) (*entities.User, error) {
-	args := m.Called(ctx, id)
+func (m *BaseMockStore) GetUserByID(ctx *appctx.AppContext, tenantID string, id string) (*entities.User, error) {
+	args := m.Called(ctx, tenantID, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*entities.User), args.Error(1)
 }
 
-func (m *BaseMockStore) GetUserByUsername(ctx *appctx.AppContext, username string) (*entities.User, error) {
-	args := m.Called(ctx, username)
+func (m *BaseMockStore) GetUserByUsername(ctx *appctx.AppContext, tenantID string, username string) (*entities.User, error) {
+	args := m.Called(ctx, tenantID, username)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*entities.User), args.Error(1)
 }
 
-func (m *BaseMockStore) UpdateUser(ctx *appctx.AppContext, user *entities.User) error {
-	args := m.Called(ctx, user)
+func (m *BaseMockStore) UpdateUser(ctx *appctx.AppContext, tenantID string, user *entities.User) error {
+	args := m.Called(ctx, tenantID, user)
 	return args.Error(0)
 }
 
-func (m *BaseMockStore) UpdateUserPassword(ctx *appctx.AppContext, id string, password string) error {
-	args := m.Called(ctx, id, password)
+func (m *BaseMockStore) UpdateUserPassword(ctx *appctx.AppContext, tenantID string, id string, password string) error {
+	args := m.Called(ctx, tenantID, id, password)
 	return args.Error(0)
 }
 
-func (m *BaseMockStore) BlockUser(ctx *appctx.AppContext, id string) error {
-	args := m.Called(ctx, id)
+func (m *BaseMockStore) BlockUser(ctx *appctx.AppContext, tenantID string, id string) error {
+	args := m.Called(ctx, tenantID, id)
 	return args.Error(0)
 }
 
-func (m *BaseMockStore) SetRefreshToken(ctx *appctx.AppContext, id string, refreshToken string) error {
-	args := m.Called(ctx, id, refreshToken)
+func (m *BaseMockStore) SetRefreshToken(ctx *appctx.AppContext, tenantID string, id string, refreshToken string) error {
+	args := m.Called(ctx, tenantID, id, refreshToken)
 	return args.Error(0)
 }
 
-func (m *BaseMockStore) DeleteUser(ctx *appctx.AppContext, id string) error {
-	args := m.Called(ctx, id)
+func (m *BaseMockStore) DeleteUser(ctx *appctx.AppContext, tenantID string, id string) error {
+	args := m.Called(ctx, tenantID, id)
 	return args.Error(0)
 }
 

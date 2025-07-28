@@ -26,16 +26,16 @@ var (
 type DefaultUsersMigrationWorker struct {
 	db          *gorm.DB
 	config      *config.Config
-	authStore   *stores.AuthDataStore
+	userStore   stores.UserDataStoreInterface
 	tenantStore stores.TenantDataStoreInterface
 }
 
 // NewDefaultUsersMigrationWorker creates a new example seed worker
-func NewDefaultUsersMigrationWorker(db *gorm.DB, config *config.Config, authStore *stores.AuthDataStore, tenantStore stores.TenantDataStoreInterface) *DefaultUsersMigrationWorker {
+func NewDefaultUsersMigrationWorker(db *gorm.DB, config *config.Config, userStore stores.UserDataStoreInterface, tenantStore stores.TenantDataStoreInterface) *DefaultUsersMigrationWorker {
 	return &DefaultUsersMigrationWorker{
 		db:          db,
 		config:      config,
-		authStore:   authStore,
+		userStore:   userStore,
 		tenantStore: tenantStore,
 	}
 }
@@ -126,7 +126,7 @@ func (e *DefaultUsersMigrationWorker) Up(ctx *appctx.AppContext) *diagnostics.Di
 		}
 
 		if needToCreate {
-			createdUser, err := e.authStore.CreateUser(ctx, &user)
+			createdUser, err := e.userStore.CreateUser(ctx, globalTenant.ID, &user)
 			if err != nil {
 				diag.AddError(fmt.Sprintf("failed_to_create_user_%s", user.Username), fmt.Sprintf("failed to create user: %v", err), "user_migration", nil)
 				return diag

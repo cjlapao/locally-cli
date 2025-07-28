@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/cjlapao/locally-cli/internal/config"
 	"github.com/go-playground/validator/v10"
 )
 
@@ -25,6 +26,9 @@ func Initialize() error {
 		return err
 	}
 	if err := validate.RegisterValidation("versionformat", validateVersionFormat); err != nil {
+		return err
+	}
+	if err := validate.RegisterValidation("password_complexity", validatePasswordComplexity); err != nil {
 		return err
 	}
 
@@ -78,6 +82,8 @@ func Validate(i interface{}) []ValidationError {
 
 // createValidationError creates a ValidationError from a validator.ValidationError
 func createValidationError(err validator.FieldError) ValidationError {
+	cfg := config.GetInstance().Get()
+
 	var message string
 	switch err.Tag() {
 	case "required":
@@ -94,6 +100,22 @@ func createValidationError(err validator.FieldError) ValidationError {
 		message = fmt.Sprintf("%s cannot contain spaces", err.Field())
 	case "versionformat":
 		message = fmt.Sprintf("%s must be in the format x.x.x", err.Field())
+	case "password_complexity":
+		minLength := cfg.GetInt(config.SecurityPasswordMinLengthKey, 8)
+		requireNumber := cfg.GetBool(config.SecurityPasswordRequireNumberKey, true)
+		requireSpecial := cfg.GetBool(config.SecurityPasswordRequireSpecialKey, true)
+		requireUppercase := cfg.GetBool(config.SecurityPasswordRequireUppercaseKey, true)
+		msg := fmt.Sprintf("%s must be at least %v characters long", err.Field(), minLength)
+		if requireNumber {
+			msg += " and contain at least one number"
+		}
+		if requireSpecial {
+			msg += " and contain at least one special character from the following: " + config.PasswordAllowedSpecialChars
+		}
+		if requireUppercase {
+			msg += " and contain at least one uppercase letter"
+		}
+		message = msg
 	default:
 		message = fmt.Sprintf("%s failed validation: %s", err.Field(), err.Tag())
 	}
@@ -156,4 +178,44 @@ func validateVersionFormat(fl validator.FieldLevel) bool {
 	match := regexp.MustCompile(versionRegex).MatchString(field)
 
 	return match
+}
+
+func validatePasswordComplexity(fl validator.FieldLevel) bool {
+	field := fl.Field().String()
+	if field == "" {
+		return true // empty values are handled by 'required' tag
+	}
+	cfg := config.GetInstance().Get()
+	if cfg == nil {
+		return false
+	}
+
+	minLength := cfg.GetInt(config.SecurityPasswordMinLengthKey, 8)
+	requireNumber := cfg.GetBool(config.SecurityPasswordRequireNumberKey, true)
+	requireSpecial := cfg.GetBool(config.SecurityPasswordRequireSpecialKey, true)
+	requireUppercase := cfg.GetBool(config.SecurityPasswordRequireUppercaseKey, true)
+
+	if requireNumber {
+		if !regexp.MustCompile(`[0-9]`).MatchString(field) {
+			return false
+		}
+	}
+
+	if requireSpecial {
+		if !regexp.MustCompile(`[` + config.PasswordAllowedSpecialChars + `]`).MatchString(field) {
+			return false
+		}
+	}
+
+	if requireUppercase {
+		if !regexp.MustCompile(`[A-Z]`).MatchString(field) {
+			return false
+		}
+	}
+
+	if len(field) < minLength {
+		return false
+	}
+
+	return true
 }

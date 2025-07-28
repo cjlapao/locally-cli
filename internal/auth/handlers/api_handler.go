@@ -16,10 +16,10 @@ import (
 
 type Handler struct {
 	authService *auth.AuthService
-	store       *stores.AuthDataStore
+	store       stores.AuthDataStoreInterface
 }
 
-func NewApiHandler(authService *auth.AuthService, store *stores.AuthDataStore) *Handler {
+func NewApiHandler(authService *auth.AuthService, store stores.AuthDataStoreInterface) *Handler {
 	return &Handler{authService: authService, store: store}
 }
 
@@ -87,14 +87,19 @@ func (h *Handler) Routes() []api.Route {
 func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	ctx := appctx.FromContext(r.Context())
 	var creds auth.AuthCredentials
-	if err := json.NewDecoder(r.Body).Decode(&creds); err != nil {
-		api.WriteBadRequest(w, r, "Invalid request body", "Failed to parse JSON: "+err.Error())
+	tenantID, _ := api.GetTenantIDFromRequest(r)
+
+	creds, parseDiags := api.ParseAndValidateBody[auth.AuthCredentials](r)
+	if parseDiags.HasErrors() {
+		api.WriteBadRequest(w, r, "Invalid request body", "Failed to parse JSON: "+parseDiags.GetSummary())
 		return
 	}
 
-	// Validate request
-	if errors := validation.Validate(creds); len(errors) > 0 {
-		api.WriteValidationError(w, r, "Invalid request", fmt.Sprintf("%v", errors))
+	if creds.TenantID == "" {
+		creds.TenantID = tenantID
+	}
+	if creds.TenantID == "" {
+		api.WriteBadRequest(w, r, "Tenant ID is required", "Tenant ID is required")
 		return
 	}
 

@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  locally-api:
+    build:
+      context: ../..
+      dockerfile: cmd/api/Dockerfile
+    container_name: locally-api
+    ports:
+      - "8080:8080"
+    env_file:
+      - env.template
+    environment:
+      # Override specific values for Docker environment
+      - LOCALLY_DATABASE_TYPE=sqlite
+      - LOCALLY_DATABASE_STORAGE_PATH=/app/data/locally.db
+      - LOCALLY_SERVER_BIND_TO=0.0.0.0
+      - LOCALLY_SERVER_API_PORT=8080
+      # Security - CHANGE THESE IN PRODUCTION!
+      - LOCALLY_JWT_AUTH_SECRET=your-jwt-secret-here-change-in-production
+      - LOCALLY_ENCRYPTION_MASTER_SECRET=your-encryption-master-secret-change-in-production
+      - LOCALLY_ENCRYPTION_GLOBAL_SECRET=your-encryption-global-secret-change-in-production
+      - LOCALLY_AUTH_ROOT_PASSWORD=your-secure-root-password-change-in-production
+      # CORS for development
+      - LOCALLY_CORS_ALLOW_ORIGINS=*
+      - LOCALLY_CORS_ALLOW_METHODS=OPTIONS,HEAD,GET,POST,PUT,PATCH,DELETE
+      - LOCALLY_CORS_ALLOW_HEADERS=*
+      # Logging
+      - LOCALLY_LOG_LEVEL=info
+      - LOCALLY_DEBUG=false
+      # Database
+      - LOCALLY_DATABASE_MIGRATE=true
+      # Message processor
+      - LOCALLY_MESSAGE_PROCESSOR_POLL_INTERVAL=30
+      - LOCALLY_MESSAGE_PROCESSOR_PROCESSING_TIMEOUT=300
+      - LOCALLY_MESSAGE_PROCESSOR_DEFAULT_MAX_RETRIES=3
+      - LOCALLY_MESSAGE_PROCESSOR_RECOVERY_ENABLED=true
+      - LOCALLY_MESSAGE_PROCESSOR_CLEANUP_ENABLED=true
+      # Demo data (disable in production)
+      - LOCALLY_SEED_DEMO_DATA=false
+    volumes:
+      - locally-data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - locally-network
+    # Add labels to help with cleanup
+    labels:
+      - "com.locally.service=api"
+      - "com.locally.version=1.0"
+
+volumes:
+  locally-data:
+    driver: local
+    # Add labels for better management
+    labels:
+      - "com.locally.volume=data"
+
+networks:
+  locally-network:
+    driver: bridge
+    # Add labels for better management
+    labels:
+      - "com.locally.network=api" 

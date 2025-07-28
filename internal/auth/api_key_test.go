@@ -8,14 +8,14 @@ import (
 
 	"github.com/cjlapao/locally-cli/internal/appctx"
 	"github.com/cjlapao/locally-cli/internal/database/entities"
-	"github.com/cjlapao/locally-cli/internal/database/stores"
+	"github.com/cjlapao/locally-cli/internal/database/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
 
 // MockAuthDataStore implements AuthDataStoreInterface for testing
 type MockAuthDataStore struct {
-	*stores.BaseMockStore
+	*mocks.BaseMockStore
 }
 
 var authConfig = AuthServiceConfig{
@@ -25,12 +25,12 @@ var authConfig = AuthServiceConfig{
 
 func setupAuthServiceWithMockStore(mockStore *MockAuthDataStore) *AuthService {
 	Reset() // Reset singleton for test isolation
-	Initialize(authConfig, mockStore)
+	Initialize(authConfig, mockStore, mockStore, mockStore)
 	return GetInstance()
 }
 
 func TestGenerateSecureAPIKey(t *testing.T) {
-	mockStore := &MockAuthDataStore{BaseMockStore: stores.NewBaseMockStore()}
+	mockStore := &MockAuthDataStore{BaseMockStore: mocks.NewBaseMockStore()}
 	service := setupAuthServiceWithMockStore(mockStore)
 
 	key1, errDiag := service.GenerateSecureAPIKey()
@@ -47,7 +47,7 @@ func TestGenerateSecureAPIKey(t *testing.T) {
 }
 
 func TestCreateAPIKey(t *testing.T) {
-	mockStore := &MockAuthDataStore{BaseMockStore: stores.NewBaseMockStore()}
+	mockStore := &MockAuthDataStore{BaseMockStore: mocks.NewBaseMockStore()}
 	service := setupAuthServiceWithMockStore(mockStore)
 
 	userID := "test-user-id"
@@ -93,7 +93,7 @@ func TestCreateAPIKey(t *testing.T) {
 }
 
 func TestListAPIKeys(t *testing.T) {
-	mockStore := &MockAuthDataStore{BaseMockStore: stores.NewBaseMockStore()}
+	mockStore := &MockAuthDataStore{BaseMockStore: mocks.NewBaseMockStore()}
 	service := setupAuthServiceWithMockStore(mockStore)
 
 	userID := "test-user-id"
@@ -143,7 +143,7 @@ func TestListAPIKeys(t *testing.T) {
 }
 
 func TestRevokeAPIKey(t *testing.T) {
-	mockStore := &MockAuthDataStore{BaseMockStore: stores.NewBaseMockStore()}
+	mockStore := &MockAuthDataStore{BaseMockStore: mocks.NewBaseMockStore()}
 	service := setupAuthServiceWithMockStore(mockStore)
 
 	apiKeyID := "test-api-key-id"
@@ -160,7 +160,7 @@ func TestRevokeAPIKey(t *testing.T) {
 }
 
 func TestDeleteAPIKey(t *testing.T) {
-	mockStore := &MockAuthDataStore{BaseMockStore: stores.NewBaseMockStore()}
+	mockStore := &MockAuthDataStore{BaseMockStore: mocks.NewBaseMockStore()}
 	service := setupAuthServiceWithMockStore(mockStore)
 
 	apiKeyID := "test-api-key-id"
@@ -175,7 +175,7 @@ func TestDeleteAPIKey(t *testing.T) {
 }
 
 func TestAuthService_GenerateSecureAPIKey(t *testing.T) {
-	mockStore := &MockAuthDataStore{BaseMockStore: stores.NewBaseMockStore()}
+	mockStore := &MockAuthDataStore{BaseMockStore: mocks.NewBaseMockStore()}
 	service := setupAuthServiceWithMockStore(mockStore)
 
 	// Test multiple key generations to ensure uniqueness

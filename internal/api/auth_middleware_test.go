@@ -13,16 +13,22 @@ import (
 	"github.com/cjlapao/locally-cli/internal/appctx"
 	"github.com/cjlapao/locally-cli/internal/auth"
 	"github.com/cjlapao/locally-cli/internal/config"
+	"github.com/cjlapao/locally-cli/internal/database/mocks"
 	"github.com/cjlapao/locally-cli/pkg/models"
 	"github.com/cjlapao/locally-cli/pkg/types"
 )
 
+type MockAuthDataStore struct {
+	*mocks.BaseMockStore
+}
+
 func TestNewRequireAuthPreMiddleware_PreservesAppContext(t *testing.T) {
 	// Create a mock auth service
+	mockStore := &MockAuthDataStore{BaseMockStore: mocks.NewBaseMockStore()}
 	authService, diag := auth.Initialize(auth.AuthServiceConfig{
 		SecretKey: []byte("test-secret-key"),
 		Issuer:    "test-issuer",
-	}, nil)
+	}, mockStore, mockStore, mockStore)
 	assert.False(t, diag.HasErrors())
 
 	// Apply the auth middleware
@@ -36,11 +42,12 @@ func TestNewRequireAuthPreMiddleware_PreservesAppContext(t *testing.T) {
 }
 
 func TestAuthMiddleware_WithValidToken(t *testing.T) {
+	mockStore := &MockAuthDataStore{BaseMockStore: mocks.NewBaseMockStore()}
 	// Create a mock auth service
 	authService, diag := auth.Initialize(auth.AuthServiceConfig{
 		SecretKey: []byte("test-secret-key"),
 		Issuer:    "test-issuer",
-	}, nil)
+	}, mockStore, mockStore, mockStore)
 	assert.False(t, diag.HasErrors())
 
 	// Create the auth middleware
@@ -55,11 +62,14 @@ func TestAuthMiddleware_WithValidToken(t *testing.T) {
 
 func TestAuthMiddleware_PreservesContextThroughoutRequest(t *testing.T) {
 	// Create a mock auth service
-	cfg := config.GetInstance().Get()
+	mockStore := &MockAuthDataStore{BaseMockStore: mocks.NewBaseMockStore()}
+	cfgSvc, _ := config.Initialize()
+	cfg := cfgSvc.Get()
+	cfg.Set(config.JwtAuthSecretKey, "test-secret-key")
 	authService, diag := auth.Initialize(auth.AuthServiceConfig{
 		SecretKey: []byte("test-secret-key"),
 		Issuer:    "test-issuer",
-	}, nil)
+	}, mockStore, mockStore, mockStore)
 	assert.False(t, diag.HasErrors())
 
 	// Create a valid token for testing
@@ -90,6 +100,7 @@ func TestAuthMiddleware_PreservesContextThroughoutRequest(t *testing.T) {
 	// Create a request with the token
 	req := httptest.NewRequest("GET", "/api/v1/environment/vaults", nil)
 	req.Header.Set("Authorization", "Bearer "+tokenString)
+	req.Header.Set("X-Tenant-ID", claims.TenantID)
 
 	// Create a response recorder
 	w := httptest.NewRecorder()
@@ -732,6 +743,11 @@ func TestNewRequireClaimPreMiddleware_Creation(t *testing.T) {
 // Test middleware with missing auth header
 func TestNewRequireRolePreMiddleware_MissingAuthHeader(t *testing.T) {
 	middleware := NewRequireRolePreMiddleware([]models.Role{{Name: "admin"}})
+	_, diag := auth.Initialize(auth.AuthServiceConfig{
+		SecretKey: []byte("test-secret-key"),
+		Issuer:    "test-issuer",
+	}, nil, nil, nil)
+	assert.False(t, diag.HasErrors())
 	req := httptest.NewRequest("GET", "/test", nil)
 	w := httptest.NewRecorder()
 
@@ -743,6 +759,12 @@ func TestNewRequireRolePreMiddleware_MissingAuthHeader(t *testing.T) {
 }
 
 func TestNewRequireClaimPreMiddleware_MissingAuthHeader(t *testing.T) {
+	_, diag := auth.Initialize(auth.AuthServiceConfig{
+		SecretKey: []byte("test-secret-key"),
+		Issuer:    "test-issuer",
+	}, nil, nil, nil)
+	assert.False(t, diag.HasErrors())
+
 	requiredClaim := models.Claim{
 		Module:  "users",
 		Service: "auth",
@@ -762,6 +784,11 @@ func TestNewRequireClaimPreMiddleware_MissingAuthHeader(t *testing.T) {
 
 // Test middleware with invalid token
 func TestNewRequireRolePreMiddleware_InvalidToken(t *testing.T) {
+	_, diag := auth.Initialize(auth.AuthServiceConfig{
+		SecretKey: []byte("test-secret-key"),
+		Issuer:    "test-issuer",
+	}, nil, nil, nil)
+	assert.False(t, diag.HasErrors())
 	middleware := NewRequireRolePreMiddleware([]models.Role{{Name: "admin"}})
 	req := httptest.NewRequest("GET", "/test", nil)
 	req.Header.Set("Authorization", "Bearer invalid-token")
@@ -775,6 +802,11 @@ func TestNewRequireRolePreMiddleware_InvalidToken(t *testing.T) {
 }
 
 func TestNewRequireClaimPreMiddleware_InvalidToken(t *testing.T) {
+	_, diag := auth.Initialize(auth.AuthServiceConfig{
+		SecretKey: []byte("test-secret-key"),
+		Issuer:    "test-issuer",
+	}, nil, nil, nil)
+	assert.False(t, diag.HasErrors())
 	requiredClaim := models.Claim{
 		Module:  "users",
 		Service: "auth",
@@ -863,13 +895,16 @@ func TestNewRequireRolePreMiddleware(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			cfgSvc, _ := config.Initialize()
+			cfg := cfgSvc.Get()
+			cfg.Set(config.JwtAuthSecretKey, "test-secret-key")
 			// Create mock auth service
+			mockStore := &MockAuthDataStore{BaseMockStore: mocks.NewBaseMockStore()}
 			_, diag := auth.Initialize(auth.AuthServiceConfig{
 				SecretKey: []byte("test-secret-key"),
 				Issuer:    "test-issuer",
-			}, nil)
+			}, mockStore, mockStore, mockStore)
 			assert.False(t, diag.HasErrors())
-			cfg := config.GetInstance().Get()
 
 			// Create middleware
 			middleware := NewRequireRolePreMiddleware([]models.Role{{Name: tt.requiredRole}})
@@ -1042,12 +1077,14 @@ func TestNewRequireClaimPreMiddleware(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create mock auth service
+			cfgSvc, _ := config.Initialize()
+			cfg := cfgSvc.Get()
+			cfg.Set(config.JwtAuthSecretKey, "test-secret-key")
 			_, diag := auth.Initialize(auth.AuthServiceConfig{
 				SecretKey: []byte("test-secret-key"),
 				Issuer:    "test-issuer",
-			}, nil)
+			}, nil, nil, nil)
 			assert.False(t, diag.HasErrors())
-			cfg := config.GetInstance().Get()
 
 			// Create middleware
 			middleware := NewRequireClaimPreMiddleware([]models.Claim{tt.requiredClaim})
