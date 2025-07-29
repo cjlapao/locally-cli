@@ -31,14 +31,179 @@ this is the [extension](https://marketplace.visualstudio.com/items?itemName=gola
 
 ### How to build
 
-If you want to test your changes can actually build but not generate the executable follow this:
+The project includes a comprehensive Makefile for cross-platform building. All builds include SQLite support by default (CGO enabled). Here are the available build options:
 
-1. Go to the ```src``` folder
-2. Run ```go build -v ./...```
+#### Quick Build (Current Platform)
+```bash
+# Build for current platform
+make build
 
-This will just build the code but with no output, if you want to generate an output you can do this
+# Build API only
+make api-build
+```
 
-1. Go to the ```src``` folder
-2. Run ```go build -o locally.exe```
+#### Cross-Platform Building
 
-This will be building the locally but will create a locally.exe as the output
+**Build for specific platform:**
+```bash
+# Linux (amd64)
+make build-linux
+
+# Linux (arm64)
+make build-linux-arm64
+
+# macOS (amd64)
+make build-macos
+
+# macOS (arm64/M1)
+make build-macos-arm64
+
+# Windows (amd64) - Requires Windows C compiler for cross-compilation
+make build-windows
+
+# Windows (arm64) - Requires Windows C compiler for cross-compilation
+make build-windows-arm64
+```
+
+**Build for all platforms:**
+```bash
+# Build for all major platforms
+make build-all
+```
+
+**Custom platform build:**
+```bash
+# Build for specific OS/arch combination
+GOOS=linux GOARCH=amd64 make build-cross
+GOOS=darwin GOARCH=arm64 make build-cross
+GOOS=windows GOARCH=amd64 make build-cross
+```
+
+> **Note:** Cross-compiling with CGO (required for SQLite) has limitations:
+> - **Same platform, different architecture**: Requires target architecture's C compiler
+>   - Linux amd64 → Linux arm64: Requires ARM64 GCC
+>   - macOS amd64 → macOS arm64: Requires ARM64 Clang
+> - **Cross-platform**: Requires target platform's C compiler
+>   - Linux → Windows: Requires MinGW-w64
+>   - Linux → macOS: Requires Xcode command line tools
+>   - macOS → Linux: Requires GCC
+>   - macOS → Windows: Requires MinGW-w64
+> 
+> **What works out of the box:**
+> - Building for the current platform and architecture
+> - Building for the same OS but different architecture (if C compiler is available)
+> 
+> For reliable cross-platform builds, use native builds on each platform or CI/CD pipelines.
+
+#### Release Builds
+
+**Build release binaries:**
+```bash
+# All platforms (with SQLite support)
+make release
+```
+
+#### Build Parameters
+
+You can customize builds with these parameters:
+
+- `GOOS`: Target operating system (linux, darwin, windows)
+- `GOARCH`: Target architecture (amd64, arm64, 386)
+- `CGO_ENABLED`: Enable CGO for SQLite (default: 1)
+
+**Examples:**
+```bash
+# Build for Linux ARM64
+GOOS=linux GOARCH=arm64 make build-cross
+
+# Build for Windows AMD64
+GOOS=windows GOARCH=amd64 make build-cross
+
+# Build without CGO (not recommended - SQLite won't work)
+GOOS=linux GOARCH=amd64 CGO_ENABLED=0 make build-cross
+```
+
+#### Manual Go Build
+
+If you prefer to use Go directly:
+
+```bash
+# Build for current platform (with SQLite)
+CGO_ENABLED=1 go build -o locally-api ./cmd/api
+
+# Build for specific platform (with SQLite)
+CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o locally-api-linux ./cmd/api
+CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build -o locally-api-macos ./cmd/api
+CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -o locally-api-windows.exe ./cmd/api
+```
+
+### Docker Registry Management
+
+The project includes Docker registry targets for building and pushing to `dcr.carloslapao.com/locally/locally-api`:
+
+#### Docker Registry Commands
+
+```bash
+# Login to registry
+make docker-login
+
+# Build and push to registry
+make docker-push
+
+# Build and push with specific tag
+DOCKER_TAG=v1.0.0 make docker-push
+
+# Build and push with latest tag
+make docker-push-latest
+
+# Build and push with version from VERSION file
+make docker-push-version
+
+# Pull from registry
+make docker-pull
+
+# Tag local image for registry
+make docker-tag
+
+# Build, tag, and push in one command
+make docker-build-and-push
+
+# Build and push with latest tag
+make docker-build-and-push-latest
+
+# Build and push with version tag
+make docker-build-and-push-version
+```
+
+#### Registry Configuration
+
+The registry configuration can be customized:
+
+```bash
+# Use different registry
+DOCKER_REGISTRY=my-registry.com make docker-push
+
+# Use different namespace
+DOCKER_NAMESPACE=my-namespace make docker-push
+
+# Use different image name
+DOCKER_IMAGE=my-api make docker-push
+
+# Use different tag
+DOCKER_TAG=v2.0.0 make docker-push
+```
+
+#### Running from Registry
+
+The Docker run scripts automatically use the registry image:
+
+```bash
+# Run with latest tag
+make docker-run
+
+# Run with specific tag
+DOCKER_TAG=v1.0.0 make docker-run
+
+# Run with custom registry
+DOCKER_REGISTRY=my-registry.com make docker-run
+```

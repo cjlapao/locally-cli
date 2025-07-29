@@ -120,40 +120,185 @@ api-build: ## Build only the API service (ignores other packages)
 	@echo "API build complete!"
 
 # =============================================================================
+# CROSS-PLATFORM BUILDING
+# =============================================================================
+
+# Build parameters (can be overridden)
+GOOS ?= $(shell go env GOOS 2>/dev/null || echo linux)
+GOARCH ?= $(shell go env GOARCH 2>/dev/null || echo amd64)
+CGO_ENABLED ?= 1
+
+.PHONY: build-cross
+build-cross: ## Build for specific platform (GOOS=linux GOARCH=amd64 make build-cross)
+	@echo "Building for $(GOOS)/$(GOARCH) with CGO_ENABLED=$(CGO_ENABLED)..."
+	$(MKDIR) $(OUT_DIR) 2>$(NULL) || true
+ifeq ($(GOOS),windows)
+	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) GOARCH=$(GOARCH) go build -o $(OUT_DIR)/locally-api-$(GOOS)-$(GOARCH).exe ./$(API_DIR)
+	@echo "Build complete: $(OUT_DIR)/locally-api-$(GOOS)-$(GOARCH).exe"
+else
+	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) GOARCH=$(GOARCH) go build -o $(OUT_DIR)/locally-api-$(GOOS)-$(GOARCH) ./$(API_DIR)
+	@echo "Build complete: $(OUT_DIR)/locally-api-$(GOOS)-$(GOARCH)"
+endif
+
+.PHONY: build-linux
+build-linux: ## Build for Linux (amd64)
+	@echo "Building for linux/amd64 with CGO_ENABLED=1..."
+	$(MKDIR) $(OUT_DIR) 2>$(NULL) || true
+	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o $(OUT_DIR)/locally-api-linux-amd64 ./$(API_DIR)
+	@echo "Build complete: $(OUT_DIR)/locally-api-linux-amd64"
+
+.PHONY: build-linux-arm64
+build-linux-arm64: ## Build for Linux (arm64)
+	@echo "Building for linux/arm64 with CGO_ENABLED=1..."
+	$(MKDIR) $(OUT_DIR) 2>$(NULL) || true
+	CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build -o $(OUT_DIR)/locally-api-linux-arm64 ./$(API_DIR)
+	@echo "Build complete: $(OUT_DIR)/locally-api-linux-arm64"
+
+.PHONY: build-macos
+build-macos: ## Build for macOS (amd64)
+	@echo "Building for darwin/amd64 with CGO_ENABLED=1..."
+	$(MKDIR) $(OUT_DIR) 2>$(NULL) || true
+	CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 go build -o $(OUT_DIR)/locally-api-darwin-amd64 ./$(API_DIR)
+	@echo "Build complete: $(OUT_DIR)/locally-api-darwin-amd64"
+
+.PHONY: build-macos-arm64
+build-macos-arm64: ## Build for macOS (arm64/M1)
+	@echo "Building for darwin/arm64 with CGO_ENABLED=1..."
+	$(MKDIR) $(OUT_DIR) 2>$(NULL) || true
+	CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build -o $(OUT_DIR)/locally-api-darwin-arm64 ./$(API_DIR)
+	@echo "Build complete: $(OUT_DIR)/locally-api-darwin-arm64"
+
+.PHONY: build-windows
+build-windows: ## Build for Windows (amd64)
+	@echo "Building for windows/amd64 with CGO_ENABLED=1..."
+	$(MKDIR) $(OUT_DIR) 2>$(NULL) || true
+	CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -o $(OUT_DIR)/locally-api-windows-amd64.exe ./$(API_DIR)
+	@echo "Build complete: $(OUT_DIR)/locally-api-windows-amd64.exe"
+
+.PHONY: build-windows-arm64
+build-windows-arm64: ## Build for Windows (arm64)
+	@echo "Building for windows/arm64 with CGO_ENABLED=1..."
+	$(MKDIR) $(OUT_DIR) 2>$(NULL) || true
+	CGO_ENABLED=1 GOOS=windows GOARCH=arm64 go build -o $(OUT_DIR)/locally-api-windows-arm64.exe ./$(API_DIR)
+	@echo "Build complete: $(OUT_DIR)/locally-api-windows-arm64.exe"
+
+.PHONY: build-all
+build-all: ## Build for all major platforms (current platform + same OS alternatives)
+	@echo "Building for current platform and same OS alternatives..."
+	@$(MAKE) build-linux
+	@$(MAKE) build-macos
+	@echo "Note: Cross-platform builds require target platform C compilers"
+	@echo "For Windows builds, build natively on Windows or use CI/CD"
+	@echo "All available platform builds complete!"
+
+
+
+# =============================================================================
 # DOCKER
 # =============================================================================
+
+# Docker registry configuration
+DOCKER_REGISTRY = dcr.carloslapao.com
+DOCKER_NAMESPACE = locally
+DOCKER_IMAGE = locally-api
+DOCKER_TAG ?= latest
+DOCKER_FULL_NAME = $(DOCKER_REGISTRY)/$(DOCKER_NAMESPACE)/$(DOCKER_IMAGE)
 
 .PHONY: docker-build
 docker-build: ## Build the Docker image
 	@echo "Building Docker image..."
-	cd $(API_DIR) && docker build -t locally-api -f Dockerfile ../..
+	cd $(API_DIR) && docker build -t $(DOCKER_FULL_NAME):$(DOCKER_TAG) -f Dockerfile ../..
 
 .PHONY: docker-run
 docker-run: ## Run the Docker container
 	@echo "Running Docker container..."
-	cd $(API_DIR) && ./docker-run.sh run
+ifeq ($(OS),Windows_NT)
+	powershell -ExecutionPolicy Bypass -File scripts/docker-run.ps1 run
+else
+	./scripts/docker-run.sh run
+endif
 
 .PHONY: docker-stop
 docker-stop: ## Stop the Docker container
 	@echo "Stopping Docker container..."
-	cd $(API_DIR) && ./docker-run.sh stop
+ifeq ($(OS),Windows_NT)
+	powershell -ExecutionPolicy Bypass -File scripts/docker-run.ps1 stop
+else
+	./scripts/docker-run.sh stop
+endif
 
 .PHONY: docker-clean
 docker-clean: ## Clean Docker images and containers
 	@echo "Cleaning Docker artifacts..."
-	cd $(API_DIR) && ./docker-run.sh clean
+ifeq ($(OS),Windows_NT)
+	powershell -ExecutionPolicy Bypass -File scripts/docker-run.ps1 clean
+else
+	./scripts/docker-run.sh clean
+endif
 	docker system prune -f
 	docker image prune -f
 
 .PHONY: docker-logs
 docker-logs: ## Show Docker container logs
 	@echo "Showing Docker container logs..."
-	cd $(API_DIR) && ./docker-run.sh logs
+ifeq ($(OS),Windows_NT)
+	powershell -ExecutionPolicy Bypass -File scripts/docker-run.ps1 logs
+else
+	./scripts/docker-run.sh logs
+endif
 
 .PHONY: docker-status
 docker-status: ## Show Docker container status
 	@echo "Showing Docker container status..."
-	cd $(API_DIR) && ./docker-run.sh status
+ifeq ($(OS),Windows_NT)
+	powershell -ExecutionPolicy Bypass -File scripts/docker-run.ps1 status
+else
+	./scripts/docker-run.sh status
+endif
+
+# =============================================================================
+# DOCKER REGISTRY
+# =============================================================================
+
+.PHONY: docker-login
+docker-login: ## Login to Docker registry
+	@echo "Logging in to $(DOCKER_REGISTRY)..."
+	docker login $(DOCKER_REGISTRY)
+
+.PHONY: docker-push
+docker-push: docker-build ## Build and push Docker image to registry
+	@echo "Pushing $(DOCKER_FULL_NAME):$(DOCKER_TAG) to registry..."
+	docker push $(DOCKER_FULL_NAME):$(DOCKER_TAG)
+
+.PHONY: docker-push-latest
+docker-push-latest: ## Build and push with latest tag
+	@$(MAKE) docker-push DOCKER_TAG=latest
+
+.PHONY: docker-push-version
+docker-push-version: ## Build and push with version tag (VERSION file)
+	@echo "Reading version from VERSION file..."
+	@$(MAKE) docker-push DOCKER_TAG=$(shell cat VERSION 2>/dev/null || echo "unknown")
+
+.PHONY: docker-pull
+docker-pull: ## Pull Docker image from registry
+	@echo "Pulling $(DOCKER_FULL_NAME):$(DOCKER_TAG) from registry..."
+	docker pull $(DOCKER_FULL_NAME):$(DOCKER_TAG)
+
+.PHONY: docker-tag
+docker-tag: ## Tag local image with registry name
+	@echo "Tagging locally-api as $(DOCKER_FULL_NAME):$(DOCKER_TAG)..."
+	docker tag locally-api $(DOCKER_FULL_NAME):$(DOCKER_TAG)
+
+.PHONY: docker-build-and-push
+docker-build-and-push: docker-build docker-tag docker-push ## Build, tag, and push in one command
+
+.PHONY: docker-build-and-push-latest
+docker-build-and-push-latest: ## Build and push with latest tag
+	@$(MAKE) docker-build-and-push DOCKER_TAG=latest
+
+.PHONY: docker-build-and-push-version
+docker-build-and-push-version: ## Build and push with version tag
+	@$(MAKE) docker-build-and-push DOCKER_TAG=$(shell cat VERSION 2>/dev/null || echo "unknown")
 
 # =============================================================================
 # TESTING
@@ -272,10 +417,9 @@ docs: ## Generate documentation
 # =============================================================================
 
 .PHONY: release
-release: ## Build release binaries
-	@echo "Building release binaries..."
-	$(MKDIR) $(OUT_DIR) 2>$(NULL) || true
-	GOOS=linux GOARCH=amd64 go build -o $(OUT_DIR)/locally-api-linux-amd64 ./$(API_DIR)
-	GOOS=darwin GOARCH=amd64 go build -o $(OUT_DIR)/locally-api-darwin-amd64 ./$(API_DIR)
-	GOOS=windows GOARCH=amd64 go build -o $(OUT_DIR)/locally-api-windows-amd64.exe ./$(API_DIR)
-	@echo "Release binaries created in $(OUT_DIR)/" 
+release: ## Build release binaries for all platforms
+	@echo "Building release binaries for all platforms..."
+	@$(MAKE) build-all
+	@echo "Release binaries created in $(OUT_DIR)/"
+
+ 

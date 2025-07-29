@@ -19,6 +19,7 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+	_ "modernc.org/sqlite"
 )
 
 var (
@@ -85,6 +86,7 @@ func Initialize(config *types.Config) error {
 func initializeSQLite(config *types.Config, gormConfig *gorm.Config) (*gorm.DB, error) {
 	// Convert to absolute path if relative
 	absPath, err := filepath.Abs(config.StoragePath)
+	absPath = fmt.Sprintf("file:%s", absPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get absolute path: %w", err)
 	}

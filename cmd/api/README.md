@@ -4,28 +4,71 @@ This directory contains the Docker configuration for the Locally API service.
 
 ## Quick Start
 
-### Using the Docker Run Script (Recommended)
+### Using the Makefile (Recommended)
 
-The `docker-run.sh` script provides a robust way to manage the API container, handling docker-compose issues and providing better control:
+The Makefile provides cross-platform Docker management with automatic platform detection:
 
 ```bash
 # Start the API
-./docker-run.sh run
+make docker-run
 
 # Stop the API
-./docker-run.sh stop
+make docker-stop
 
 # View logs
-./docker-run.sh logs
+make docker-logs
 
 # Check status
-./docker-run.sh status
+make docker-status
+
+# Clean up everything
+make docker-clean
+```
+
+### Using Platform-Specific Scripts
+
+The scripts are located in the `scripts/` directory and provide platform-specific implementations:
+
+**Linux/macOS:**
+```bash
+# Start the API
+./scripts/docker-run.sh run
+
+# Stop the API
+./scripts/docker-run.sh stop
+
+# View logs
+./scripts/docker-run.sh logs
+
+# Check status
+./scripts/docker-run.sh status
 
 # Restart the API
-./docker-run.sh restart
+./scripts/docker-run.sh restart
 
 # Clean up everything (containers, volumes, networks)
-./docker-run.sh clean
+./scripts/docker-run.sh clean
+```
+
+**Windows (PowerShell):**
+```powershell
+# Start the API
+powershell -ExecutionPolicy Bypass -File scripts/docker-run.ps1 run
+
+# Stop the API
+powershell -ExecutionPolicy Bypass -File scripts/docker-run.ps1 stop
+
+# View logs
+powershell -ExecutionPolicy Bypass -File scripts/docker-run.ps1 logs
+
+# Check status
+powershell -ExecutionPolicy Bypass -File scripts/docker-run.ps1 status
+
+# Restart the API
+powershell -ExecutionPolicy Bypass -File scripts/docker-run.ps1 restart
+
+# Clean up everything (containers, volumes, networks)
+powershell -ExecutionPolicy Bypass -File scripts/docker-run.ps1 clean
 ```
 
 ### Using Docker Compose
@@ -79,22 +122,24 @@ The `docker-run.sh` script provides a robust way to manage the API container, ha
      locally-api
    ```
 
-## Docker Run Script Features
+## Script Features
 
-The `docker-run.sh` script provides several advantages:
+The scripts provide several advantages:
 
+- **Cross-platform compatibility** - Automatic platform detection and appropriate script selection
 - **Automatic docker-compose version detection** - Handles known issues with older docker-compose versions
 - **Fallback to direct Docker commands** - Ensures compatibility across different environments
 - **Robust container management** - Proper cleanup and status checking
 - **Database persistence** - Preserves SQLite database across restarts
-- **Cross-platform compatibility** - Works on Linux, macOS, and Windows
+- **PowerShell support** - Full PowerShell implementation for Windows with better error handling
 
-### Script Commands
+### Available Commands
 
 | Command | Description |
 |---------|-------------|
 | `run` | Start the API container (default) |
 | `stop` | Stop the running container |
+| `restart` | Stop and restart the container |
 | `clean` | Remove container, volumes, and networks |
 | `logs` | Show container logs |
 | `status` | Show container status |
