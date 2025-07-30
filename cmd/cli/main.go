@@ -8,7 +8,6 @@ import (
 
 	"github.com/cjlapao/locally-cli/internal/appctx"
 	"github.com/cjlapao/locally-cli/internal/common"
-	"github.com/cjlapao/locally-cli/internal/configuration"
 	"github.com/cjlapao/locally-cli/internal/environment"
 	"github.com/cjlapao/locally-cli/internal/help"
 	"github.com/cjlapao/locally-cli/internal/lanes"
@@ -57,10 +56,10 @@ func main() {
 		logger.WithDebug()
 	}
 
-	config := configuration.Get()
-	if err := config.Init(); err != nil {
-		notify.Critical("There was a critical error loading the configuration file")
-	}
+	// config := configuration.Get()
+	// if err := config.Init(); err != nil {
+	// 	notify.Critical("There was a critical error loading the configuration file")
+	// }
 
 	operationsService := operations.Get()
 	if command == "api" {

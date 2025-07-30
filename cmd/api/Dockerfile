@@ -2,7 +2,7 @@
 FROM golang:1.24-alpine AS builder
 
 # Install build dependencies including C libraries for SQLite
-RUN apk add --no-cache git ca-certificates tzdata gcc musl-dev sqlite-dev
+RUN apk add --no-cache git ca-certificates tzdata
 
 # Set working directory
 WORKDIR /app
@@ -17,13 +17,13 @@ RUN go mod download
 COPY . .
 
 # Build the application with CGO enabled for SQLite support
-RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o api ./cmd/api
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o api ./cmd/api
 
 # Runtime stage
 FROM alpine:latest
 
 # Install runtime dependencies including SQLite
-RUN apk --no-cache add ca-certificates tzdata sqlite
+RUN apk --no-cache add ca-certificates tzdata
 
 # Create non-root user
 RUN addgroup -g 1001 -S appgroup && \
