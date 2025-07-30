@@ -240,7 +240,7 @@ CGO_ENABLED=0 make build-cross
 
 ## Project Structure
 
-```
+```text
 locally-cli/
 ├── cmd/
 │   ├── api/          # API service
