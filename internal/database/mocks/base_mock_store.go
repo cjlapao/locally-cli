@@ -90,7 +90,7 @@ func (m *BaseMockStore) Migrate() *diagnostics.Diagnostics {
 }
 
 // ============================================================================
-// Auth Store Methods
+// User Store Methods
 // ============================================================================
 
 func (m *BaseMockStore) GetUsersByFilter(ctx *appctx.AppContext, tenantID string, filterObj *filters.Filter) (*filters.FilterResponse[entities.User], error) {
@@ -149,6 +149,26 @@ func (m *BaseMockStore) DeleteUser(ctx *appctx.AppContext, tenantID string, id s
 	args := m.Called(ctx, tenantID, id)
 	return args.Error(0)
 }
+
+func (m *BaseMockStore) GetRolesByFilter(ctx *appctx.AppContext, tenantID string, filterObj *filters.Filter) (*filters.FilterResponse[entities.Role], error) {
+	args := m.Called(ctx, tenantID, filterObj)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*filters.FilterResponse[entities.Role]), args.Error(1)
+}
+
+func (m *BaseMockStore) GetClaimsByFilter(ctx *appctx.AppContext, tenantID string, filterObj *filters.Filter) (*filters.FilterResponse[entities.Claim], error) {
+	args := m.Called(ctx, tenantID, filterObj)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*filters.FilterResponse[entities.Claim]), args.Error(1)
+}
+
+// ============================================================================
+// Auth Store Methods
+// ============================================================================
 
 func (m *BaseMockStore) CreateAPIKey(ctx *appctx.AppContext, apiKey *entities.APIKey) (*entities.APIKey, error) {
 	args := m.Called(ctx, apiKey)

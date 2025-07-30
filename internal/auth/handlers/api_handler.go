@@ -9,6 +9,7 @@ import (
 	"github.com/cjlapao/locally-cli/internal/api"
 	"github.com/cjlapao/locally-cli/internal/appctx"
 	"github.com/cjlapao/locally-cli/internal/auth"
+	"github.com/cjlapao/locally-cli/internal/config"
 	"github.com/cjlapao/locally-cli/internal/database/stores"
 	"github.com/cjlapao/locally-cli/internal/validation"
 	"github.com/cjlapao/locally-cli/pkg/types"
@@ -86,6 +87,9 @@ func (h *Handler) Routes() []api.Route {
 
 func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	ctx := appctx.FromContext(r.Context())
+	cfg := config.GetInstance().Get()
+	suUser := cfg.GetString(config.RootUserUsernameKey, "")
+
 	var creds auth.AuthCredentials
 	tenantID, _ := api.GetTenantIDFromRequest(r)
 
@@ -98,6 +102,10 @@ func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	if creds.TenantID == "" {
 		creds.TenantID = tenantID
 	}
+	if creds.TenantID == "" && strings.EqualFold(creds.Username, suUser) {
+		creds.TenantID = config.GlobalTenantID
+	}
+
 	if creds.TenantID == "" {
 		api.WriteBadRequest(w, r, "Tenant ID is required", "Tenant ID is required")
 		return
