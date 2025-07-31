@@ -137,7 +137,8 @@ extract_changelog_content() {
   local temp_file=$(mktemp)
   
   # Extract content from # Description to next ##
-  echo "$pr_body" | awk '
+  # Convert \r\n to \n and handle carriage returns
+  echo "$pr_body" | tr -d '\r' | awk '
     /^# Description$/ { in_description = 1; next }
     /^##/ { in_description = 0; next }
     in_description { print }
@@ -190,7 +191,7 @@ generate_release_notes() {
     log_no_color "Generating release notes for repository $REPO_NAME"
     
     # Build the search query
-    local search_query="--base main --state merged"
+    local search_query="--base unstable --state merged"
     if [ -n "$last_release_date" ]; then
       search_query="$search_query --search \"merged:>$last_release_date\""
       log_no_color "Looking for PRs merged after $last_release_date"
@@ -199,7 +200,7 @@ generate_release_notes() {
     fi
   else
     # Build the search query without logging
-    local search_query="--base main --state merged"
+    local search_query="--base unstable --state merged"
     if [ -n "$last_release_date" ]; then
       search_query="$search_query --search \"merged:>$last_release_date\""
     fi
@@ -215,7 +216,8 @@ generate_release_notes() {
     echo "" > "$temp_file"
   else
     # Process each PR
-    echo "$prs" | jq -r '.[] | @base64' | while read -r pr_base64; do
+    local all_changes=""
+    while read -r pr_base64; do
       if [ -n "$pr_base64" ]; then
         local pr_data=$(echo "$pr_base64" | base64 --decode)
         local pr_body=$(echo "$pr_data" | jq -r '.body // ""')
@@ -240,7 +242,7 @@ generate_release_notes() {
           fi
         fi
       fi
-    done
+    done < <(echo "$prs" | jq -r '.[] | @base64')
     
     # Remove duplicates and sort
     if [ -n "$all_changes" ]; then
@@ -335,8 +337,12 @@ generate_changelog_entry() {
   local last_release_date=$(get_last_release_date)
   
   # Generate release notes to a separate file to avoid log contamination
-  OUTPUT_TO_FILE=TRUE generate_release_notes "$last_release_date" > "$content_file" 2>/dev/null
-  local content=$(cat "$content_file")
+  OUTPUT_TO_FILE=TRUE generate_release_notes "$last_release_date" > /dev/null 2>/dev/null
+  local content=""
+  if [ -f "$RELEASE_NOTES_FILE" ]; then
+    # Extract content from the release notes file (skip the header)
+    content=$(tail -n +3 "$RELEASE_NOTES_FILE" 2>/dev/null || true)
+  fi
   
   # Check if version already exists
   local version_line=$(grep -n "^## \[$NEW_RELEASE\]" "$CHANGELOG_FILE" 2>/dev/null | cut -d: -f1 || true)
@@ -353,12 +359,14 @@ generate_changelog_entry() {
       insert_line=$(wc -l < "$CHANGELOG_FILE")
       insert_line=$((insert_line + 1))
     else
-      # Insert before the first existing version
-      insert_line=$((header_end_line - 1))
+      # Insert before the first existing version (after the empty line)
+      insert_line=$((header_end_line))
     fi
     
     local today=$(date '+%Y-%m-%d')
-    local new_version_section="## [$NEW_RELEASE] - $today
+    local new_version_section="
+
+## [$NEW_RELEASE] - $today
 
 "
     
