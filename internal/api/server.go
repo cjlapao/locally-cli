@@ -324,12 +324,15 @@ func readCorsConfigFromConfiguration(cfg *config.Config) CORSConfig {
 		}
 	}
 
-	// Add X-Tenant-ID to the allow headers if it's not already there, this is a
-	// special header that is used to identify the tenant in the request
-	for _, header := range systemHeadersToAllow {
-		if !strings.Contains(strings.Join(corsConfig.AllowHeaders, ","), header) {
-			if !strings.Contains(strings.Join(corsConfig.AllowHeaders, ","), "*") {
-				corsConfig.AllowHeaders = append(corsConfig.AllowHeaders, header)
+	// if the headers in the config are * then we do not need to add the special ones as all are allowed
+	if strings.Contains(strings.Join(corsConfig.AllowHeaders, ","), "*") {
+		corsConfig.AllowHeaders = []string{"*"}
+	} else {
+		for _, header := range systemHeadersToAllow {
+			if !strings.Contains(strings.Join(corsConfig.AllowHeaders, ","), header) {
+				if !strings.Contains(strings.Join(corsConfig.AllowHeaders, ","), "*") {
+					corsConfig.AllowHeaders = append(corsConfig.AllowHeaders, header)
+				}
 			}
 		}
 	}
