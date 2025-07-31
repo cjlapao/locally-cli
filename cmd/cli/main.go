@@ -21,8 +21,15 @@ import (
 )
 
 var (
-	releaseVersion = "0.0.1"
+	releaseVersion = "0.0.1" // This will be overridden by build flags
 	versionSvc     = version.Get()
+)
+
+// Build-time variables (set by build flags)
+var (
+	Version   = "0.0.1"
+	BuildTime = "unknown"
+	GitCommit = "unknown"
 )
 
 var (
@@ -129,7 +136,14 @@ func SetVersion() {
 	versionSvc.Name = "Locally"
 	versionSvc.Author = "Carlos Lapao"
 	versionSvc.License = "MIT"
-	strVer, err := version.FromString(releaseVersion)
+
+	// Use build flag version if available, otherwise fall back to releaseVersion
+	versionToUse := Version
+	if versionToUse == "0.0.1" {
+		versionToUse = releaseVersion
+	}
+
+	strVer, err := version.FromString(versionToUse)
 	if err == nil {
 		versionSvc.Major = strVer.Major
 		versionSvc.Minor = strVer.Minor

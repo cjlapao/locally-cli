@@ -1,10 +1,13 @@
 package config
 
-import "time"
+import (
+	"time"
+)
 
 type Config struct {
-	Debug bool         `json:"debug"`
-	Items []ConfigItem `json:"items"`
+	Debug       bool         `json:"debug"`
+	Items       []ConfigItem `json:"items"`
+	storagePath string
 }
 
 func (c *Config) Get(key string) *ConfigItem {

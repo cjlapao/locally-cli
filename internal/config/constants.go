@@ -8,6 +8,7 @@ const (
 	IntermediateCertificateSlug = "locally-ca"
 	ApiKeyPrefix                = "sk-locally-"
 	PasswordAllowedSpecialChars = "!@#$%.?"
+	SystemStoragePath           = ".locally"
 )
 
 const (

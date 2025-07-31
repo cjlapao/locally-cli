@@ -33,7 +33,17 @@ import (
 	"github.com/cjlapao/locally-cli/pkg/interfaces"
 )
 
-var versionSvc = version.Get()
+var (
+	versionSvc = version.Get()
+	appVersion = "0.0.0" // This will be overridden by build flags
+)
+
+// Build-time variables (set by build flags)
+var (
+	Version   = "0.0.0"
+	BuildTime = "unknown"
+	GitCommit = "unknown"
+)
 
 func main() {
 	logging.Info("Starting locally API")
@@ -43,21 +53,39 @@ func main() {
 	}
 }
 
-func setVersion() {
+func setVersion(debug bool) {
 	versionSvc.Name = "Locally API"
 	versionSvc.Author = "Carlos Lapao"
 	versionSvc.License = "MIT"
 
-	// loading the version from the file if it exist
-	if _, err := os.Stat("../../VERSION"); err == nil {
-		versionFile, err := os.ReadFile("../../VERSION")
-		if err == nil {
-			strVer, err := version.FromString(string(versionFile))
+	// Use build flag version if available, otherwise fall back to appVersion
+	versionToUse := Version
+	if versionToUse == "0.0.0" {
+		versionToUse = appVersion
+	}
+
+	ver, err := version.FromString(versionToUse)
+	if err != nil {
+		logging.Errorf("Error setting version: %v", err)
+	}
+	versionSvc.Major = ver.Major
+	versionSvc.Minor = ver.Minor
+	versionSvc.Build = ver.Build
+	versionSvc.Rev = ver.Rev
+
+	// if debug is true, we will load the version from the file as the version is not set
+	if debug {
+		// loading the version from the file if it exist
+		if _, err := os.Stat("../../VERSION"); err == nil {
+			versionFile, err := os.ReadFile("../../VERSION")
 			if err == nil {
-				versionSvc.Major = strVer.Major
-				versionSvc.Minor = strVer.Minor
-				versionSvc.Build = strVer.Build
-				versionSvc.Rev = strVer.Rev
+				strVer, err := version.FromString(string(versionFile))
+				if err == nil {
+					versionSvc.Major = strVer.Major
+					versionSvc.Minor = strVer.Minor
+					versionSvc.Build = strVer.Build
+					versionSvc.Rev = strVer.Rev
+				}
 			}
 		}
 	}
@@ -357,14 +385,15 @@ func seedDatabaseMigrations(ctx *appctx.AppContext, configSvc *config.ConfigServ
 }
 
 func run() error {
-	setVersion()
-	ctx := appctx.NewContext(context.Background())
-	versionSvc.PrintAnsiHeader()
 	configSvc, err := config.Initialize()
 	if err != nil {
 		fmt.Printf("Error initializing config: %v\n", err)
 		return err
 	}
+	cfg := configSvc.Get()
+	setVersion(cfg.GetBool(config.DebugKey, false))
+	ctx := appctx.NewContext(context.Background())
+	versionSvc.PrintAnsiHeader()
 
 	logging.Initialize()
 	logging.Info("Initializing services...")
