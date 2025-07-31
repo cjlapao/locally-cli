@@ -280,8 +280,8 @@ func handlePreflightRequest(w http.ResponseWriter, r *http.Request, config CORSC
 	}
 
 	// Set CORS headers for preflight response
-	setCORSHeaders(w, config, allowOrigin)
-	w.WriteHeader(http.StatusOK)
+	setCORSHeaders(w, config, allowOrigin, true)
+	w.WriteHeader(http.StatusNoContent)
 	return MiddlewareResult{Continue: false}
 }
 
@@ -328,35 +328,37 @@ func handleActualRequest(w http.ResponseWriter, r *http.Request, config CORSConf
 		}
 	}
 
-	// For actual requests, we don't set CORS headers back
-	// CORS headers are only set in preflight responses
+	setCORSHeaders(w, config, allowOrigin, false)
 	return MiddlewareResult{Continue: true}
 }
 
 // setCORSHeaders sets the appropriate CORS headers on the response
-func setCORSHeaders(w http.ResponseWriter, config CORSConfig, allowOrigin string) {
+func setCORSHeaders(w http.ResponseWriter, config CORSConfig, allowOrigin string, preflightRequest bool) {
 	if allowOrigin != "" {
 		w.Header().Set("Access-Control-Allow-Origin", allowOrigin)
 	}
 
-	if config.AllowCredentials {
-		w.Header().Set("Access-Control-Allow-Credentials", "true")
-	}
+	if preflightRequest {
 
-	if len(config.AllowMethods) > 0 {
-		w.Header().Set("Access-Control-Allow-Methods", strings.Join(config.AllowMethods, ", "))
-	}
+		if len(config.AllowMethods) > 0 {
+			w.Header().Set("Access-Control-Allow-Methods", strings.Join(config.AllowMethods, ", "))
+		}
 
-	if len(config.AllowHeaders) > 0 {
-		w.Header().Set("Access-Control-Allow-Headers", strings.Join(config.AllowHeaders, ", "))
-	}
+		if len(config.AllowHeaders) > 0 {
+			w.Header().Set("Access-Control-Allow-Headers", strings.Join(config.AllowHeaders, ", "))
+		}
 
-	if len(config.ExposeHeaders) > 0 {
-		w.Header().Set("Access-Control-Expose-Headers", strings.Join(config.ExposeHeaders, ", "))
-	}
+		if config.MaxAge > 0 {
+			w.Header().Set("Access-Control-Max-Age", fmt.Sprintf("%d", config.MaxAge))
+		}
 
-	if config.MaxAge > 0 {
-		w.Header().Set("Access-Control-Max-Age", fmt.Sprintf("%d", config.MaxAge))
+		if config.AllowCredentials {
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+		}
+
+		if len(config.ExposeHeaders) > 0 {
+			w.Header().Set("Access-Control-Expose-Headers", strings.Join(config.ExposeHeaders, ", "))
+		}
 	}
 }
 

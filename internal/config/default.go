@@ -39,7 +39,7 @@ func DefaultConfig() *Config {
 			{Key: CorsAllowOriginsKey, Value: "http://localhost:3000, http://127.0.0.1:3000", EnvName: CorsAllowOriginsEnvKey, FlagName: FlagCorsAllowOrigins},
 			{Key: CorsAllowMethodsKey, Value: "GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD", EnvName: CorsAllowMethodsEnvKey, FlagName: FlagCorsAllowMethods},
 			{Key: CorsAllowHeadersKey, Value: "Accept, Accept-Language, Content-Type, Content-Language, Origin, Authorization, X-Requested-With, X-Request-ID, X-HTTP-Method-Override, Cache-Control, X-Tenant-ID", EnvName: CorsAllowHeadersEnvKey, FlagName: FlagCorsAllowHeaders},
-			{Key: CorsExposeHeadersKey, Value: "Content-Length, Content-Type, X-Request-ID", EnvName: CorsExposeHeadersEnvKey, FlagName: FlagCorsExposeHeaders},
+			{Key: CorsExposeHeadersKey, Value: "X-Request-ID", EnvName: CorsExposeHeadersEnvKey, FlagName: FlagCorsExposeHeaders},
 
 			// Database Default Values
 			{Key: DatabaseTypeKey, Value: "sqlite", EnvName: DatabaseTypeEnvKey, FlagName: FlagDatabaseType},
