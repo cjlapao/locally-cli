@@ -4,6 +4,14 @@
 # Target selection (default: api)
 TARGET ?= api
 
+# Version variables
+VERSION ?= $(shell cat VERSION 2>/dev/null || echo "0.0.0")
+BUILD_TIME ?= $(shell date -u '+%Y-%m-%d_%H:%M:%S')
+GIT_COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+
+# Build flags for version injection
+LDFLAGS = -X main.Version=$(VERSION) -X main.BuildTime=$(BUILD_TIME) -X main.GitCommit=$(GIT_COMMIT)
+
 # Validate target
 ifeq ($(filter api cli,$(TARGET)),)
 	$(error Invalid TARGET: $(TARGET). Valid targets are: api, cli)
@@ -195,12 +203,12 @@ else
 endif
 endif
 	@echo "Running go mod tidy (this may show warnings for missing packages)..."
-	-go mod tidy
+	-go mod tidy -e
 	@echo "Running go mod download..."
 	-go mod download
 	@echo "Testing $(TARGET) build..."
 	@echo "Building $(TARGET) only..."
-	-go build -o /tmp/test-build ./$(CMD_DIR) 2>/dev/null || echo "Warning: $(TARGET) build failed due to missing dependencies"
+	-go build -ldflags "$(LDFLAGS)" -o /tmp/test-build ./$(CMD_DIR) 2>/dev/null || echo "Warning: $(TARGET) build failed due to missing dependencies"
 	@echo "Initialization complete!"
 	@echo ""
 	@echo "Next steps:"
@@ -242,26 +250,26 @@ endif
 
 .PHONY: build
 build: ## Build the binary
-	@echo "Building $(BINARY_NAME)..."
+	@echo "Building $(BINARY_NAME) with version $(VERSION)..."
 	$(MKDIR) $(OUT_DIR) 2>$(NULL) || true
 	@echo "Building $(TARGET) service..."
-	-go build -o $(OUT_DIR)/$(BINARY_NAME) ./$(CMD_DIR) || (echo "Build failed. Trying to build with missing dependencies..." && go build -o $(OUT_DIR)/$(BINARY_NAME) ./$(CMD_DIR) 2>/dev/null || echo "Build failed due to missing dependencies. Please check the codebase.")
+	-go build -ldflags "$(LDFLAGS)" -o $(OUT_DIR)/$(BINARY_NAME) ./$(CMD_DIR) || (echo "Build failed. Trying to build with missing dependencies..." && go build -ldflags "$(LDFLAGS)" -o $(OUT_DIR)/$(BINARY_NAME) ./$(CMD_DIR) 2>/dev/null || echo "Build failed due to missing dependencies. Please check the codebase.")
 	@echo "Build complete!"
 
 .PHONY: api-build
 api-build: ## Build only the API service (ignores other packages)
-	@echo "Building API service only..."
+	@echo "Building API service only with version $(VERSION)..."
 	$(MKDIR) $(OUT_DIR) 2>$(NULL) || true
 	@echo "Building API binary..."
-	cd cmd/api && go build -o ../../$(OUT_DIR)/locally-api .
+	cd cmd/api && go build -ldflags "$(LDFLAGS)" -o ../../$(OUT_DIR)/locally-api .
 	@echo "API build complete!"
 
 .PHONY: cli-build
 cli-build: ## Build only the CLI service (ignores other packages)
-	@echo "Building CLI service only..."
+	@echo "Building CLI service only with version $(VERSION)..."
 	$(MKDIR) $(OUT_DIR) 2>$(NULL) || true
 	@echo "Building CLI binary..."
-	cd cmd/cli && go build -o ../../$(OUT_DIR)/locally-cli .
+	cd cmd/cli && go build -ldflags "$(LDFLAGS)" -o ../../$(OUT_DIR)/locally-cli .
 	@echo "CLI build complete!"
 
 # =============================================================================
@@ -275,57 +283,57 @@ CGO_ENABLED ?= 0
 
 .PHONY: build-cross
 build-cross: ## Build for specific platform (GOOS=linux GOARCH=amd64 make build-cross)
-	@echo "Building for $(GOOS)/$(GOARCH) with CGO_ENABLED=$(CGO_ENABLED)..."
+	@echo "Building for $(GOOS)/$(GOARCH) with CGO_ENABLED=$(CGO_ENABLED) and version $(VERSION)..."
 	$(MKDIR) $(OUT_DIR) 2>$(NULL) || true
 ifeq ($(GOOS),windows)
-	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) GOARCH=$(GOARCH) go build -o $(OUT_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH).exe ./$(CMD_DIR)
+	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags "$(LDFLAGS)" -o $(OUT_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH).exe ./$(CMD_DIR)
 	@echo "Build complete: $(OUT_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH).exe"
 else
-	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) GOARCH=$(GOARCH) go build -o $(OUT_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH) ./$(CMD_DIR)
+	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags "$(LDFLAGS)" -o $(OUT_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH) ./$(CMD_DIR)
 	@echo "Build complete: $(OUT_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH)"
 endif
 
 .PHONY: build-linux
 build-linux: ## Build for Linux (amd64)
-	@echo "Building for linux/amd64 with CGO_ENABLED=$(CGO_ENABLED)..."
+	@echo "Building for linux/amd64 with CGO_ENABLED=$(CGO_ENABLED) and version $(VERSION)..."
 	$(MKDIR) $(OUT_DIR) 2>$(NULL) || true
-	CGO_ENABLED=$(CGO_ENABLED) GOOS=linux GOARCH=amd64 go build -o $(OUT_DIR)/$(BINARY_NAME)-linux-amd64 ./$(CMD_DIR)
+	CGO_ENABLED=$(CGO_ENABLED) GOOS=linux GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o $(OUT_DIR)/$(BINARY_NAME)-linux-amd64 ./$(CMD_DIR)
 	@echo "Build complete: $(OUT_DIR)/$(BINARY_NAME)-linux-amd64"
 
 .PHONY: build-linux-arm64
 build-linux-arm64: ## Build for Linux (arm64)
-	@echo "Building for linux/arm64 with CGO_ENABLED=$(CGO_ENABLED)..."
+	@echo "Building for linux/arm64 with CGO_ENABLED=$(CGO_ENABLED) and version $(VERSION)..."
 	$(MKDIR) $(OUT_DIR) 2>$(NULL) || true
-	CGO_ENABLED=$(CGO_ENABLED) GOOS=linux GOARCH=amd64 go build -o $(OUT_DIR)/$(BINARY_NAME)-linux-amd64 ./$(CMD_DIR)
-	CGO_ENABLED=$(CGO_ENABLED) GOOS=linux GOARCH=arm64 go build -o $(OUT_DIR)/$(BINARY_NAME)-linux-arm64 ./$(CMD_DIR)
+	CGO_ENABLED=$(CGO_ENABLED) GOOS=linux GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o $(OUT_DIR)/$(BINARY_NAME)-linux-amd64 ./$(CMD_DIR)
+	CGO_ENABLED=$(CGO_ENABLED) GOOS=linux GOARCH=arm64 go build -ldflags "$(LDFLAGS)" -o $(OUT_DIR)/$(BINARY_NAME)-linux-arm64 ./$(CMD_DIR)
 	@echo "Build complete: $(OUT_DIR)/$(BINARY_NAME)-linux-arm64"
 
 .PHONY: build-macos
 build-macos: ## Build for macOS (amd64)
-	@echo "Building for darwin/amd64 with CGO_ENABLED=$(CGO_ENABLED)..."
+	@echo "Building for darwin/amd64 with CGO_ENABLED=$(CGO_ENABLED) and version $(VERSION)..."
 	$(MKDIR) $(OUT_DIR) 2>$(NULL) || true
-	CGO_ENABLED=$(CGO_ENABLED) GOOS=darwin GOARCH=amd64 go build -o $(OUT_DIR)/$(BINARY_NAME)-darwin-amd64 ./$(CMD_DIR)
+	CGO_ENABLED=$(CGO_ENABLED) GOOS=darwin GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o $(OUT_DIR)/$(BINARY_NAME)-darwin-amd64 ./$(CMD_DIR)
 	@echo "Build complete: $(OUT_DIR)/$(BINARY_NAME)-darwin-amd64"
 
 .PHONY: build-macos-arm64
 build-macos-arm64: ## Build for macOS (arm64/M1)
-	@echo "Building for darwin/arm64 with CGO_ENABLED=$(CGO_ENABLED)..."
+	@echo "Building for darwin/arm64 with CGO_ENABLED=$(CGO_ENABLED) and version $(VERSION)..."
 	$(MKDIR) $(OUT_DIR) 2>$(NULL) || true
-	CGO_ENABLED=$(CGO_ENABLED) GOOS=darwin GOARCH=arm64 go build -o $(OUT_DIR)/$(BINARY_NAME)-darwin-arm64 ./$(CMD_DIR)
+	CGO_ENABLED=$(CGO_ENABLED) GOOS=darwin GOARCH=arm64 go build -ldflags "$(LDFLAGS)" -o $(OUT_DIR)/$(BINARY_NAME)-darwin-arm64 ./$(CMD_DIR)
 	@echo "Build complete: $(OUT_DIR)/$(BINARY_NAME)-darwin-arm64"
 
 .PHONY: build-windows
 build-windows: ## Build for Windows (amd64)
-	@echo "Building for windows/amd64 with CGO_ENABLED=$(CGO_ENABLED)..."
+	@echo "Building for windows/amd64 with CGO_ENABLED=$(CGO_ENABLED) and version $(VERSION)..."
 	$(MKDIR) $(OUT_DIR) 2>$(NULL) || true
-	CGO_ENABLED=$(CGO_ENABLED) GOOS=windows GOARCH=amd64 go build -o $(OUT_DIR)/$(BINARY_NAME)-windows-amd64.exe ./$(CMD_DIR)
+	CGO_ENABLED=$(CGO_ENABLED) GOOS=windows GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o $(OUT_DIR)/$(BINARY_NAME)-windows-amd64.exe ./$(CMD_DIR)
 	@echo "Build complete: $(OUT_DIR)/$(BINARY_NAME)-windows-amd64.exe"
 
 .PHONY: build-windows-arm64
 build-windows-arm64: ## Build for Windows (arm64)
-	@echo "Building for windows/arm64 with CGO_ENABLED=$(CGO_ENABLED)..."
+	@echo "Building for windows/arm64 with CGO_ENABLED=$(CGO_ENABLED) and version $(VERSION)..."
 	$(MKDIR) $(OUT_DIR) 2>$(NULL) || true
-	CGO_ENABLED=$(CGO_ENABLED) GOOS=windows GOARCH=arm64 go build -o $(OUT_DIR)/$(BINARY_NAME)-windows-arm64.exe ./$(CMD_DIR)
+	CGO_ENABLED=$(CGO_ENABLED) GOOS=windows GOARCH=arm64 go build -ldflags "$(LDFLAGS)" -o $(OUT_DIR)/$(BINARY_NAME)-windows-arm64.exe ./$(CMD_DIR)
 	@echo "Build complete: $(OUT_DIR)/$(BINARY_NAME)-windows-arm64.exe"
 
 .PHONY: build-all
@@ -350,8 +358,7 @@ DOCKER_IMAGE = locally-api
 DOCKER_TAG ?= latest
 DOCKER_FULL_NAME = $(DOCKER_REGISTRY)/$(DOCKER_NAMESPACE)/$(DOCKER_IMAGE)
 
-# Get version from VERSION file
-VERSION ?= $(shell cat VERSION 2>/dev/null || echo "unknown")
+# Version is already defined at the top of the file
 
 # Generate beta version with timestamp (ddmmyyhhMM format)
 BETA_VERSION ?= $(shell date +%d%m%y%H%M)
@@ -564,13 +571,13 @@ lint: fmt vet ## Run all linting checks
 deps: ## Download and tidy dependencies
 	@echo "Downloading dependencies..."
 	go mod download
-	go mod tidy
+	go mod tidy -e
 
 .PHONY: update-deps
 update-deps: ## Update dependencies to latest versions
 	@echo "Updating dependencies..."
 	go get -u ./...
-	go mod tidy
+	go mod tidy -e
 
 .PHONY: check-env
 check-env: ## Check if environment file exists
@@ -616,7 +623,7 @@ windows-init: ## Windows-specific initialization (alternative to init)
 	) else ( \
 		echo "$(API_DIR)\.api.env already exists - skipping" \
 	)
-	go mod tidy
+	go mod tidy -e
 	go mod download
 	@echo "Windows initialization complete!"
 

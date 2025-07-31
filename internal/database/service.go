@@ -3,7 +3,9 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -84,9 +86,11 @@ func Initialize(config *types.Config) error {
 
 // initializeSQLite initializes SQLite database connection
 func initializeSQLite(config *types.Config, gormConfig *gorm.Config) (*gorm.DB, error) {
+	storagePath := config.StoragePath
+
 	// Convert to absolute path if relative
-	absPath, err := filepath.Abs(config.StoragePath)
-	absPath = fmt.Sprintf("file:%s", absPath)
+	absPath := filepath.Join(storagePath, "locally.db")
+	absPath, err := filepath.Abs(absPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get absolute path: %w", err)
 	}
@@ -96,10 +100,14 @@ func initializeSQLite(config *types.Config, gormConfig *gorm.Config) (*gorm.DB, 
 		return nil, fmt.Errorf("failed to create database directory: %w", err)
 	}
 
+	sqlDB, err := sql.Open("sqlite", fmt.Sprintf("file:%s?cache=shared&mode=rwc", absPath))
+	if err != nil {
+		log.Fatalf("failed to open db: %v", err)
+	}
 	logging.WithField("database_path", absPath).Info("Using SQLite database path")
 
 	// Open database connection
-	db, err := gorm.Open(sqlite.Open(absPath), gormConfig)
+	db, err := gorm.Open(sqlite.Dialector{Conn: sqlDB}, gormConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to SQLite database: %w", err)
 	}

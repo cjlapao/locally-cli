@@ -28,6 +28,7 @@ require (
 	gorm.io/driver/postgres v1.6.0
 	gorm.io/driver/sqlite v1.6.0
 	gorm.io/gorm v1.30.0
+	modernc.org/sqlite v1.38.1
 	software.sslmate.com/src/go-pkcs12 v0.2.0
 )
 
@@ -114,6 +115,5 @@ require (
 	modernc.org/libc v1.66.3 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
-	modernc.org/sqlite v1.38.1 // indirect
 
 )

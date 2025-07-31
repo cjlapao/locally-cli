@@ -20,9 +20,10 @@ type Provider interface {
 
 // ConfigService represents the configuration service
 type ConfigService struct {
-	config    *Config
-	providers []Provider
-	isLoaded  bool
+	config      *Config
+	storagePath string
+	providers   []Provider
+	isLoaded    bool
 }
 
 // GetInstance returns the singleton instance of the config service
@@ -35,8 +36,9 @@ func Initialize(providers ...Provider) (*ConfigService, error) {
 	var initErr error
 	once.Do(func() {
 		service := &ConfigService{
-			config:    DefaultConfig(),
-			providers: providers,
+			config:      DefaultConfig(),
+			providers:   providers,
+			storagePath: "",
 		}
 
 		// Add providers in order of priority (lowest to highest)
@@ -52,6 +54,20 @@ func Initialize(providers ...Provider) (*ConfigService, error) {
 			initErr = fmt.Errorf("failed to load configuration: %w", err)
 			return
 		}
+
+		// Get user folder
+		userFolder, err := os.UserHomeDir()
+		if err != nil {
+			initErr = fmt.Errorf("failed to get user home directory: %w", err)
+			return
+		}
+		storagePath := filepath.Join(userFolder, SystemStoragePath)
+		// creating the folder if it doesn't exist
+		if err := os.MkdirAll(storagePath, 0o755); err != nil {
+			initErr = fmt.Errorf("failed to create locally storage directory: %w", err)
+			return
+		}
+		service.storagePath = storagePath
 
 		instance = service
 	})
@@ -104,14 +120,11 @@ func (s *ConfigService) SetStoragePath(path string) {
 }
 
 func (s *ConfigService) GetStoragePath() (string, error) {
-	storagePath := s.config.Get(DatabaseStoragePathKey)
-	if storagePath == nil {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			return "", fmt.Errorf("failed to get home directory: %w", err)
-		}
-		s.config.Set(DatabaseStoragePathKey, filepath.Join(homeDir, DefaultStoragePath, DefaultStorageFile))
+	storagePath := s.config.GetString(DatabaseStoragePathKey, "")
+	if storagePath == "" {
+		s.config.Set(DatabaseStoragePathKey, s.storagePath)
+		return s.storagePath, nil
 	}
 
-	return storagePath.Value, nil
+	return storagePath, nil
 }

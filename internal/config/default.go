@@ -43,7 +43,7 @@ func DefaultConfig() *Config {
 
 			// Database Default Values
 			{Key: DatabaseTypeKey, Value: "sqlite", EnvName: DatabaseTypeEnvKey, FlagName: FlagDatabaseType},
-			{Key: DatabaseStoragePathKey, Value: "locally.db", EnvName: DatabaseStoragePathEnvKey, FlagName: FlagDatabaseStoragePath},
+			{Key: DatabaseStoragePathKey, Value: "", EnvName: DatabaseStoragePathEnvKey, FlagName: FlagDatabaseStoragePath},
 			{Key: DatabaseHostKey, Value: "localhost", EnvName: DatabaseHostEnvKey, FlagName: FlagDatabaseHost},
 			{Key: DatabasePortKey, Value: "5432", EnvName: DatabasePortEnvKey, FlagName: FlagDatabasePort},
 			{Key: DatabaseDatabaseKey, Value: "locally", EnvName: DatabaseDatabaseEnvKey, FlagName: FlagDatabaseDatabase},
