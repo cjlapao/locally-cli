@@ -253,6 +253,12 @@ switch ($Action) {
                 Write-Status "Using docker-compose..."
                 Push-Location $ApiDir
                 try {
+                    # Set build arguments for docker-compose
+                    $env:VERSION = if ($env:VERSION) { $env:VERSION } else { "0.0.0" }
+                    $env:BUILD_TIME = if ($env:BUILD_TIME) { $env:BUILD_TIME } else { (Get-Date -Format "yyyy-MM-dd_HH:mm:ss") }
+                    $env:GIT_COMMIT = if ($env:GIT_COMMIT) { $env:GIT_COMMIT } else { 
+                        try { git rev-parse --short HEAD 2>$null } catch { "unknown" }
+                    }
                     docker-compose up -d --build
                     if ($LASTEXITCODE -eq 0) {
                         Write-Success "Container started successfully with docker-compose"

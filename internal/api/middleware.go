@@ -209,6 +209,7 @@ func DefaultCORSConfig() CORSConfig {
 		AllowHeaders: []string{
 			"Accept",
 			"Accept-Language",
+			"Accept-Encoding",
 			"Content-Type",
 			"Content-Language",
 			"Origin",
@@ -217,11 +218,14 @@ func DefaultCORSConfig() CORSConfig {
 			"X-Request-ID",
 			"X-HTTP-Method-Override",
 			"Cache-Control",
+			"Pragma",
+			"Expires",
 		},
 		ExposeHeaders: []string{
 			"Content-Length",
 			"Content-Type",
 			"X-Request-ID",
+			"X-Total-Count",
 		},
 		AllowCredentials: true,
 		MaxAge:           86400, // 24 hours
@@ -233,47 +237,130 @@ func CORSMiddleware(config CORSConfig) PreMiddleware {
 	return PreMiddlewareFunc(func(w http.ResponseWriter, r *http.Request) MiddlewareResult {
 		origin := r.Header.Get("Origin")
 
-		// Check if origin is allowed
+		// Determine if origin is allowed
 		allowOrigin := ""
 		if len(config.AllowOrigins) == 0 || contains(config.AllowOrigins, "*") {
 			allowOrigin = "*"
-		} else if contains(config.AllowOrigins, origin) {
+		} else if origin != "" && contains(config.AllowOrigins, origin) {
 			allowOrigin = origin
-		}
-
-		// Set CORS headers
-		if allowOrigin != "" {
-			w.Header().Set("Access-Control-Allow-Origin", allowOrigin)
-		}
-
-		if config.AllowCredentials {
-			w.Header().Set("Access-Control-Allow-Credentials", "true")
-		}
-
-		if len(config.AllowMethods) > 0 {
-			w.Header().Set("Access-Control-Allow-Methods", strings.Join(config.AllowMethods, ", "))
-		}
-
-		if len(config.AllowHeaders) > 0 {
-			w.Header().Set("Access-Control-Allow-Headers", strings.Join(config.AllowHeaders, ", "))
-		}
-
-		if len(config.ExposeHeaders) > 0 {
-			w.Header().Set("Access-Control-Expose-Headers", strings.Join(config.ExposeHeaders, ", "))
-		}
-
-		if config.MaxAge > 0 {
-			w.Header().Set("Access-Control-Max-Age", fmt.Sprintf("%d", config.MaxAge))
 		}
 
 		// Handle preflight OPTIONS request
 		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusOK)
-			return MiddlewareResult{Continue: false} // Short-circuit for OPTIONS
+			return handlePreflightRequest(w, r, config, allowOrigin)
 		}
 
-		return MiddlewareResult{Continue: true}
+		// Handle actual requests (non-preflight)
+		return handleActualRequest(w, r, config, allowOrigin)
 	})
+}
+
+// handlePreflightRequest handles CORS preflight OPTIONS requests
+func handlePreflightRequest(w http.ResponseWriter, r *http.Request, config CORSConfig, allowOrigin string) MiddlewareResult {
+	// Validate requested method
+	requestMethod := r.Header.Get("Access-Control-Request-Method")
+	if requestMethod != "" && !contains(config.AllowMethods, requestMethod) {
+		logging.Warnf("CORS preflight rejected: method %s not allowed", requestMethod)
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return MiddlewareResult{Continue: false}
+	}
+
+	// Validate requested headers
+	requestHeaders := r.Header.Get("Access-Control-Request-Headers")
+	if requestHeaders != "" {
+		headers := strings.Split(requestHeaders, ",")
+		for _, header := range headers {
+			header = strings.TrimSpace(header)
+			if header != "" && !contains(config.AllowHeaders, header) {
+				logging.Warnf("CORS preflight rejected: header %s not allowed", header)
+				w.WriteHeader(http.StatusForbidden)
+				return MiddlewareResult{Continue: false}
+			}
+		}
+	}
+
+	// Set CORS headers for preflight response
+	setCORSHeaders(w, config, allowOrigin)
+	w.WriteHeader(http.StatusOK)
+	return MiddlewareResult{Continue: false}
+}
+
+// handleActualRequest handles actual CORS requests (non-preflight)
+func handleActualRequest(w http.ResponseWriter, r *http.Request, config CORSConfig, allowOrigin string) MiddlewareResult {
+	// Validate origin for actual requests
+	if allowOrigin == "" {
+		logging.Warnf("CORS request rejected: origin %s not allowed", r.Header.Get("Origin"))
+		w.WriteHeader(http.StatusForbidden)
+		return MiddlewareResult{Continue: false}
+	}
+
+	// Validate HTTP method
+	if !contains(config.AllowMethods, r.Method) {
+		logging.Warnf("CORS request rejected: method %s not allowed", r.Method)
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return MiddlewareResult{Continue: false}
+	}
+
+	// Validate CORS-specific headers (only check headers that are CORS-related)
+	corsHeaders := []string{
+		"Origin",
+		"Access-Control-Request-Method",
+		"Access-Control-Request-Headers",
+		"Access-Control-Allow-Origin",
+		"Access-Control-Allow-Methods",
+		"Access-Control-Allow-Headers",
+		"Access-Control-Allow-Credentials",
+		"Access-Control-Max-Age",
+		"Access-Control-Expose-Headers",
+	}
+
+	for headerName := range r.Header {
+		// Only validate CORS-specific headers, not all headers
+		if contains(corsHeaders, headerName) {
+			// For Origin header, we already validated it above
+			if headerName == "Origin" {
+				continue
+			}
+
+			// For other CORS headers, check if they're allowed
+			if !contains(config.AllowHeaders, headerName) {
+				logging.Warnf("CORS request rejected: header %s not allowed", headerName)
+				w.WriteHeader(http.StatusForbidden)
+				return MiddlewareResult{Continue: false}
+			}
+		}
+	}
+
+	// Set CORS headers for actual requests
+	setCORSHeaders(w, config, allowOrigin)
+	return MiddlewareResult{Continue: true}
+}
+
+// setCORSHeaders sets the appropriate CORS headers on the response
+func setCORSHeaders(w http.ResponseWriter, config CORSConfig, allowOrigin string) {
+	if allowOrigin != "" {
+		w.Header().Set("Access-Control-Allow-Origin", allowOrigin)
+	}
+
+	if config.AllowCredentials {
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
+	}
+
+	if len(config.AllowMethods) > 0 {
+		w.Header().Set("Access-Control-Allow-Methods", strings.Join(config.AllowMethods, ", "))
+	}
+
+	if len(config.AllowHeaders) > 0 {
+		w.Header().Set("Access-Control-Allow-Headers", strings.Join(config.AllowHeaders, ", "))
+	}
+
+	if len(config.ExposeHeaders) > 0 {
+		w.Header().Set("Access-Control-Expose-Headers", strings.Join(config.ExposeHeaders, ", "))
+	}
+
+	if config.MaxAge > 0 {
+		w.Header().Set("Access-Control-Max-Age", fmt.Sprintf("%d", config.MaxAge))
+	}
 }
 
 // RequestIDMiddleware creates a request ID pre-middleware

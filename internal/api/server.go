@@ -42,47 +42,11 @@ type Config struct {
 
 // NewServer creates a new HTTP server
 func NewServer(cfg Config, handler *Handler) *Server {
-	corsConfig := DefaultCORSConfig()
-	if cfg.CORSConfig != nil {
-		corsConfig = *cfg.CORSConfig
-	}
 	appCfg := config.GetInstance().Get()
-	corsAllowOrigins := appCfg.Get(config.CorsAllowOriginsKey).GetString()
-	corsAllowMethods := appCfg.Get(config.CorsAllowMethodsKey).GetString()
-	corsAllowHeaders := appCfg.Get(config.CorsAllowHeadersKey).GetString()
-	corsExposeHeaders := appCfg.Get(config.CorsExposeHeadersKey).GetString()
-	if corsAllowOrigins != "" {
-		configCorsOrigins := strings.Split(corsAllowOrigins, ",")
-		corsConfig.AllowOrigins = make([]string, 0)
-		for _, origin := range configCorsOrigins {
-			corsConfig.AllowOrigins = append(corsConfig.AllowOrigins, strings.TrimSpace(origin))
-		}
-	}
-	if corsAllowMethods != "" {
-		configCorsMethods := strings.Split(corsAllowMethods, ",")
-		corsConfig.AllowMethods = make([]string, 0)
-		for _, method := range configCorsMethods {
-			corsConfig.AllowMethods = append(corsConfig.AllowMethods, strings.TrimSpace(method))
-		}
-	}
-	if corsAllowHeaders != "" {
-		configCorsHeaders := strings.Split(corsAllowHeaders, ",")
-		corsConfig.AllowHeaders = make([]string, 0)
-		for _, header := range configCorsHeaders {
-			corsConfig.AllowHeaders = append(corsConfig.AllowHeaders, strings.TrimSpace(header))
-		}
-	}
-	if corsExposeHeaders != "" {
-		configCorsExposeHeaders := strings.Split(corsExposeHeaders, ",")
-		corsConfig.ExposeHeaders = make([]string, 0)
-		for _, header := range configCorsExposeHeaders {
-			corsConfig.ExposeHeaders = append(corsConfig.ExposeHeaders, strings.TrimSpace(header))
-		}
-	}
 
 	// Create middleware chain with default middlewares
 	middlewareChain := NewMiddlewareChain()
-	middlewareChain.AddPreMiddleware(CORSMiddleware(corsConfig))
+	middlewareChain.AddPreMiddleware(CORSMiddleware(readCorsConfigFromConfiguration(appCfg)))
 	middlewareChain.AddPreMiddleware(RequestIDMiddleware())
 	middlewareChain.AddPreMiddleware(RequestLoggingMiddleware())
 	middlewareChain.AddPostMiddleware(ResponseLoggingMiddleware())
@@ -201,9 +165,10 @@ func (s *Server) registerRoute(route Route) {
 // createOptionsHandler creates a handler for OPTIONS requests
 func (s *Server) createOptionsHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		appCfg := config.GetInstance().Get()
 		// Create a minimal middleware chain for OPTIONS (just CORS)
 		optionsChain := NewMiddlewareChain()
-		optionsChain.AddPreMiddleware(CORSMiddleware(DefaultCORSConfig()))
+		optionsChain.AddPreMiddleware(CORSMiddleware(readCorsConfigFromConfiguration(appCfg)))
 
 		// Create a simple handler that returns 204 No Content
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -301,4 +266,47 @@ func (s *Server) Stop(ctx context.Context) error {
 		return s.server.Shutdown(ctx)
 	}
 	return nil
+}
+
+func readCorsConfigFromConfiguration(cfg *config.Config) CORSConfig {
+	corsConfig := DefaultCORSConfig()
+	corsAllowOrigins := cfg.Get(config.CorsAllowOriginsKey).GetString()
+	corsAllowMethods := cfg.Get(config.CorsAllowMethodsKey).GetString()
+	corsAllowHeaders := cfg.Get(config.CorsAllowHeadersKey).GetString()
+	corsExposeHeaders := cfg.Get(config.CorsExposeHeadersKey).GetString()
+	if corsAllowOrigins != "" {
+		configCorsOrigins := strings.Split(corsAllowOrigins, ",")
+		corsConfig.AllowOrigins = make([]string, 0)
+		for _, origin := range configCorsOrigins {
+			corsConfig.AllowOrigins = append(corsConfig.AllowOrigins, strings.TrimSpace(origin))
+		}
+	}
+	if corsAllowMethods != "" {
+		configCorsMethods := strings.Split(corsAllowMethods, ",")
+		corsConfig.AllowMethods = make([]string, 0)
+		for _, method := range configCorsMethods {
+			corsConfig.AllowMethods = append(corsConfig.AllowMethods, strings.TrimSpace(method))
+		}
+	}
+	if corsAllowHeaders != "" {
+		configCorsHeaders := strings.Split(corsAllowHeaders, ",")
+		corsConfig.AllowHeaders = make([]string, 0)
+		for _, header := range configCorsHeaders {
+			corsConfig.AllowHeaders = append(corsConfig.AllowHeaders, strings.TrimSpace(header))
+		}
+	}
+	if corsExposeHeaders != "" {
+		configCorsExposeHeaders := strings.Split(corsExposeHeaders, ",")
+		corsConfig.ExposeHeaders = make([]string, 0)
+		for _, header := range configCorsExposeHeaders {
+			corsConfig.ExposeHeaders = append(corsConfig.ExposeHeaders, strings.TrimSpace(header))
+		}
+	}
+
+	// Add X-Tenant-ID to the allow headers if it's not already there, this is a
+	// special header that is used to identify the tenant in the request
+	if !strings.Contains(strings.Join(corsConfig.AllowHeaders, ","), "X-Tenant-ID") {
+		corsConfig.AllowHeaders = append(corsConfig.AllowHeaders, "X-Tenant-ID")
+	}
+	return corsConfig
 }

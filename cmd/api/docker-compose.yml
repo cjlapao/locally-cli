@@ -5,6 +5,10 @@ services:
     build:
       context: ../..
       dockerfile: cmd/api/Dockerfile
+      args:
+        VERSION: ${VERSION:-0.0.0}
+        BUILD_TIME: ${BUILD_TIME:-unknown}
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
     container_name: locally-api
     ports:
       - "8080:8080"
@@ -13,7 +17,7 @@ services:
     environment:
       # Override specific values for Docker environment
       - LOCALLY_DATABASE_TYPE=sqlite
-      - LOCALLY_DATABASE_STORAGE_PATH=/app/data/locally.db
+      - LOCALLY_DATABASE_STORAGE_PATH=/app/data
       - LOCALLY_SERVER_BIND_TO=0.0.0.0
       - LOCALLY_SERVER_API_PORT=8080
       # Security - CHANGE THESE IN PRODUCTION!

@@ -235,6 +235,10 @@ case "$ACTION" in
             else
                 print_status "Using docker-compose..."
                 cd "$API_DIR"
+                # Export build arguments for docker-compose
+                export VERSION="${VERSION:-0.0.0}"
+                export BUILD_TIME="${BUILD_TIME:-$(date -u '+%Y-%m-%d_%H:%M:%S')}"
+                export GIT_COMMIT="${GIT_COMMIT:-$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')}"
                 if docker-compose up -d --build; then
                     print_success "Container started successfully with docker-compose"
                 else

@@ -20,12 +20,14 @@ endif
 # Variables based on target
 ifeq ($(TARGET),api)
 	CMD_DIR = cmd/api
+	API_DIR = cmd/api
 	BINARY_NAME = locally-api
 	ENV_FILE = $(CMD_DIR)/.api.env
 	ENV_TEMPLATE = $(CMD_DIR)/env.template
 	HAS_DOCKER = true
 else
 	CMD_DIR = cmd/cli
+	API_DIR = cmd/cli
 	BINARY_NAME = locally-cli
 	ENV_FILE = $(CMD_DIR)/.cli.env
 	ENV_TEMPLATE = 
@@ -376,7 +378,11 @@ endif
 .PHONY: docker-build
 docker-build: validate-docker ## Build the Docker image
 	@echo "Building Docker image..."
-	cd $(API_DIR) && docker build -t $(DOCKER_FULL_NAME):$(DOCKER_TAG) -f Dockerfile ../..
+	cd $(API_DIR) && docker build \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg BUILD_TIME=$(BUILD_TIME) \
+		--build-arg GIT_COMMIT=$(GIT_COMMIT) \
+		-t $(DOCKER_FULL_NAME):$(DOCKER_TAG) -f Dockerfile ../..
 
 .PHONY: docker-run
 docker-run: validate-docker ## Run the Docker container
