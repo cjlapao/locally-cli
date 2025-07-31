@@ -301,7 +301,7 @@ func handleActualRequest(w http.ResponseWriter, r *http.Request, config CORSConf
 		return MiddlewareResult{Continue: false}
 	}
 
-	// Validate CORS-specific headers (only check headers that are CORS-related)
+	// Validate non-CORS headers against AllowHeaders list
 	corsHeaders := []string{
 		"Origin",
 		"Access-Control-Request-Method",
@@ -315,24 +315,21 @@ func handleActualRequest(w http.ResponseWriter, r *http.Request, config CORSConf
 	}
 
 	for headerName := range r.Header {
-		// Only validate CORS-specific headers, not all headers
+		// Skip CORS headers - they're always allowed
 		if contains(corsHeaders, headerName) {
-			// For Origin header, we already validated it above
-			if headerName == "Origin" {
-				continue
-			}
+			continue
+		}
 
-			// For other CORS headers, check if they're allowed
-			if !contains(config.AllowHeaders, headerName) {
-				logging.Warnf("CORS request rejected: header %s not allowed", headerName)
-				w.WriteHeader(http.StatusForbidden)
-				return MiddlewareResult{Continue: false}
-			}
+		// Check if non-CORS header is allowed
+		if !contains(config.AllowHeaders, headerName) {
+			logging.Warnf("CORS request rejected: header %s not allowed", headerName)
+			w.WriteHeader(http.StatusForbidden)
+			return MiddlewareResult{Continue: false}
 		}
 	}
 
-	// Set CORS headers for actual requests
-	setCORSHeaders(w, config, allowOrigin)
+	// For actual requests, we don't set CORS headers back
+	// CORS headers are only set in preflight responses
 	return MiddlewareResult{Continue: true}
 }
 
@@ -423,10 +420,18 @@ func ResponseLoggingMiddleware() PostMiddleware {
 	})
 }
 
-// contains checks if a slice contains a string
+// contains checks if a slice contains a string (case-insensitive)
 func contains(slice []string, item string) bool {
+	// If the slice contains "*", everything is allowed
 	for _, s := range slice {
-		if s == item {
+		if s == "*" {
+			return true
+		}
+	}
+
+	// Otherwise, check for exact match (case-insensitive)
+	for _, s := range slice {
+		if strings.EqualFold(s, item) {
 			return true
 		}
 	}

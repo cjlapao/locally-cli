@@ -270,6 +270,27 @@ func (s *Server) Stop(ctx context.Context) error {
 
 func readCorsConfigFromConfiguration(cfg *config.Config) CORSConfig {
 	corsConfig := DefaultCORSConfig()
+	systemHeadersToAllow := []string{
+		"X-Tenant-ID",
+		"Content-Type",
+		"Host",
+		"User-Agent",
+		"Accept",
+		"Accept-Encoding",
+		"Accept-Language",
+		"Origin",
+		"Referer",
+		"Postman-Token",
+		"Cache-Control",
+		"Pragma",
+		"Connection",
+		"Upgrade-Insecure-Requests",
+		"Sec-Fetch-Dest",
+		"Sec-Fetch-Mode",
+		"Sec-Fetch-Site",
+		"Content-Length",
+		"Sec-Fetch-User",
+	}
 	corsAllowOrigins := cfg.Get(config.CorsAllowOriginsKey).GetString()
 	corsAllowMethods := cfg.Get(config.CorsAllowMethodsKey).GetString()
 	corsAllowHeaders := cfg.Get(config.CorsAllowHeadersKey).GetString()
@@ -305,8 +326,12 @@ func readCorsConfigFromConfiguration(cfg *config.Config) CORSConfig {
 
 	// Add X-Tenant-ID to the allow headers if it's not already there, this is a
 	// special header that is used to identify the tenant in the request
-	if !strings.Contains(strings.Join(corsConfig.AllowHeaders, ","), "X-Tenant-ID") {
-		corsConfig.AllowHeaders = append(corsConfig.AllowHeaders, "X-Tenant-ID")
+	for _, header := range systemHeadersToAllow {
+		if !strings.Contains(strings.Join(corsConfig.AllowHeaders, ","), header) {
+			if !strings.Contains(strings.Join(corsConfig.AllowHeaders, ","), "*") {
+				corsConfig.AllowHeaders = append(corsConfig.AllowHeaders, header)
+			}
+		}
 	}
 	return corsConfig
 }
