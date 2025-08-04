@@ -3,15 +3,16 @@ package utils
 import (
 	"math"
 
+	"github.com/cjlapao/locally-cli/internal/config"
 	"github.com/cjlapao/locally-cli/internal/database/filters"
 	"github.com/cjlapao/locally-cli/internal/logging"
 	"gorm.io/gorm"
 )
 
-// PaginatedQuery executes a paginated query and returns a FilterResponse
+// PaginatedFilteredQuery executes a paginated query and returns a FilterResponse
 // This is a generic helper function that can be used by any data store
 // to avoid repeating pagination logic
-func PaginatedQuery[T any](
+func PaginatedFilteredQuery[T any](
 	db *gorm.DB,
 	tenantID string,
 	filterObj *filters.Filter,
@@ -81,9 +82,9 @@ func PaginatedQuery[T any](
 	return &response, nil
 }
 
-// PaginatedQueryWithPreload executes a paginated query with preloads and returns a FilterResponse
+// PaginatedFilteredQueryWithPreload executes a paginated query with preloads and returns a FilterResponse
 // This variant allows you to specify preloads for related data
-func PaginatedQueryWithPreload[T any](
+func PaginatedFilteredQueryWithPreload[T any](
 	db *gorm.DB,
 	tenantID string,
 	filterObj *filters.Filter,
@@ -149,6 +150,54 @@ func PaginatedQueryWithPreload[T any](
 		Page:       pageIndex + 1,
 		PageSize:   pageSize,
 		TotalPages: int(math.Ceil(float64(total) / float64(pageSize))),
+	}
+
+	return &response, nil
+}
+
+func PaginatedQuery[T any](
+	db *gorm.DB,
+	tenantID string,
+	pagination *filters.Pagination,
+	model T,
+) (*filters.PaginationResponse[T], error) {
+	cfg := config.GetInstance().Get()
+	var items []T
+	total := int64(0)
+	if pagination == nil {
+		pagination = &filters.Pagination{
+			Page:     1,
+			PageSize: cfg.GetInt(config.PaginationDefaultPageSizeKey, config.DefaultPageSizeInt),
+		}
+	}
+
+	// Get total count
+	countQuery := db.Model(&model)
+	if tenantID != "" {
+		countQuery = countQuery.Where("tenant_id = ?", tenantID)
+	}
+	if err := countQuery.Count(&total).Error; err != nil {
+		return nil, err
+	}
+	pagination.Total = total
+	offset := pagination.GetOffset()
+
+	query := db
+	if tenantID != "" {
+		query = query.Where("tenant_id = ?", tenantID)
+	}
+	if err := query.Offset(offset).
+		Limit(pagination.PageSize).
+		Find(&items).Error; err != nil {
+		return nil, err
+	}
+
+	response := filters.PaginationResponse[T]{
+		Items:      items,
+		Total:      total,
+		Page:       pagination.Page,
+		PageSize:   pagination.PageSize,
+		TotalPages: pagination.GetTotalPages(),
 	}
 
 	return &response, nil

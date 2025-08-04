@@ -8,6 +8,7 @@ import (
 
 	"github.com/cjlapao/locally-cli/internal/config"
 	"github.com/cjlapao/locally-cli/internal/logging"
+	"github.com/cjlapao/locally-cli/pkg/models"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
 )
@@ -107,12 +108,12 @@ func (s *Server) registerRoute(route Route) {
 	}
 
 	// Add auth middleware if required
-	if route.AuthRequired && s.authMiddleware != nil {
+	if route.SecurityLevel.RequiresAuthentication() && s.authMiddleware != nil {
 		routeChain.AddPreMiddleware(s.authMiddleware)
 	}
 
 	// Add super user middleware if required
-	if route.SuperUserRequired && s.superUserMiddleware != nil {
+	if route.SecurityLevel == models.ApiKeySecurityLevelSuperUser && s.superUserMiddleware != nil {
 		routeChain.AddPreMiddleware(s.superUserMiddleware)
 	}
 
@@ -154,11 +155,10 @@ func (s *Server) registerRoute(route Route) {
 	}
 
 	logging.WithFields(logrus.Fields{
-		"method":              route.Method,
-		"path":                route.Path,
-		"description":         route.Description,
-		"auth_required":       route.AuthRequired,
-		"super_user_required": route.SuperUserRequired,
+		"method":         route.Method,
+		"path":           route.Path,
+		"description":    route.Description,
+		"security_level": route.SecurityLevel,
 	}).Info("Registered route")
 }
 
@@ -207,12 +207,12 @@ func (s *Server) Start() error {
 			}
 
 			// Add auth middleware if required
-			if route.AuthRequired && s.authMiddleware != nil {
+			if route.SecurityLevel.RequiresAuthentication() && s.authMiddleware != nil {
 				routeChain.AddPreMiddleware(s.authMiddleware)
 			}
 
 			// Add super user middleware if required
-			if route.SuperUserRequired && s.superUserMiddleware != nil {
+			if route.SecurityLevel == models.ApiKeySecurityLevelSuperUser && s.superUserMiddleware != nil {
 				routeChain.AddPreMiddleware(s.superUserMiddleware)
 			}
 
@@ -241,11 +241,10 @@ func (s *Server) Start() error {
 			}
 
 			logging.WithFields(logrus.Fields{
-				"method":              route.Method,
-				"path":                group.Prefix + route.Path,
-				"description":         route.Description,
-				"auth_required":       route.AuthRequired,
-				"super_user_required": route.SuperUserRequired,
+				"method":         route.Method,
+				"path":           group.Prefix + route.Path,
+				"description":    route.Description,
+				"security_level": route.SecurityLevel,
 			}).Info("Registered group route")
 		}
 	}

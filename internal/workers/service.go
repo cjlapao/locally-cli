@@ -45,7 +45,7 @@ type registeredWorker struct {
 type SystemWorkerMessageService struct {
 	config    *config.Config
 	workers   map[string]registeredWorker // key: worker name
-	store     *stores.MessageDataStore
+	store     stores.MessageDataStoreInterface
 	workersMu sync.RWMutex
 	running   bool
 	stopCh    chan struct{}
@@ -56,7 +56,7 @@ var (
 	once     sync.Once
 )
 
-func Initialize(store *stores.MessageDataStore) (*SystemWorkerMessageService, error) {
+func Initialize(store stores.MessageDataStoreInterface) (*SystemWorkerMessageService, error) {
 	var initErr error
 	once.Do(func() {
 		svc, initErr := newService(store, config.GetInstance().Get())
@@ -74,7 +74,7 @@ func GetInstance() *SystemWorkerMessageService {
 	return instance
 }
 
-func newService(store *stores.MessageDataStore, config *config.Config) (*SystemWorkerMessageService, error) {
+func newService(store stores.MessageDataStoreInterface, config *config.Config) (*SystemWorkerMessageService, error) {
 	return &SystemWorkerMessageService{
 		workers: make(map[string]registeredWorker),
 		store:   store,

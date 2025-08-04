@@ -17,17 +17,21 @@ var (
 	configurationDataStoreOnce     sync.Once
 )
 
+type ConfigurationDataStoreInterface interface {
+	GetConfigurationValue(ctx context.Context, key string, value interface{}) (interface{}, error)
+}
+
 type ConfigurationDataStore struct {
 	database.BaseDataStore
 }
 
 // GetConfigurationDataStoreInstance returns the singleton instance of the ConfigurationDataStore
-func GetConfigurationDataStoreInstance() *ConfigurationDataStore {
+func GetConfigurationDataStoreInstance() ConfigurationDataStoreInterface {
 	return configurationDataStoreInstance
 }
 
 // InitializeConfigurationDataStore initializes the ConfigurationDataStore singleton
-func InitializeConfigurationDataStore() *diagnostics.Diagnostics {
+func InitializeConfigurationDataStore() (ConfigurationDataStoreInterface, *diagnostics.Diagnostics) {
 	diag := diagnostics.New("initialize_configuration_data_store")
 	cfg := config.GetInstance().Get()
 	configurationDataStoreOnce.Do(func() {
@@ -53,7 +57,8 @@ func InitializeConfigurationDataStore() *diagnostics.Diagnostics {
 		configurationDataStoreInstance = store
 	})
 
-	return diag
+	logging.Info("Configuration store initialized successfully")
+	return configurationDataStoreInstance, diag
 }
 
 func (s *ConfigurationDataStore) Migrate() *diagnostics.Diagnostics {

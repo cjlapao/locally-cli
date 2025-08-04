@@ -1,12 +1,21 @@
 package entities
 
-import "github.com/cjlapao/locally-cli/pkg/models"
+import (
+	"fmt"
+
+	"github.com/cjlapao/locally-cli/pkg/models"
+)
 
 type Claim struct {
-	BaseModel
-	Service string             `json:"service" gorm:"not null;type:text"`
-	Module  string             `json:"module" gorm:"not null;type:text"`
-	Action  models.ClaimAction `json:"action" gorm:"not null;type:text"`
+	BaseModelWithTenant
+	Service       string               `json:"service" gorm:"not null;type:text"`
+	Module        string               `json:"module" gorm:"not null;type:text"`
+	Action        models.AccessLevel   `json:"action" gorm:"not null;type:text"`
+	SecurityLevel models.SecurityLevel `json:"security_level" gorm:"not null;type:text"`
+}
+
+func (c *Claim) GetSlug() string {
+	return fmt.Sprintf("%s::%s::%s", c.Service, c.Module, c.Action)
 }
 
 func (Claim) TableName() string {

@@ -21,15 +21,33 @@ var (
 	certificatesDataStoreOnce     sync.Once
 )
 
+type CertificatesDataStoreInterface interface {
+	GetRootCertificates(ctx *appctx.AppContext) ([]entities.RootCertificate, *diagnostics.Diagnostics)
+	GetRootCertificate(ctx *appctx.AppContext, id string) (*entities.RootCertificate, *diagnostics.Diagnostics)
+	GetRootCertificateBySlug(ctx *appctx.AppContext, slug string) (*entities.RootCertificate, *diagnostics.Diagnostics)
+	GetIntermediateCertificates(ctx *appctx.AppContext) ([]entities.IntermediateCertificate, *diagnostics.Diagnostics)
+	GetIntermediateCertificate(ctx *appctx.AppContext, id string) (*entities.IntermediateCertificate, *diagnostics.Diagnostics)
+	GetIntermediateCertificateBySlug(ctx *appctx.AppContext, slug string) (*entities.IntermediateCertificate, *diagnostics.Diagnostics)
+	GetCertificates(ctx *appctx.AppContext, rootCertificateID string) ([]entities.Certificate, *diagnostics.Diagnostics)
+	GetCertificate(ctx *appctx.AppContext, id string) (*entities.Certificate, *diagnostics.Diagnostics)
+	GetCertificateBySlug(ctx *appctx.AppContext, slug string) (*entities.Certificate, *diagnostics.Diagnostics)
+	CreateRootCertificate(ctx *appctx.AppContext, rootCertificate *entities.RootCertificate) (*entities.RootCertificate, *diagnostics.Diagnostics)
+	CreateIntermediateCertificate(ctx *appctx.AppContext, intermediateCertificate *entities.IntermediateCertificate) (*entities.IntermediateCertificate, *diagnostics.Diagnostics)
+	CreateCertificate(ctx *appctx.AppContext, certificate *entities.Certificate) (*entities.Certificate, *diagnostics.Diagnostics)
+	DeleteRootCertificate(ctx *appctx.AppContext, id string) *diagnostics.Diagnostics
+	DeleteIntermediateCertificate(ctx *appctx.AppContext, id string) *diagnostics.Diagnostics
+	DeleteCertificate(ctx *appctx.AppContext, id string) *diagnostics.Diagnostics
+}
+
 type CertificatesDataStore struct {
 	database.BaseDataStore
 }
 
-func GetCertificatesDataStoreInstance() *CertificatesDataStore {
+func GetCertificatesDataStoreInstance() CertificatesDataStoreInterface {
 	return certificatesDataStoreInstance
 }
 
-func InitializeCertificatesDataStore() *diagnostics.Diagnostics {
+func InitializeCertificatesDataStore() (CertificatesDataStoreInterface, *diagnostics.Diagnostics) {
 	diag := diagnostics.New("initialize_certificates_data_store")
 	cfg := config.GetInstance().Get()
 	logging.Info("Initializing certificates store...")
@@ -58,7 +76,7 @@ func InitializeCertificatesDataStore() *diagnostics.Diagnostics {
 	})
 
 	logging.Info("Certificates store initialized successfully")
-	return diag
+	return certificatesDataStoreInstance, diag
 }
 
 func (s *CertificatesDataStore) Migrate() *diagnostics.Diagnostics {

@@ -117,7 +117,7 @@ func NewRequireSuperUserPreMiddleware(authService *auth.AuthService) PreMiddlewa
 			return MiddlewareResult{Continue: false, Error: err}
 		}
 
-		if !claims.IsSuperUser {
+		if claims.SecurityLevel != models.SecurityLevelSuperUser {
 			writeForbiddenError(w, r, "Forbidden", "User is not a super user")
 			return MiddlewareResult{Continue: false, Error: fmt.Errorf("user is not a super user")}
 		}
@@ -165,7 +165,7 @@ func NewRequireRolePreMiddleware(requiredRoles []models.Role) PreMiddleware {
 		}
 
 		// Super users can do anything
-		if claims.IsSuperUser {
+		if claims.SecurityLevel == models.SecurityLevelSuperUser {
 			return MiddlewareResult{Continue: true}
 		}
 
@@ -261,33 +261,32 @@ func NewRequireClaimPreMiddleware(requiredClaims []models.Claim) PreMiddleware {
 		}
 
 		// Super users can do anything
-		if claims.IsSuperUser {
+		if claims.SecurityLevel == models.SecurityLevelSuperUser {
 			return MiddlewareResult{Continue: true}
 		}
 
 		// Get user from database to validate claims
 		appCtx := appctx.FromContext(r.Context())
-		user, err := authService.UserStore.GetUserByUsername(appCtx, claims.TenantID, claims.Username)
+		dbClaims, err := authService.UserStore.GetUserClaims(appCtx, claims.TenantID, claims.Username)
 		if err != nil {
 			debugCtx.LogWithError(err).Error("Claim middleware: Failed to get user from database")
 			writeForbiddenError(w, r, "Forbidden", "Failed to get user information")
 			return MiddlewareResult{Continue: false, Error: fmt.Errorf("failed to get user: %w", err)}
 		}
 
-		if user == nil {
+		if len(dbClaims) == 0 {
 			debugCtx.LogError("Claim middleware: User not found in database")
 			writeForbiddenError(w, r, "Forbidden", "User not found")
 			return MiddlewareResult{Continue: false, Error: fmt.Errorf("user not found")}
 		}
 
-		// Convert entity to model for claim checking
-		userModel := mappers.MapUserToDto(user)
+		userClaims := mappers.MapClaimsToDto(dbClaims)
 
 		// Check if user has any of the required claims
 		hasRequiredClaim := false
 		unmatchedClaims := make([]string, 0)
 		for _, claim := range requiredClaims {
-			if hasClaims(userModel, claim) {
+			if hasClaims(userClaims, claim) {
 				hasRequiredClaim = true
 				claim.Matched = true
 				break
@@ -296,7 +295,7 @@ func NewRequireClaimPreMiddleware(requiredClaims []models.Claim) PreMiddleware {
 
 		for _, claim := range requiredClaims {
 			if !claim.Matched {
-				unmatchedClaims = append(unmatchedClaims, claim.GetName())
+				unmatchedClaims = append(unmatchedClaims, models.GetClaimName(&claim))
 			}
 		}
 
@@ -381,15 +380,15 @@ func hasRole(user *models.User, role string) bool {
 
 // this function will be used to indicate if the user has the necessary claims to access the resource
 // We will need to break it into the module, service and action and take into account the wildcard
-func hasClaims(user *models.User, requiredClaim models.Claim) bool {
+func hasClaims(userClaims []models.Claim, requiredClaim models.Claim) bool {
 	// If user has no claims, they can't access anything
-	if len(user.Claims) == 0 {
+	if len(userClaims) == 0 {
 		return false
 	}
 
 	// Check if user has any claim that matches the required claim
 
-	for _, userClaim := range user.Claims {
+	for _, userClaim := range userClaims {
 		if matchesClaim(userClaim, requiredClaim) {
 			return true
 		}
@@ -436,20 +435,20 @@ func matchesField(userField, requiredField string) bool {
 }
 
 // matchesAction checks if a user action matches a required action, handling special cases
-func matchesAction(userAction, requiredAction models.ClaimAction) bool {
+func matchesAction(userAction, requiredAction models.AccessLevel) bool {
 	// If required action is wildcard, it matches anything
-	if requiredAction == models.ClaimActionAll {
+	if requiredAction == models.AccessLevelAll {
 		return true
 	}
 
 	// If user action is wildcard, it matches anything
-	if userAction == models.ClaimActionAll {
+	if userAction == models.AccessLevelAll {
 		return true
 	}
 
 	// Special case: if required action is read, user can have read or all
-	if requiredAction == models.ClaimActionRead {
-		return userAction == models.ClaimActionRead || userAction == models.ClaimActionAll
+	if requiredAction == models.AccessLevelRead {
+		return userAction == models.AccessLevelRead || userAction == models.AccessLevelAll
 	}
 
 	// Exact match

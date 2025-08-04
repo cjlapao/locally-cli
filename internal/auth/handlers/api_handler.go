@@ -12,6 +12,7 @@ import (
 	"github.com/cjlapao/locally-cli/internal/config"
 	"github.com/cjlapao/locally-cli/internal/database/stores"
 	"github.com/cjlapao/locally-cli/internal/validation"
+	"github.com/cjlapao/locally-cli/pkg/models"
 	"github.com/cjlapao/locally-cli/pkg/types"
 )
 
@@ -27,64 +28,74 @@ func NewApiHandler(authService *auth.AuthService, store stores.AuthDataStoreInte
 func (h *Handler) Routes() []api.Route {
 	return []api.Route{
 		{
-			Method:       http.MethodPost,
-			Path:         "/v1/auth/login",
-			Handler:      h.HandleLogin,
-			Description:  "Login to the system with username/password",
-			AuthRequired: false,
+			Method:        http.MethodPost,
+			Path:          "/v1/auth/login",
+			Handler:       h.HandleLogin,
+			Description:   "Login to the system with username/password",
+			SecurityLevel: models.ApiKeySecurityLevelNone,
 		},
 		{
-			Method:       http.MethodPost,
-			Path:         "/v1/auth/login/api-key",
-			Handler:      h.HandleAPIKeyLogin,
-			Description:  "Login to the system with API key",
-			AuthRequired: false,
+			Method:        http.MethodPost,
+			Path:          "/v1/auth/login/api-key",
+			Handler:       h.HandleAPIKeyLogin,
+			Description:   "Login to the system with API key",
+			SecurityLevel: models.ApiKeySecurityLevelNone,
 		},
 		{
-			Method:       http.MethodPost,
-			Path:         "/v1/auth/refresh",
-			Handler:      h.HandleRefresh,
-			Description:  "Refresh the token",
-			AuthRequired: true,
+			Method:        http.MethodPost,
+			Path:          "/v1/auth/refresh",
+			Handler:       h.HandleRefresh,
+			Description:   "Refresh the token",
+			SecurityLevel: models.ApiKeySecurityLevelAny,
 		},
 		{
-			Method:       http.MethodPost,
-			Path:         "/v1/auth/api-keys",
-			Handler:      h.HandleCreateAPIKey,
-			Description:  "Create a new API key",
-			AuthRequired: true,
+			Method:        http.MethodPost,
+			Path:          "/v1/auth/api-keys",
+			Handler:       h.HandleCreateAPIKey,
+			Description:   "Create a new API key",
+			SecurityLevel: models.ApiKeySecurityLevelAny,
 		},
 		{
-			Method:       http.MethodGet,
-			Path:         "/v1/auth/api-keys",
-			Handler:      h.HandleListAPIKeys,
-			Description:  "List all API keys for the current user",
-			AuthRequired: true,
+			Method:        http.MethodGet,
+			Path:          "/v1/auth/api-keys",
+			Handler:       h.HandleListAPIKeys,
+			Description:   "List all API keys for the current user",
+			SecurityLevel: models.ApiKeySecurityLevelAny,
 		},
 		{
-			Method:       http.MethodGet,
-			Path:         "/v1/auth/api-keys/{id}",
-			Handler:      h.HandleGetAPIKey,
-			Description:  "Get details of a specific API key",
-			AuthRequired: true,
+			Method:        http.MethodGet,
+			Path:          "/v1/auth/api-keys/{id}",
+			Handler:       h.HandleGetAPIKey,
+			Description:   "Get details of a specific API key",
+			SecurityLevel: models.ApiKeySecurityLevelAny,
 		},
 		{
-			Method:       http.MethodDelete,
-			Path:         "/v1/auth/api-keys/{id}",
-			Handler:      h.HandleDeleteAPIKey,
-			Description:  "Delete an API key",
-			AuthRequired: true,
+			Method:        http.MethodDelete,
+			Path:          "/v1/auth/api-keys/{id}",
+			Handler:       h.HandleDeleteAPIKey,
+			Description:   "Delete an API key",
+			SecurityLevel: models.ApiKeySecurityLevelAny,
 		},
 		{
-			Method:       http.MethodPost,
-			Path:         "/v1/auth/api-keys/{id}/revoke",
-			Handler:      h.HandleRevokeAPIKey,
-			Description:  "Revoke an API key",
-			AuthRequired: true,
+			Method:        http.MethodPost,
+			Path:          "/v1/auth/api-keys/{id}/revoke",
+			Handler:       h.HandleRevokeAPIKey,
+			Description:   "Revoke an API key",
+			SecurityLevel: models.ApiKeySecurityLevelAny,
 		},
 	}
 }
 
+// @Summary      Login with username/password
+// @Description  Authenticate a user with username and password
+// @Tags         Authentication
+// @Accept       json
+// @Produce      json
+// @Param        request body auth.AuthCredentials true "Login credentials"
+// @Success      200  {object}  auth.AuthToken
+// @Failure      400  {object}  api.ErrorResponse
+// @Failure      401  {object}  api.ErrorResponse
+// @Router       /auth/login [post]
 func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	ctx := appctx.FromContext(r.Context())
 	cfg := config.GetInstance().Get()
@@ -125,6 +136,16 @@ func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// @Summary      Login with API key
+// @Description  Authenticate a user with API key
+// @Tags         Authentication
+// @Accept       json
+// @Produce      json
+// @Param        request body auth.AuthCredentials true "API key credentials"
+// @Success      200  {object}  auth.AuthToken
+// @Failure      400  {object}  api.ErrorResponse
+// @Failure      401  {object}  api.ErrorResponse
+// @Router       /auth/login/api-key [post]
 func (h *Handler) HandleAPIKeyLogin(w http.ResponseWriter, r *http.Request) {
 	ctx := appctx.FromContext(r.Context())
 	var creds auth.APIKeyCredentials
@@ -153,6 +174,16 @@ func (h *Handler) HandleAPIKeyLogin(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// @Summary      Refresh token
+// @Description  Refresh the current authentication token
+// @Tags         Authentication
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200  {object}  auth.AuthToken
+// @Failure      400  {object}  api.ErrorResponse
+// @Failure      401  {object}  api.ErrorResponse
+// @Router       /auth/refresh [post]
 func (h *Handler) HandleRefresh(w http.ResponseWriter, r *http.Request) {
 	ctx := appctx.FromContext(r.Context())
 	refreshToken := r.Header.Get("Authorization")

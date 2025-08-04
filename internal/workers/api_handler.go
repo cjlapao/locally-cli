@@ -7,6 +7,7 @@ import (
 
 	"github.com/cjlapao/locally-cli/internal/api"
 	"github.com/cjlapao/locally-cli/internal/config"
+	"github.com/cjlapao/locally-cli/pkg/models"
 )
 
 type APIHandler struct {
@@ -20,32 +21,32 @@ func NewApiHandler(service *SystemWorkerMessageService) *APIHandler {
 func (h *APIHandler) Routes() []api.Route {
 	return []api.Route{
 		{
-			Method:       http.MethodPost,
-			Path:         "/v1/messages",
-			Handler:      h.PostMessage,
-			Description:  "Post a message to the processor",
-			AuthRequired: true,
+			Method:        http.MethodPost,
+			Path:          "/v1/messages",
+			Handler:       h.PostMessage,
+			Description:   "Post a message to the processor",
+			SecurityLevel: models.ApiKeySecurityLevelAny,
 		},
 		{
-			Method:       http.MethodGet,
-			Path:         "/v1/messages/workers",
-			Handler:      h.GetWorkers,
-			Description:  "Get all registered workers",
-			AuthRequired: true,
+			Method:        http.MethodGet,
+			Path:          "/v1/messages/workers",
+			Handler:       h.GetWorkers,
+			Description:   "Get all registered workers",
+			SecurityLevel: models.ApiKeySecurityLevelAny,
 		},
 		{
-			Method:       http.MethodGet,
-			Path:         "/v1/messages/health",
-			Handler:      h.HealthCheck,
-			Description:  "Check service health",
-			AuthRequired: false,
+			Method:        http.MethodGet,
+			Path:          "/v1/messages/health",
+			Handler:       h.HealthCheck,
+			Description:   "Check service health",
+			SecurityLevel: models.ApiKeySecurityLevelAny,
 		},
 		{
-			Method:       http.MethodGet,
-			Path:         "/v1/messages/config",
-			Handler:      h.GetConfig,
-			Description:  "Get service configuration",
-			AuthRequired: true,
+			Method:        http.MethodGet,
+			Path:          "/v1/messages/config",
+			Handler:       h.GetConfig,
+			Description:   "Get service configuration",
+			SecurityLevel: models.ApiKeySecurityLevelAny,
 		},
 	}
 }

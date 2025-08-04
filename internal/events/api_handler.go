@@ -7,6 +7,7 @@ import (
 
 	"github.com/cjlapao/locally-cli/internal/api"
 	"github.com/cjlapao/locally-cli/internal/auth"
+	"github.com/cjlapao/locally-cli/pkg/models"
 	"github.com/google/uuid"
 )
 
@@ -28,32 +29,32 @@ func NewApiHandler(eventService *EventService, authService *auth.AuthService) *A
 func (h *APIHandler) Routes() []api.Route {
 	return []api.Route{
 		{
-			Method:       http.MethodGet,
-			Path:         "/v1/events/stream",
-			Handler:      h.sseHandler.HandleSSE,
-			Description:  "Server-Sent Events stream for real-time updates",
-			AuthRequired: true,
+			Method:        http.MethodGet,
+			Path:          "/v1/events/stream",
+			Handler:       h.sseHandler.HandleSSE,
+			Description:   "Server-Sent Events stream for real-time updates",
+			SecurityLevel: models.ApiKeySecurityLevelAny,
 		},
 		{
-			Method:       http.MethodPost,
-			Path:         "/v1/events/push",
-			Handler:      h.HandlePushEvent,
-			Description:  "Push an event to the event service",
-			AuthRequired: true,
+			Method:        http.MethodPost,
+			Path:          "/v1/events/push",
+			Handler:       h.HandlePushEvent,
+			Description:   "Push an event to the event service",
+			SecurityLevel: models.ApiKeySecurityLevelAny,
 		},
 		{
-			Method:       http.MethodGet,
-			Path:         "/v1/events/stats",
-			Handler:      h.HandleGetStats,
-			Description:  "Get event service statistics",
-			AuthRequired: true,
+			Method:        http.MethodGet,
+			Path:          "/v1/events/stats",
+			Handler:       h.HandleGetStats,
+			Description:   "Get event service statistics",
+			SecurityLevel: models.ApiKeySecurityLevelAny,
 		},
 		{
-			Method:       http.MethodGet,
-			Path:         "/v1/events/health",
-			Handler:      h.HandleHealthCheck,
-			Description:  "Health check for event service",
-			AuthRequired: false,
+			Method:        http.MethodGet,
+			Path:          "/v1/events/health",
+			Handler:       h.HandleHealthCheck,
+			Description:   "Health check for event service",
+			SecurityLevel: models.ApiKeySecurityLevelAny,
 		},
 	}
 }
@@ -176,7 +177,7 @@ func (h *APIHandler) HandleGetStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// If user has admin role, include all tenant statistics
-	if claims.IsSuperUser {
+	if claims.SecurityLevel == models.SecurityLevelSuperUser {
 		response.AllTenantConnections = h.eventService.GetAllConnectedClients()
 	}
 

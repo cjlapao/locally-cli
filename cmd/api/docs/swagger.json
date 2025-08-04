@@ -1,0 +1,77 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "A comprehensive API for managing local development environments, contexts, and services.",
+        "title": "Locally API",
+        "termsOfService": "https://locally.cloud/terms",
+        "contact": {
+            "name": "API Support",
+            "url": "https://locally.cloud/support",
+            "email": "support@locally.cloud"
+        },
+        "license": {
+            "name": "Fair Source License",
+            "url": "https://locally.cloud/license"
+        },
+        "version": "1.0"
+    },
+    "host": "localhost:8080",
+    "basePath": "/v1",
+    "paths": {},
+    "securityDefinitions": {
+        "ApiKeyAuth": {
+            "description": "API key for authentication",
+            "type": "apiKey",
+            "name": "X-API-Key",
+            "in": "header"
+        },
+        "BearerAuth": {
+            "description": "Type \"Bearer\" followed by a space and JWT token.",
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
+        }
+    },
+    "tags": [
+        {
+            "description": "Authentication and authorization endpoints",
+            "name": "Authentication"
+        },
+        {
+            "description": "User management operations",
+            "name": "Users"
+        },
+        {
+            "description": "Tenant management operations",
+            "name": "Tenants"
+        },
+        {
+            "description": "Context and environment management",
+            "name": "Contexts"
+        },
+        {
+            "description": "Message processing and worker management",
+            "name": "Messages"
+        },
+        {
+            "description": "Certificate management operations",
+            "name": "Certificates"
+        },
+        {
+            "description": "Environment variable management",
+            "name": "Environment"
+        },
+        {
+            "description": "Event management and notifications",
+            "name": "Events"
+        },
+        {
+            "description": "Worker and task management",
+            "name": "Workers"
+        },
+        {
+            "description": "Health check and status endpoints",
+            "name": "Health"
+        }
+    ]
+}

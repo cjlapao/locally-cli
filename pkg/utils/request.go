@@ -52,7 +52,7 @@ func GetFilterFromRequest(r *http.Request) (*filters.Filter, error) {
 	urlPageSize := r.URL.Query().Get("page_size")
 	pageSizeInt, err := strconv.Atoi(urlPageSize)
 	if err != nil {
-		pageSizeInt = cfg.GetInt(config.PaginationDefaultPageSizeKey, 20)
+		pageSizeInt = cfg.GetInt(config.PaginationDefaultPageSizeKey, config.DefaultPageSizeInt)
 	}
 	var dbFilter *filters.Filter
 	if urlFilter != "" {

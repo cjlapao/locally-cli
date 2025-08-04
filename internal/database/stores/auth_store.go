@@ -14,6 +14,7 @@ import (
 	"github.com/cjlapao/locally-cli/internal/database/utils"
 	"github.com/cjlapao/locally-cli/internal/encryption"
 	"github.com/cjlapao/locally-cli/internal/logging"
+	"github.com/cjlapao/locally-cli/pkg/diagnostics"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -45,14 +46,14 @@ func GetAuthDataStoreInstance() AuthDataStoreInterface {
 }
 
 // InitializeAuthDataStore initializes the auth store singleton
-func InitializeAuthDataStore() error {
-	var initErr error
+func InitializeAuthDataStore() (AuthDataStoreInterface, *diagnostics.Diagnostics) {
+	diag := diagnostics.New("initialize_auth_data_store")
 	cfg := config.GetInstance().Get()
 	authDataStoreOnce.Do(func() {
 		// Get the database service instance
 		dbService := database.GetInstance()
 		if dbService == nil {
-			initErr = fmt.Errorf("database service not initialized")
+			diag.AddError("database_service_not_initialized", "database service not initialized", "auth_data_store", nil)
 			return
 		}
 
@@ -63,7 +64,7 @@ func InitializeAuthDataStore() error {
 		if cfg.Get(config.DatabaseMigrateKey).GetBool() {
 			logging.Info("Running auth migrations")
 			if err := store.Migrate(); err != nil {
-				initErr = fmt.Errorf("failed to run auth migrations: %w", err)
+				diag.AddError("failed_to_run_auth_migrations", "failed to run auth migrations", "auth_data_store", nil)
 				return
 			}
 			logging.Info("Auth migrations completed")
@@ -72,7 +73,8 @@ func InitializeAuthDataStore() error {
 		authDataStoreInstance = store
 	})
 
-	return initErr
+	logging.Info("Auth store initialized successfully")
+	return authDataStoreInstance, diag
 }
 
 // Migrate implements the DataStore interface
@@ -165,7 +167,7 @@ func (s *AuthDataStore) ListAPIKeysByUserIDWithFilter(ctx *appctx.AppContext, us
 	filterObj.WithField("user_id", filters.FilterOperatorEqual, userID, filters.FilterJoinerAnd)
 
 	// Use the generic pagination helper
-	return utils.PaginatedQuery(s.GetDB(), "", filterObj, entities.APIKey{})
+	return utils.PaginatedFilteredQuery(s.GetDB(), "", filterObj, entities.APIKey{})
 }
 
 // UpdateAPIKeyLastUsed updates the last used timestamp for an API key

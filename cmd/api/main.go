@@ -14,6 +14,8 @@ import (
 	"github.com/cjlapao/locally-cli/internal/auth"
 	"github.com/cjlapao/locally-cli/internal/auth/handlers"
 	"github.com/cjlapao/locally-cli/internal/certificates"
+	"github.com/cjlapao/locally-cli/internal/claim"
+	claim_interfaces "github.com/cjlapao/locally-cli/internal/claim/interfaces"
 	"github.com/cjlapao/locally-cli/internal/config"
 	"github.com/cjlapao/locally-cli/internal/database"
 	"github.com/cjlapao/locally-cli/internal/database/seeds"
@@ -24,14 +26,75 @@ import (
 	"github.com/cjlapao/locally-cli/internal/environment"
 	"github.com/cjlapao/locally-cli/internal/events"
 	"github.com/cjlapao/locally-cli/internal/logging"
+	"github.com/cjlapao/locally-cli/internal/role"
+	rolesvc "github.com/cjlapao/locally-cli/internal/role/interfaces"
+	"github.com/cjlapao/locally-cli/internal/system"
+	system_interfaces "github.com/cjlapao/locally-cli/internal/system/interfaces"
 	"github.com/cjlapao/locally-cli/internal/tenant"
+	tenant_interfaces "github.com/cjlapao/locally-cli/internal/tenant/interfaces"
 	"github.com/cjlapao/locally-cli/internal/user"
+	user_interfaces "github.com/cjlapao/locally-cli/internal/user/interfaces"
 	"github.com/cjlapao/locally-cli/internal/validation"
 	"github.com/cjlapao/locally-cli/internal/vaults/configvault"
 	"github.com/cjlapao/locally-cli/internal/workers"
 	"github.com/cjlapao/locally-cli/pkg/diagnostics"
 	"github.com/cjlapao/locally-cli/pkg/interfaces"
 )
+
+// @title           Locally API
+// @version         1.0
+// @description     A comprehensive API for managing local development environments, contexts, and services.
+// @termsOfService  https://locally.cloud/terms
+
+// @contact.name   API Support
+// @contact.url    https://locally.cloud/support
+// @contact.email  support@locally.cloud
+
+// @license.name  Fair Source License
+// @license.url   https://locally.cloud/license
+
+// @host      localhost:8080
+// @BasePath  /v1
+
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Type "Bearer" followed by a space and JWT token.
+
+// @securityDefinitions.apikey ApiKeyAuth
+// @in header
+// @name X-API-Key
+// @description API key for authentication
+
+// @tag.name Authentication
+// @tag.description Authentication and authorization endpoints
+
+// @tag.name Users
+// @tag.description User management operations
+
+// @tag.name Tenants
+// @tag.description Tenant management operations
+
+// @tag.name Contexts
+// @tag.description Context and environment management
+
+// @tag.name Messages
+// @tag.description Message processing and worker management
+
+// @tag.name Certificates
+// @tag.description Certificate management operations
+
+// @tag.name Environment
+// @tag.description Environment variable management
+
+// @tag.name Events
+// @tag.description Event management and notifications
+
+// @tag.name Workers
+// @tag.description Worker and task management
+
+// @tag.name Health
+// @tag.description Health check and status endpoints
 
 var (
 	versionSvc = version.Get()
@@ -91,6 +154,18 @@ func setVersion(debug bool) {
 	}
 }
 
+func initializeSystemService() (system_interfaces.SystemServiceInterface, *diagnostics.Diagnostics) {
+	logging.Info("Initializing system service...")
+	diag := diagnostics.New("initialize_system_service")
+	systemService := system.Initialize()
+	if systemService == nil {
+		diag.AddError("system_service_not_initialized", "system service not initialized", "initialize_system_service", nil)
+		return nil, diag
+	}
+	logging.Info("System service initialized successfully")
+	return systemService, diag
+}
+
 // initializeDatabase initializes the database service
 func initializeDatabase(cfg *config.Config) error {
 	logging.Info("Initializing database service...")
@@ -137,71 +212,107 @@ func initializeDatabase(cfg *config.Config) error {
 }
 
 // initializeConfigurationStore initializes the configuration store
-func initializeConfigurationStore() (*stores.ConfigurationDataStore, *diagnostics.Diagnostics) {
+func initializeConfigurationStore() (stores.ConfigurationDataStoreInterface, *diagnostics.Diagnostics) {
 	diag := diagnostics.New("initialize_configuration_store")
 	logging.Info("Initializing configuration store...")
-	if initDiag := stores.InitializeConfigurationDataStore(); initDiag.HasErrors() {
+	configurationStore, initDiag := stores.InitializeConfigurationDataStore()
+	if initDiag.HasErrors() {
 		diag.Append(initDiag)
 		return nil, diag
 	}
 	logging.Info("Configuration store initialized successfully")
-	return stores.GetConfigurationDataStoreInstance(), diag
+	return configurationStore, diag
 }
 
 // initializeAuthStore initializes the auth store
-func initializeAuthStore() (stores.AuthDataStoreInterface, error) {
+func initializeAuthStore() (stores.AuthDataStoreInterface, *diagnostics.Diagnostics) {
 	logging.Info("Initializing auth store...")
-	if err := stores.InitializeAuthDataStore(); err != nil {
-		return nil, fmt.Errorf("failed to initialize auth store: %w", err)
+	diag := diagnostics.New("initialize_auth_store")
+	authStore, initDiag := stores.InitializeAuthDataStore()
+	if initDiag.HasErrors() {
+		diag.Append(initDiag)
+		return nil, diag
 	}
 	logging.Info("Auth store initialized successfully")
-	return stores.GetAuthDataStoreInstance(), nil
+	return authStore, diag
 }
 
 // initializeMessageStore initializes the message store
-func initializeMessageStore() (*stores.MessageDataStore, error) {
+func initializeMessageStore() (stores.MessageDataStoreInterface, *diagnostics.Diagnostics) {
 	logging.Info("Initializing message store...")
-	if err := stores.InitializeMessageDataStore(); err != nil {
-		return nil, fmt.Errorf("failed to initialize message store: %w", err)
+	diag := diagnostics.New("initialize_message_store")
+	messageStore, initDiag := stores.InitializeMessageDataStore()
+	if initDiag.HasErrors() {
+		diag.Append(initDiag)
+		return nil, diag
 	}
 	logging.Info("Message store initialized successfully")
-	return stores.GetMessageDataStoreInstance(), nil
+	return messageStore, diag
 }
 
 // initializeCertificatesStore initializes the certificates store
-func initializeCertificatesStore() (*stores.CertificatesDataStore, *diagnostics.Diagnostics) {
+func initializeCertificatesStore() (stores.CertificatesDataStoreInterface, *diagnostics.Diagnostics) {
 	logging.Info("Initializing certificates store...")
 	diag := diagnostics.New("initialize_certificates_store")
-	if initDiag := stores.InitializeCertificatesDataStore(); initDiag.HasErrors() {
+	certificatesStore, initDiag := stores.InitializeCertificatesDataStore()
+	if initDiag.HasErrors() {
 		diag.Append(initDiag)
 		return nil, diag
 	}
 	logging.Info("Certificates store initialized successfully")
-	return stores.GetCertificatesDataStoreInstance(), diag
+	return certificatesStore, diag
 }
 
 // initializeTenantStore initializes the tenant store
 func initializeTenantStore() (stores.TenantDataStoreInterface, *diagnostics.Diagnostics) {
 	logging.Info("Initializing tenant store...")
 	diag := diagnostics.New("initialize_tenant_store")
-	if initDiag := stores.InitializeTenantDataStore(); initDiag.HasErrors() {
+	tenantStore, initDiag := stores.InitializeTenantDataStore()
+	if initDiag.HasErrors() {
 		diag.Append(initDiag)
 		return nil, diag
 	}
 	logging.Info("Tenant store initialized successfully")
-	return stores.GetTenantDataStoreInstance(), diag
+	return tenantStore, diag
 }
 
 // initializeUserStore initializes the user store
 func initializeUserStore() (stores.UserDataStoreInterface, *diagnostics.Diagnostics) {
 	logging.Info("Initializing user store...")
 	diag := diagnostics.New("initialize_user_store")
-	if initDiag := stores.InitializeUserDataStore(); initDiag.HasErrors() {
+	userStore, initDiag := stores.InitializeUserDataStore()
+	if initDiag.HasErrors() {
 		diag.Append(initDiag)
 		return nil, diag
 	}
 	logging.Info("User store initialized successfully")
-	return stores.GetUserDataStoreInstance(), diag
+	return userStore, diag
+}
+
+// initializeRoleStore initializes the role store
+func initializeRoleStore() (stores.RoleDataStoreInterface, *diagnostics.Diagnostics) {
+	logging.Info("Initializing role store...")
+	diag := diagnostics.New("initialize_role_store")
+	roleStore, initDiag := stores.InitializeRoleDataStore()
+	if initDiag.HasErrors() {
+		diag.Append(initDiag)
+		return nil, diag
+	}
+	logging.Info("Role store initialized successfully")
+	return roleStore, diag
+}
+
+// initializeClaimStore initializes the claim store
+func initializeClaimStore() (stores.ClaimDataStoreInterface, *diagnostics.Diagnostics) {
+	logging.Info("Initializing claim store...")
+	diag := diagnostics.New("initialize_claim_store")
+	claimStore, initDiag := stores.InitializeClaimDataStore()
+	if initDiag.HasErrors() {
+		diag.Append(initDiag)
+		return nil, diag
+	}
+	logging.Info("Claim store initialized successfully")
+	return claimStore, diag
 }
 
 // initializeValidationService initializes the validation service
@@ -212,7 +323,7 @@ func initializeValidationService() {
 }
 
 // initializeMessageProcessorService initializes the message processor service
-func initializeMessageProcessorService(store *stores.MessageDataStore) (*workers.SystemWorkerMessageService, error) {
+func initializeMessageProcessorService(store stores.MessageDataStoreInterface) (*workers.SystemWorkerMessageService, error) {
 	logging.Info("Initializing system messages service...")
 	svc, err := workers.Initialize(store)
 	if err != nil {
@@ -251,7 +362,7 @@ func initializeAuthService(cfg *config.Config, authDataStore stores.AuthDataStor
 }
 
 // initializeCertificateService initializes the certificate service
-func initializeCertificateService(store *stores.CertificatesDataStore) *certificates.CertificateService {
+func initializeCertificateService(store stores.CertificatesDataStoreInterface) *certificates.CertificateService {
 	logging.Info("Initializing certificate service...")
 	certificateService := certificates.Initialize(store)
 	if certificateService == nil {
@@ -263,19 +374,35 @@ func initializeCertificateService(store *stores.CertificatesDataStore) *certific
 }
 
 // initializeTenantService initializes the tenant service
-func initializeTenantService(tenantStore stores.TenantDataStoreInterface) tenant.TenantServiceInterface {
+func initializeTenantService(tenantStore stores.TenantDataStoreInterface, userService user_interfaces.UserServiceInterface, roleService rolesvc.RoleServiceInterface, systemService system_interfaces.SystemServiceInterface, claimService claim_interfaces.ClaimServiceInterface) tenant_interfaces.TenantServiceInterface {
 	logging.Info("Initializing tenant service...")
-	tenantService := tenant.Initialize(tenantStore)
+	tenantService := tenant.Initialize(tenantStore, userService, roleService, systemService, claimService)
 	logging.Info("Tenant service initialized successfully")
 	return tenantService
 }
 
 // initializeUserService initializes the user service
-func initializeUserService(userStore stores.UserDataStoreInterface) user.UserServiceInterface {
+func initializeUserService(userStore stores.UserDataStoreInterface, roleService rolesvc.RoleServiceInterface, claimService claim_interfaces.ClaimServiceInterface, systemService system_interfaces.SystemServiceInterface) user_interfaces.UserServiceInterface {
 	logging.Info("Initializing user service...")
-	userService := user.Initialize(userStore)
+	userService := user.Initialize(userStore, roleService, claimService, systemService)
 	logging.Info("User service initialized successfully")
 	return userService
+}
+
+// initializeRoleService initializes the role service
+func initializeRoleService(roleStore stores.RoleDataStoreInterface, systemService system_interfaces.SystemServiceInterface, claimService claim_interfaces.ClaimServiceInterface) rolesvc.RoleServiceInterface {
+	logging.Info("Initializing role service...")
+	roleService := role.Initialize(roleStore, systemService, claimService)
+	logging.Info("Role service initialized successfully")
+	return roleService
+}
+
+// initializeClaimService initializes the claim service
+func initializeClaimService(claimStore stores.ClaimDataStoreInterface) claim_interfaces.ClaimServiceInterface {
+	logging.Info("Initializing claim service...")
+	claimService := claim.Initialize(claimStore)
+	logging.Info("Claim service initialized successfully")
+	return claimService
 }
 
 // initializeAPIServer initializes the API server
@@ -323,7 +450,7 @@ func initializeEnvironmentService(ctx *appctx.AppContext, vaults []interfaces.En
 	return environmentService
 }
 
-func seedDatabaseMigrations(ctx *appctx.AppContext, configSvc *config.ConfigService) *diagnostics.Diagnostics {
+func seedDatabaseMigrations(ctx *appctx.AppContext, configSvc *config.ConfigService, tenantService tenant_interfaces.TenantServiceInterface, userService user_interfaces.UserServiceInterface, systemService system_interfaces.SystemServiceInterface) *diagnostics.Diagnostics {
 	logging.Info("Seeding database migrations...")
 	diag := diagnostics.New("seed_database_migrations")
 
@@ -359,15 +486,15 @@ func seedDatabaseMigrations(ctx *appctx.AppContext, configSvc *config.ConfigServ
 	// Initializing the migration service
 	service := seeds.NewMigrationService(db.GetDB())
 	// migrations workers
-	defaultClaimsMigrationWorker := migrations.NewDefaultClaimsMigrationWorker(db.GetDB(), configSvc.Get())
-	defaultRolesMigrationWorker := migrations.NewDefaultRolesMigrationWorker(db.GetDB(), configSvc.Get())
-	defaultTenantMigrationWorker := migrations.NewDefaultTenantMigrationWorker(db.GetDB(), tenantStore)
-	defaultUsersMigrationWorker := migrations.NewDefaultUsersMigrationWorker(db.GetDB(), configSvc.Get(), userStore, tenantStore)
+	// defaultClaimsMigrationWorker := migrations.NewDefaultClaimsMigrationWorker(db.GetDB(), configSvc.Get())
+	// defaultRolesMigrationWorker := migrations.NewDefaultRolesMigrationWorker(db.GetDB(), configSvc.Get())
+	defaultTenantMigrationWorker := migrations.NewDefaultTenantMigrationWorker(db.GetDB(), tenantService)
+	defaultUsersMigrationWorker := migrations.NewDefaultUsersMigrationWorker(db.GetDB(), configSvc.Get(), systemService, userService)
 	rootCertificateMigrationWorker := migrations.NewRootCertificateMigrationWorker(db.GetDB(), certificateService)
 	intermediateCertificateMigrationWorker := migrations.NewIntermediateCertificateMigrationWorker(db.GetDB(), certificateService)
 
-	service.Register(defaultClaimsMigrationWorker)
-	service.Register(defaultRolesMigrationWorker)
+	// service.Register(defaultClaimsMigrationWorker)
+	// service.Register(defaultRolesMigrationWorker)
 	service.Register(defaultTenantMigrationWorker)
 	service.Register(defaultUsersMigrationWorker)
 	service.Register(rootCertificateMigrationWorker)
@@ -398,6 +525,16 @@ func run() error {
 	logging.Initialize()
 	logging.Info("Initializing services...")
 
+	// Initializing system service
+	systemService, systemServiceDiag := initializeSystemService()
+	if systemServiceDiag.HasErrors() {
+		return fmt.Errorf("failed to initialize system service: %s", systemServiceDiag.GetSummary())
+	}
+	// if debug is true, we will print the system service
+	if cfg.GetBool(config.DebugKey, false) {
+		systemService.LogSummary(ctx)
+	}
+
 	// Initializing encryption service
 	_, err = initializeEncryptionService(configSvc.Get())
 	if err != nil {
@@ -415,28 +552,39 @@ func run() error {
 		return fmt.Errorf("failed to initialize configuration store: %s", configStoreDiag.GetSummary())
 	}
 
-	authDataStore, err := initializeAuthStore()
-	if err != nil {
-		return err
+	authDataStore, authStoreDiag := initializeAuthStore()
+	if authStoreDiag.HasErrors() {
+		return fmt.Errorf("failed to initialize auth store: %s", authStoreDiag.GetSummary())
 	}
-	messageDataStore, err := initializeMessageStore()
-	if err != nil {
-		return err
+	messageDataStore, messageStoreDiag := initializeMessageStore()
+	if messageStoreDiag.HasErrors() {
+		return fmt.Errorf("failed to initialize message store: %s", messageStoreDiag.GetSummary())
 	}
-
 	certificatesStore, certificatesStoreDiag := initializeCertificatesStore()
 	if certificatesStoreDiag.HasErrors() {
-		return err
+		return fmt.Errorf("failed to initialize certificates store: %s", certificatesStoreDiag.GetSummary())
 	}
 
 	tenantStore, tenantStoreDiag := initializeTenantStore()
 	if tenantStoreDiag.HasErrors() {
-		return err
+		return fmt.Errorf("failed to initialize tenant store: %s", tenantStoreDiag.GetSummary())
 	}
 
 	userStore, userStoreDiag := initializeUserStore()
 	if userStoreDiag.HasErrors() {
-		return err
+		return fmt.Errorf("failed to initialize user store: %s", userStoreDiag.GetSummary())
+	}
+
+	// Initialize role store
+	roleStore, roleStoreDiag := initializeRoleStore()
+	if roleStoreDiag.HasErrors() {
+		return fmt.Errorf("failed to initialize role store: %s", roleStoreDiag.GetSummary())
+	}
+
+	// Initialize claim store
+	claimStore, claimStoreDiag := initializeClaimStore()
+	if claimStoreDiag.HasErrors() {
+		return fmt.Errorf("failed to initialize claim store: %s", claimStoreDiag.GetSummary())
 	}
 
 	// initialize environment service
@@ -467,10 +615,16 @@ func run() error {
 		logging.Errorf("Error initializing auth service: %v", authServiceDiag.GetSummary())
 		panic(authServiceDiag.GetSummary())
 	}
-	// initialize tenant service
-	tenantService := initializeTenantService(tenantStore)
+
+	// initialize claim service
+	claimService := initializeClaimService(claimStore)
+	// initialize role service
+	roleService := initializeRoleService(roleStore, systemService, claimService)
 	// initialize user service
-	userService := initializeUserService(userStore)
+	userService := initializeUserService(userStore, roleService, claimService, systemService)
+	// initialize tenant service
+	tenantService := initializeTenantService(tenantStore, userService, roleService, systemService, claimService)
+
 	// initialize API server
 	apiServer, err := initializeAPIServer(configSvc.Get(), authService)
 	if err != nil {
@@ -495,6 +649,10 @@ func run() error {
 	apiServer.RegisterRoutes(tenant.NewApiHandler(tenantService))
 	// Register user routes
 	apiServer.RegisterRoutes(user.NewApiHandler(userService))
+	// Register role routes
+	apiServer.RegisterRoutes(role.NewApiHandler(roleService))
+	// Register claim routes
+	apiServer.RegisterRoutes(claim.NewApiHandler(claimService))
 	logging.Info("Starting event service...")
 	if err := startEventService(ctx, eventService); err != nil {
 		return err
@@ -507,7 +665,7 @@ func run() error {
 	messageService.Start(ctx)
 
 	// Seeding database migrations
-	seedDiag := seedDatabaseMigrations(ctx, configSvc)
+	seedDiag := seedDatabaseMigrations(ctx, configSvc, tenantService, userService, systemService)
 	if seedDiag.HasErrors() {
 		panic(seedDiag.GetSummary())
 	}
