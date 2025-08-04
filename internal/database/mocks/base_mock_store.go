@@ -76,8 +76,8 @@ func (m *BaseMockStore) UpdateTenant(ctx *appctx.AppContext, tenant *entities.Te
 	return args.Error(0)
 }
 
-func (m *BaseMockStore) DeleteTenant(ctx *appctx.AppContext, tenant *entities.Tenant) error {
-	args := m.Called(ctx, tenant)
+func (m *BaseMockStore) DeleteTenant(ctx *appctx.AppContext, id string) error {
+	args := m.Called(ctx, id)
 	return args.Error(0)
 }
 

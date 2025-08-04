@@ -136,17 +136,23 @@ func (s *AuthService) GenerateToken(ctx *appctx.AppContext, user *models.User, t
 		APIKeyID:  apiKeyID,
 	}
 
+	highestSecurityLevel := models.SecurityLevelGuest
+	for _, role := range user.Roles {
+		if role.SecurityLevel.IsHigherThan(highestSecurityLevel) {
+			highestSecurityLevel = role.SecurityLevel
+		}
+	}
+
 	tokenClaims := jwt.MapClaims{
-		"username":  claims.Username,
-		"user_id":   claims.UserID,
-		"exp":       claims.ExpiresAt,
-		"iat":       claims.IssuedAt,
-		"iss":       claims.Issuer,
-		"roles":     claims.Roles,
-		"tenant_id": claims.TenantID,
-		"auth_type": claims.AuthType,
-		"is_admin":  isAdminUser(user.Roles),
-		"is_su":     isSuperUser(user.Roles),
+		"username":       claims.Username,
+		"user_id":        claims.UserID,
+		"exp":            claims.ExpiresAt,
+		"iat":            claims.IssuedAt,
+		"iss":            claims.Issuer,
+		"roles":          claims.Roles,
+		"tenant_id":      claims.TenantID,
+		"auth_type":      claims.AuthType,
+		"security_level": highestSecurityLevel,
 	}
 	if authType == "api_key" {
 		tokenClaims["api_key_id"] = claims.APIKeyID
@@ -204,7 +210,7 @@ func (s *AuthService) AuthenticateWithPassword(ctx *appctx.AppContext, creds Aut
 		creds.TenantID = strings.TrimSpace(creds.TenantID)
 	}
 	if strings.EqualFold(creds.TenantID, config.GlobalTenantID) {
-		tenant, err := s.TenantStore.GetTenantBySlug(ctx, creds.TenantID)
+		tenant, err := s.TenantStore.GetTenantByIdOrSlug(ctx, creds.TenantID)
 		if err != nil {
 			diag.AddError("authenticate_with_password", "failed to get tenant", err.Error())
 			return nil, diag
@@ -478,18 +484,7 @@ func (s *AuthService) ValidateToken(tokenString string) (*AuthClaims, error) {
 				apiKeyID = apiKeyIDStr
 			}
 		}
-		isSuperUser := false
-		if isSuperUserClaim, exists := claims["is_su"]; exists {
-			if isSuperUserBool, ok := isSuperUserClaim.(bool); ok {
-				isSuperUser = isSuperUserBool
-			}
-		}
-		isAdmin := false
-		if isAdminClaim, exists := claims["is_admin"]; exists {
-			if isAdminBool, ok := isAdminClaim.(bool); ok {
-				isAdmin = isAdminBool
-			}
-		}
+
 		roles := []string{}
 		if rolesClaim, exists := claims["roles"]; exists {
 			if rolesSlice, ok := rolesClaim.([]interface{}); ok {
@@ -502,17 +497,16 @@ func (s *AuthService) ValidateToken(tokenString string) (*AuthClaims, error) {
 		}
 
 		return &AuthClaims{
-			Username:    claims["username"].(string),
-			UserID:      claims["user_id"].(string),
-			ExpiresAt:   int64(claims["exp"].(float64)),
-			IssuedAt:    int64(claims["iat"].(float64)),
-			Issuer:      claims["iss"].(string),
-			Roles:       roles,
-			TenantID:    claims["tenant_id"].(string),
-			AuthType:    authType,
-			APIKeyID:    apiKeyID,
-			IsSuperUser: isSuperUser,
-			IsAdmin:     isAdmin,
+			Username:      claims["username"].(string),
+			UserID:        claims["user_id"].(string),
+			ExpiresAt:     int64(claims["exp"].(float64)),
+			IssuedAt:      int64(claims["iat"].(float64)),
+			Issuer:        claims["iss"].(string),
+			Roles:         roles,
+			TenantID:      claims["tenant_id"].(string),
+			AuthType:      authType,
+			APIKeyID:      apiKeyID,
+			SecurityLevel: models.SecurityLevel(claims["security_level"].(string)),
 		}, nil
 	}
 
@@ -563,7 +557,7 @@ func (s *AuthService) RefreshToken(ctx *appctx.AppContext, refreshTokenString st
 
 func isSuperUser(roles []models.Role) bool {
 	for _, role := range roles {
-		if role.IsSuperUser {
+		if role.SecurityLevel == models.SecurityLevelSuperUser {
 			return true
 		}
 	}
@@ -572,7 +566,7 @@ func isSuperUser(roles []models.Role) bool {
 
 func isAdminUser(roles []models.Role) bool {
 	for _, role := range roles {
-		if role.IsAdmin {
+		if role.SecurityLevel == models.SecurityLevelAdmin {
 			return true
 		}
 	}

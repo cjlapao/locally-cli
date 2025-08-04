@@ -17,11 +17,14 @@ func MapTenantToDto(tenant *entities.Tenant) *models.Tenant {
 		Status:        tenant.Status,
 		ActivatedAt:   tenant.ActivatedAt,
 		DeactivatedAt: tenant.DeactivatedAt,
-		Metadata:      tenant.Metadata,
 		LogoURL:       tenant.LogoURL,
 		Require2FA:    tenant.Require2FA,
 		CreatedAt:     tenant.CreatedAt,
 		UpdatedAt:     tenant.UpdatedAt,
+	}
+
+	if tenant.Metadata.Get() != nil {
+		result.Metadata = tenant.Metadata.Get()
 	}
 
 	return result

@@ -24,7 +24,7 @@ func DefaultConfig() *Config {
 			{Key: SeedDemoDataKey, Value: "false", EnvName: SeedDemoDataEnvKey, FlagName: FlagSeedDemoData},
 
 			// Pagination Default Values
-			{Key: PaginationDefaultPageSizeKey, Value: "20", EnvName: PaginationDefaultPageSizeEnvKey, FlagName: FlagPaginationDefaultPageSize},
+			{Key: PaginationDefaultPageSizeKey, Value: DefaultPageSize, EnvName: PaginationDefaultPageSizeEnvKey, FlagName: FlagPaginationDefaultPageSize},
 
 			// Security Default Values
 			{Key: SecurityPasswordMinLengthKey, Value: "8", EnvName: SecurityPasswordMinLengthEnvKey, FlagName: FlagSecurityPasswordMinLength},

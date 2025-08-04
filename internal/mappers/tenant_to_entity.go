@@ -2,6 +2,7 @@ package mappers
 
 import (
 	"github.com/cjlapao/locally-cli/internal/database/entities"
+	"github.com/cjlapao/locally-cli/internal/database/types"
 	"github.com/cjlapao/locally-cli/pkg/models"
 )
 
@@ -13,11 +14,16 @@ func MapTenantToEntity(tenant *models.Tenant) *entities.Tenant {
 		OwnerID:       tenant.OwnerID,
 		ContactEmail:  tenant.ContactEmail,
 		Status:        tenant.Status,
-		Metadata:      tenant.Metadata,
 		LogoURL:       tenant.LogoURL,
 		Require2FA:    tenant.Require2FA,
 		ActivatedAt:   tenant.ActivatedAt,
 		DeactivatedAt: tenant.DeactivatedAt,
+	}
+
+	if tenant.Metadata != nil {
+		obj := types.JSONObject[map[string]interface{}]{}
+		obj.Set(tenant.Metadata)
+		result.Metadata = obj
 	}
 
 	result.ID = tenant.ID

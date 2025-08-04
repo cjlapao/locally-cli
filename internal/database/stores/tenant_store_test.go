@@ -190,7 +190,7 @@ func TestTenantDataStoreWithSQLite(t *testing.T) {
 		require.NoError(t, err)
 
 		// Delete the tenant
-		err = store.DeleteTenant(ctx, createdTenant)
+		err = store.DeleteTenant(ctx, createdTenant.ID)
 		assert.NoError(t, err)
 
 		// Verify it's deleted
@@ -257,7 +257,7 @@ func TestTenantDataStoreBasicOperations(t *testing.T) {
 		assert.Equal(t, "Updated Basic Tenant", updatedTenant.Name)
 
 		// Delete
-		err = store.DeleteTenant(ctx, createdTenant)
+		err = store.DeleteTenant(ctx, createdTenant.ID)
 		assert.NoError(t, err)
 
 		// Verify deletion

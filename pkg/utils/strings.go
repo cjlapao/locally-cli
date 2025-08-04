@@ -61,3 +61,12 @@ func ObjectToJson[T any](input T) (string, error) {
 	}
 	return string(json), nil
 }
+
+func GetSlug(input string) string {
+	slug := Slugify(input)
+	return strings.ReplaceAll(slug, "-", "::")
+}
+
+func CompareStringIgnoreCase(a, b string) bool {
+	return strings.EqualFold(a, b)
+}

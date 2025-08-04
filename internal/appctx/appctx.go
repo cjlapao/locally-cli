@@ -268,11 +268,25 @@ func (c *AppContext) Log() *logrus.Entry {
 		})
 	}
 
+	tenantID := c.GetTenantID()
+	userID := c.GetUserID()
+	requestID := c.GetRequestID()
+
 	fields := logrus.Fields{
-		"request_id": c.GetRequestID(),
-		"user_id":    c.GetUserID(),
-		"tenant_id":  c.GetTenantID(),
-		"duration":   c.GetDuration().String(),
+		"duration": c.GetDuration().String(),
+	}
+
+	// Add tenant, user and request ID fields if they are not empty
+	if tenantID != "" {
+		fields["tenant_id"] = tenantID
+	}
+
+	if userID != "" {
+		fields["user_id"] = userID
+	}
+
+	if requestID != "" {
+		fields["request_id"] = requestID
 	}
 
 	// Add metadata fields

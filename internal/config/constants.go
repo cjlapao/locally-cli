@@ -1,7 +1,7 @@
 package config
 
 const (
-	GlobalTenantID              = "global-tenant"
+	GlobalTenantID              = "00000000-0000-0000-0000-000000000000"
 	GlobalTenantName            = "Global Tenant"
 	SuperUserRole               = "su"
 	RootCertificateSlug         = "locally-root"
@@ -9,6 +9,15 @@ const (
 	ApiKeyPrefix                = "sk-locally-"
 	PasswordAllowedSpecialChars = "!@#$%.?"
 	SystemStoragePath           = ".locally"
+	DefaultPageSizeInt          = 20
+	DefaultPageSize             = "20"
+	// UUIDs
+	RoleSuperUserID   = "11111111-1111-1111-1111-111111111111"
+	RoleAdminUserID   = "22222222-2222-2222-2222-222222222222"
+	RoleManagerUserID = "33333333-3333-3333-3333-333333333333"
+	RoleUserID        = "44444444-4444-4444-4444-444444444444"
+	RoleGuestUserID   = "55555555-5555-5555-5555-555555555555"
+	RoleNoneUserID    = "66666666-6666-6666-6666-666666666666"
 )
 
 const (

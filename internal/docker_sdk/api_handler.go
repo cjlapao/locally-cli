@@ -8,6 +8,7 @@ import (
 	"github.com/cjlapao/locally-cli/internal/api"
 	"github.com/cjlapao/locally-cli/internal/appctx"
 	"github.com/cjlapao/locally-cli/internal/validation"
+	"github.com/cjlapao/locally-cli/pkg/models"
 	"github.com/cjlapao/locally-cli/pkg/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/go-connections/nat"
@@ -25,39 +26,39 @@ func NewApiHandler(service *DockerService) *APIHandler {
 func (h *APIHandler) Routes() []api.Route {
 	return []api.Route{
 		{
-			Method:       http.MethodGet,
-			Path:         "/v1/docker/containers",
-			Handler:      h.GetAllContainers,
-			Description:  "Get all containers",
-			AuthRequired: true,
+			Method:        http.MethodGet,
+			Path:          "/v1/docker/containers",
+			Handler:       h.GetAllContainers,
+			Description:   "Get all containers",
+			SecurityLevel: models.ApiKeySecurityLevelAny,
 		},
 		{
-			Method:       http.MethodPost,
-			Path:         "/v1/docker/containers",
-			Handler:      h.CreateContainer,
-			Description:  "Create a new container",
-			AuthRequired: true,
+			Method:        http.MethodPost,
+			Path:          "/v1/docker/containers",
+			Handler:       h.CreateContainer,
+			Description:   "Create a new container",
+			SecurityLevel: models.ApiKeySecurityLevelAny,
 		},
 		{
-			Method:       http.MethodPut,
-			Path:         "/v1/docker/containers/{id}/start",
-			Handler:      h.StartContainer,
-			Description:  "Start a container",
-			AuthRequired: true,
+			Method:        http.MethodPut,
+			Path:          "/v1/docker/containers/{id}/start",
+			Handler:       h.StartContainer,
+			Description:   "Start a container",
+			SecurityLevel: models.ApiKeySecurityLevelAny,
 		},
 		{
-			Method:       http.MethodPut,
-			Path:         "/v1/docker/containers/{id}/stop",
-			Handler:      h.StopContainer,
-			Description:  "Stop a container",
-			AuthRequired: true,
+			Method:        http.MethodPut,
+			Path:          "/v1/docker/containers/{id}/stop",
+			Handler:       h.StopContainer,
+			Description:   "Stop a container",
+			SecurityLevel: models.ApiKeySecurityLevelAny,
 		},
 		{
-			Method:       http.MethodDelete,
-			Path:         "/v1/docker/containers/{id}",
-			Handler:      h.RemoveContainer,
-			Description:  "Remove a container",
-			AuthRequired: true,
+			Method:        http.MethodDelete,
+			Path:          "/v1/docker/containers/{id}",
+			Handler:       h.RemoveContainer,
+			Description:   "Remove a container",
+			SecurityLevel: models.ApiKeySecurityLevelAny,
 		},
 	}
 }

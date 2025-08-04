@@ -10,14 +10,15 @@ import (
 	"github.com/cjlapao/locally-cli/internal/database/stores"
 	"github.com/cjlapao/locally-cli/internal/errors"
 	"github.com/cjlapao/locally-cli/internal/mappers"
+	"github.com/cjlapao/locally-cli/pkg/models"
 )
 
 type ApiHandlers struct {
 	certificateService *CertificateService
-	store              *stores.CertificatesDataStore
+	store              stores.CertificatesDataStoreInterface
 }
 
-func NewApiHandlers(certificateService *CertificateService, store *stores.CertificatesDataStore) *ApiHandlers {
+func NewApiHandlers(certificateService *CertificateService, store stores.CertificatesDataStoreInterface) *ApiHandlers {
 	return &ApiHandlers{
 		certificateService: certificateService,
 		store:              store,
@@ -27,42 +28,39 @@ func NewApiHandlers(certificateService *CertificateService, store *stores.Certif
 func (h *ApiHandlers) Routes() []api.Route {
 	return []api.Route{
 		{
-			Method:       http.MethodGet,
-			Path:         "/v1/certificates/root",
-			Handler:      h.HandleGetRootCertificate,
-			Description:  "Get the root certificate",
-			AuthRequired: true,
+			Method:        http.MethodGet,
+			Path:          "/v1/certificates/root",
+			Handler:       h.HandleGetRootCertificate,
+			Description:   "Get the root certificate",
+			SecurityLevel: models.ApiKeySecurityLevelAny,
 		},
 		{
-			Method:            http.MethodPost,
-			Path:              "/v1/certificates/root",
-			Handler:           h.HandleCreateRootCertificate,
-			Description:       "Create a new root certificate",
-			AuthRequired:      true,
-			SuperUserRequired: true,
+			Method:        http.MethodPost,
+			Path:          "/v1/certificates/root",
+			Handler:       h.HandleCreateRootCertificate,
+			Description:   "Create a new root certificate",
+			SecurityLevel: models.ApiKeySecurityLevelSuperUser,
 		},
 		{
-			Method:            http.MethodDelete,
-			Path:              "/v1/certificates/root",
-			Handler:           h.HandleDeleteRootCertificate,
-			Description:       "Delete a root certificate",
-			AuthRequired:      true,
-			SuperUserRequired: true,
+			Method:        http.MethodDelete,
+			Path:          "/v1/certificates/root",
+			Handler:       h.HandleDeleteRootCertificate,
+			Description:   "Delete a root certificate",
+			SecurityLevel: models.ApiKeySecurityLevelSuperUser,
 		},
 		{
-			Method:       http.MethodGet,
-			Path:         "/v1/certificates/ca",
-			Handler:      h.HandleGetIntermediateCertificate,
-			Description:  "Get the intermediate certificate",
-			AuthRequired: true,
+			Method:        http.MethodGet,
+			Path:          "/v1/certificates/ca",
+			Handler:       h.HandleGetIntermediateCertificate,
+			Description:   "Get the intermediate certificate",
+			SecurityLevel: models.ApiKeySecurityLevelAny,
 		},
 		{
-			Method:            http.MethodPost,
-			Path:              "/v1/certificates/ca",
-			Handler:           h.HandleCreateIntermediateCertificate,
-			Description:       "Create a new intermediate certificate",
-			AuthRequired:      true,
-			SuperUserRequired: true,
+			Method:        http.MethodPost,
+			Path:          "/v1/certificates/ca",
+			Handler:       h.HandleCreateIntermediateCertificate,
+			Description:   "Create a new intermediate certificate",
+			SecurityLevel: models.ApiKeySecurityLevelSuperUser,
 		},
 	}
 }

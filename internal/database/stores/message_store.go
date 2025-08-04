@@ -10,6 +10,7 @@ import (
 	"github.com/cjlapao/locally-cli/internal/database"
 	"github.com/cjlapao/locally-cli/internal/database/entities"
 	"github.com/cjlapao/locally-cli/internal/logging"
+	"github.com/cjlapao/locally-cli/pkg/diagnostics"
 	"github.com/google/uuid"
 )
 
@@ -18,22 +19,48 @@ var (
 	messageDataStoreOnce     sync.Once
 )
 
+type MessageDataStoreInterface interface {
+	CreateMessage(ctx context.Context, message *entities.Message) error
+	GetPendingMessages(ctx context.Context, limit int) ([]*entities.Message, error)
+	GetScheduledMessages(ctx context.Context) ([]*entities.Message, error)
+	UpdateMessageStatus(ctx context.Context, messageID string, status entities.MessageStatus, errorMsg string) error
+	MarkMessageProcessing(ctx context.Context, messageID string) error
+	CompleteMessage(ctx context.Context, messageID string) error
+	FailMessage(ctx context.Context, messageID string, errorMsg string) error
+	DeleteMessage(ctx context.Context, messageID string) error
+	GetMessageStats(ctx context.Context) (*entities.MessageStats, error)
+	RecoverOrphanedMessages(ctx context.Context, maxProcessingAge time.Duration) (int, error)
+	GetStuckRetryingMessages(ctx context.Context, maxRetryAge time.Duration) ([]*entities.Message, error)
+	ResetStuckRetryingMessages(ctx context.Context, maxRetryAge time.Duration) (int, error)
+	CleanupOldMessages(ctx context.Context, maxAge time.Duration) (int, error)
+	CleanupOldAbandonedMessages(ctx context.Context, maxAge time.Duration) (int, error)
+	CleanupOldEvents(ctx context.Context, maxAge time.Duration) (int, error)
+	CreateMessageEvent(ctx context.Context, event *entities.MessageEvent) error
+	CreateWorker(ctx context.Context, worker *entities.Worker) error
+	DeleteWorker(ctx context.Context, workerName string) error
+	GetWorkerByName(ctx context.Context, workerName string) (*entities.Worker, error)
+	GetAllWorkers(ctx context.Context) ([]*entities.Worker, error)
+	UpdateWorkerStatus(ctx context.Context, workerName string, isRunning bool) error
+	PerformStartupRecovery(ctx context.Context) error
+}
+
 type MessageDataStore struct {
 	database.BaseDataStore
 }
 
 // GetMessageDataStoreInstance returns the singleton instance of the message store
-func GetMessageDataStoreInstance() *MessageDataStore {
+func GetMessageDataStoreInstance() MessageDataStoreInterface {
 	return messageDataStoreInstance
 }
 
-func InitializeMessageDataStore() error {
-	var initErr error
+func InitializeMessageDataStore() (MessageDataStoreInterface, *diagnostics.Diagnostics) {
+	diag := diagnostics.New("initialize_message_data_store")
+	logging.Info("Initializing message store...")
 	cfg := config.GetInstance().Get()
 	messageDataStoreOnce.Do(func() {
 		dbService := database.GetInstance()
 		if dbService == nil {
-			initErr = fmt.Errorf("database service not initialized")
+			diag.AddError("database_service_not_initialized", "database service not initialized", "message_data_store", nil)
 			return
 		}
 
@@ -44,7 +71,7 @@ func InitializeMessageDataStore() error {
 		if cfg.Get(config.DatabaseMigrateKey).GetBool() {
 			logging.Info("Running message migrations")
 			if err := store.Migrate(); err != nil {
-				initErr = fmt.Errorf("failed to run message migrations: %w", err)
+				diag.AddError("failed_to_run_message_migrations", "failed to run message migrations", "message_data_store", nil)
 				return
 			}
 			logging.Info("Message migrations completed")
@@ -53,7 +80,8 @@ func InitializeMessageDataStore() error {
 		messageDataStoreInstance = store
 	})
 
-	return initErr
+	logging.Info("Message store initialized successfully")
+	return messageDataStoreInstance, diag
 }
 
 // Migrate implements the DataStore interface

@@ -2,29 +2,27 @@ package migrations
 
 import (
 	"errors"
-	"fmt"
-	"time"
 
 	"github.com/cjlapao/locally-cli/internal/appctx"
 	"github.com/cjlapao/locally-cli/internal/config"
 	"github.com/cjlapao/locally-cli/internal/database/entities"
-	"github.com/cjlapao/locally-cli/internal/database/stores"
+	tenant_interfaces "github.com/cjlapao/locally-cli/internal/tenant/interfaces"
+	tenant_models "github.com/cjlapao/locally-cli/internal/tenant/models"
 	"github.com/cjlapao/locally-cli/pkg/diagnostics"
-	"github.com/cjlapao/locally-cli/pkg/utils"
 	"gorm.io/gorm"
 )
 
-// RootCertificateMigrationWorker demonstrates how to create a seed worker
+// DefaultTenantMigrationWorker demonstrates how to create a seed worker
 type DefaultTenantMigrationWorker struct {
-	db          *gorm.DB
-	tenantStore stores.TenantDataStoreInterface
+	db            *gorm.DB
+	tenantService tenant_interfaces.TenantServiceInterface
 }
 
 // NewDefaultTenantMigrationWorker creates a new example seed worker
-func NewDefaultTenantMigrationWorker(db *gorm.DB, tenantStore stores.TenantDataStoreInterface) *DefaultTenantMigrationWorker {
+func NewDefaultTenantMigrationWorker(db *gorm.DB, tenantService tenant_interfaces.TenantServiceInterface) *DefaultTenantMigrationWorker {
 	return &DefaultTenantMigrationWorker{
-		db:          db,
-		tenantStore: tenantStore,
+		db:            db,
+		tenantService: tenantService,
 	}
 }
 
@@ -48,11 +46,8 @@ func (e *DefaultTenantMigrationWorker) Up(ctx *appctx.AppContext) *diagnostics.D
 	diag := diagnostics.New("default_tenant_migration_up")
 
 	var existingTenant entities.Tenant
-	needToCreate := false
-	if _, dbErr := e.tenantStore.GetTenantBySlug(ctx, utils.Slugify(config.GlobalTenantName)); dbErr != nil {
-		if errors.Is(dbErr, gorm.ErrRecordNotFound) {
-			needToCreate = true
-		} else {
+	if err := e.db.Where("id = ?", config.GlobalTenantID).First(&existingTenant).Error; err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			diag.AddError("failed_to_get_global_tenant", "failed to get global tenant", "default_tenant_migration", nil)
 			return diag
 		}
@@ -63,30 +58,25 @@ func (e *DefaultTenantMigrationWorker) Up(ctx *appctx.AppContext) *diagnostics.D
 		return diag
 	}
 
-	if needToCreate {
-		now := time.Now()
-		globalTenant := entities.Tenant{
-			Name:         config.GlobalTenantName,
-			Status:       "active",
-			Description:  "This is the global tenant that is created by default",
-			Domain:       "locally.internal",
-			ContactEmail: "root@locally.internal",
-			ActivatedAt:  &now,
-			Require2FA:   false,
-		}
-
-		createdTenant, dbErr := e.tenantStore.CreateTenant(ctx, &globalTenant)
-		if dbErr != nil {
-			diag.AddError("failed_to_create_global_tenant", fmt.Sprintf("failed to create global tenant: %v", dbErr), "default_tenant_migration", map[string]interface{}{
-				"error": dbErr.Error(),
-			})
-			return diag
-		}
-
-		diag.AddPathEntry("global_tenant_created", "default_tenant_migration", map[string]interface{}{
-			"global_tenant_id": createdTenant.ID,
-		})
+	createdTenant, dbErr := e.tenantService.CreateTenant(ctx, &tenant_models.TenantCreateRequest{
+		ID:              config.GlobalTenantID,
+		Name:            config.GlobalTenantName,
+		Description:     "This is the global tenant that is created by default",
+		Domain:          "locally.internal",
+		ContactEmail:    "root@locally.internal",
+		CreateAdminUser: false,
+		Metadata: map[string]interface{}{
+			"created_by": "default_tenant_migration",
+		},
+	})
+	if dbErr.HasErrors() {
+		diag.Append(dbErr)
+		return diag
 	}
+
+	diag.AddPathEntry("global_tenant_created", "default_tenant_migration", map[string]interface{}{
+		"global_tenant_id": createdTenant.ID,
+	})
 
 	return diag
 }
@@ -96,14 +86,9 @@ func (e *DefaultTenantMigrationWorker) Down(ctx *appctx.AppContext) *diagnostics
 	diag := diagnostics.New("default_tenant_migration_down")
 	defer diag.Complete()
 
-	existingTenant, dbErr := e.tenantStore.GetTenantBySlug(ctx, config.GlobalTenantID)
-	if dbErr != nil {
-		if errors.Is(dbErr, gorm.ErrRecordNotFound) {
-			return diag
-		}
-		diag.AddError("failed_to_get_global_tenant", "failed to get global tenant", "default_tenant_migration", map[string]interface{}{
-			"error": dbErr.Error(),
-		})
+	existingTenant, dbErr := e.tenantService.GetTenantByIDOrSlug(ctx, config.GlobalTenantID)
+	if dbErr.HasErrors() {
+		diag.Append(dbErr)
 		return diag
 	}
 
@@ -112,7 +97,7 @@ func (e *DefaultTenantMigrationWorker) Down(ctx *appctx.AppContext) *diagnostics
 		return diag
 	}
 
-	if dbErr := e.tenantStore.DeleteTenant(ctx, existingTenant); dbErr != nil {
+	if dbErr := e.tenantService.DeleteTenant(ctx, existingTenant.ID); dbErr.HasErrors() {
 		diag.AddError("failed_to_delete_global_tenant", "failed to delete global tenant", "default_tenant_migration", nil)
 		return diag
 	}

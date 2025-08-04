@@ -24,14 +24,12 @@ var (
 )
 
 type TenantDataStoreInterface interface {
-	GetTenantBySlug(ctx *appctx.AppContext, slug string) (*entities.Tenant, error)
-	GetTenantByID(ctx *appctx.AppContext, id string) (*entities.Tenant, error)
 	GetTenantByIdOrSlug(ctx *appctx.AppContext, idOrSlug string) (*entities.Tenant, error)
 	GetTenants(ctx *appctx.AppContext) ([]entities.Tenant, error)
 	GetTenantsByFilter(ctx *appctx.AppContext, filterObj *filters.Filter) (*filters.FilterResponse[entities.Tenant], error)
 	CreateTenant(ctx *appctx.AppContext, tenant *entities.Tenant) (*entities.Tenant, error)
 	UpdateTenant(ctx *appctx.AppContext, tenant *entities.Tenant) error
-	DeleteTenant(ctx *appctx.AppContext, tenant *entities.Tenant) error
+	DeleteTenant(ctx *appctx.AppContext, id string) error
 	Migrate() *diagnostics.Diagnostics
 }
 
@@ -43,7 +41,7 @@ func GetTenantDataStoreInstance() TenantDataStoreInterface {
 	return tenantDataStoreInstance
 }
 
-func InitializeTenantDataStore() *diagnostics.Diagnostics {
+func InitializeTenantDataStore() (TenantDataStoreInterface, *diagnostics.Diagnostics) {
 	diag := diagnostics.New("initialize_tenant_data_store")
 	cfg := config.GetInstance().Get()
 	logging.Info("Initializing tenant store...")
@@ -72,7 +70,7 @@ func InitializeTenantDataStore() *diagnostics.Diagnostics {
 	})
 
 	logging.Info("Tenant store initialized successfully")
-	return diag
+	return tenantDataStoreInstance, diag
 }
 
 func (s *TenantDataStore) Migrate() *diagnostics.Diagnostics {
@@ -93,9 +91,12 @@ func (s *TenantDataStore) GetTenantBySlug(ctx *appctx.AppContext, slug string) (
 	return &tenant, nil
 }
 
-func (s *TenantDataStore) GetTenantByID(ctx *appctx.AppContext, id string) (*entities.Tenant, error) {
+func (s *TenantDataStore) GetTenantByID(ctx *appctx.AppContext, idOrSlug string) (*entities.Tenant, error) {
 	var tenant entities.Tenant
-	if err := s.GetDB().Where("id = ?", id).First(&tenant).Error; err != nil {
+	if err := s.GetDB().Where("id = ? OR slug = ?", idOrSlug, idOrSlug).First(&tenant).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, gorm.ErrRecordNotFound
+		}
 		return nil, err
 	}
 	return &tenant, nil
@@ -118,11 +119,13 @@ func (s *TenantDataStore) GetTenants(ctx *appctx.AppContext) ([]entities.Tenant,
 }
 
 func (s *TenantDataStore) GetTenantsByFilter(ctx *appctx.AppContext, filterObj *filters.Filter) (*filters.FilterResponse[entities.Tenant], error) {
-	return utils.PaginatedQuery(s.GetDB(), "", filterObj, entities.Tenant{})
+	return utils.PaginatedFilteredQuery(s.GetDB(), "", filterObj, entities.Tenant{})
 }
 
 func (s *TenantDataStore) CreateTenant(ctx *appctx.AppContext, tenant *entities.Tenant) (*entities.Tenant, error) {
-	tenant.ID = uuid.New().String()
+	if tenant.ID == "" {
+		tenant.ID = uuid.New().String()
+	}
 	tenant.Slug = pkg_utils.Slugify(tenant.Name)
 	tenant.CreatedAt = time.Now()
 	tenant.UpdatedAt = time.Now()
@@ -150,8 +153,20 @@ func (s *TenantDataStore) UpdateTenant(ctx *appctx.AppContext, tenant *entities.
 	return nil
 }
 
-func (s *TenantDataStore) DeleteTenant(ctx *appctx.AppContext, tenant *entities.Tenant) error {
-	if err := s.GetDB().Delete(tenant).Error; err != nil {
+func (s *TenantDataStore) DeleteTenant(ctx *appctx.AppContext, id string) error {
+	// deleting all claims for the tenant
+	if err := s.GetDB().Delete(&entities.Claim{}, "tenant_id = ?", id).Error; err != nil {
+		return err
+	}
+	// deleting all roles for the tenant
+	if err := s.GetDB().Delete(&entities.Role{}, "tenant_id = ?", id).Error; err != nil {
+		return err
+	}
+	// deleting all users for the tenant
+	if err := s.GetDB().Delete(&entities.User{}, "tenant_id = ?", id).Error; err != nil {
+		return err
+	}
+	if err := s.GetDB().Delete(&entities.Tenant{}, "id = ?", id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil
 		}

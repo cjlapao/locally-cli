@@ -1,50 +1,50 @@
 package keyvault_vault
 
-import (
-	"fmt"
-	"strings"
+// import (
+// 	"fmt"
+// 	"strings"
 
-	"github.com/cjlapao/locally-cli/internal/configuration"
-	"github.com/cjlapao/locally-cli/internal/notifications"
-)
+// 	"github.com/cjlapao/locally-cli/internal/configuration"
+// 	"github.com/cjlapao/locally-cli/internal/notifications"
+// )
 
-type KeyvaultVault struct {
-	name string
-}
+// type KeyvaultVault struct {
+// 	name string
+// }
 
-func New() *KeyvaultVault {
-	result := KeyvaultVault{
-		name: "keyvault",
-	}
+// func New() *KeyvaultVault {
+// 	result := KeyvaultVault{
+// 		name: "keyvault",
+// 	}
 
-	return &result
-}
+// 	return &result
+// }
 
-func (c KeyvaultVault) Name() string {
-	return c.name
-}
+// func (c KeyvaultVault) Name() string {
+// 	return c.name
+// }
 
-func (c KeyvaultVault) Sync() (map[string]interface{}, error) {
-	config := configuration.Get()
-	context := config.GetCurrentContext()
-	notify := notifications.Get()
-	result := make(map[string]interface{})
+// func (c KeyvaultVault) Sync() (map[string]interface{}, error) {
+// 	config := configuration.Get()
+// 	context := config.GetCurrentContext()
+// 	notify := notifications.Get()
+// 	result := make(map[string]interface{})
 
-	if context == nil {
-		return result, nil
-	}
-	if !context.IsValid {
-		return result, fmt.Errorf("invalid context selected")
-	}
+// 	if context == nil {
+// 		return result, nil
+// 	}
+// 	if !context.IsValid {
+// 		return result, fmt.Errorf("invalid context selected")
+// 	}
 
-	// Adding Global Variables
-	if context.EnvironmentVariables != nil && context.EnvironmentVariables.KeyVault != nil && len(context.EnvironmentVariables.KeyVault) > 0 {
-		for key, value := range context.EnvironmentVariables.KeyVault {
-			formattedKey := fmt.Sprintf("%s", strings.ToLower(key))
-			notify.Debug("Synced %s key with value %s", formattedKey, value)
-			result[formattedKey] = value
-		}
-	}
+// 	// Adding Global Variables
+// 	if context.EnvironmentVariables != nil && context.EnvironmentVariables.KeyVault != nil && len(context.EnvironmentVariables.KeyVault) > 0 {
+// 		for key, value := range context.EnvironmentVariables.KeyVault {
+// 			formattedKey := fmt.Sprintf("%s", strings.ToLower(key))
+// 			notify.Debug("Synced %s key with value %s", formattedKey, value)
+// 			result[formattedKey] = value
+// 		}
+// 	}
 
-	return result, nil
-}
+// 	return result, nil
+// }

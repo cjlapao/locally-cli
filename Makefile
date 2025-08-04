@@ -133,6 +133,10 @@ endif
 	@echo "    fmt               Format Go code"
 	@echo "    vet               Run go vet"
 	@echo "    lint              Run all linting checks"
+ifeq ($(TARGET),api)
+	@echo "    swagger           Generate Swagger documentation"
+	@echo "    docs              Generate all documentation"
+endif
 	@echo ""
 	@echo "  ALL-IN-ONE:"
 	@echo "    full-build        Full build with linting and testing"
@@ -430,6 +434,25 @@ ifeq ($(OS),Windows_NT)
 else
 	./scripts/docker-run.sh status
 endif
+
+# =============================================================================
+# DOCUMENTATION
+# =============================================================================
+
+.PHONY: swagger
+swagger: ## Generate Swagger documentation for the API
+ifeq ($(TARGET),api)
+	@echo "Generating Swagger documentation..."
+	./scripts/generate-swagger.sh
+else
+	@echo "Error: Swagger documentation is only available for API (TARGET=api)"
+	@echo "Current target: $(TARGET)"
+	@exit 1
+endif
+
+.PHONY: docs
+docs: swagger ## Generate all documentation (currently just Swagger)
+	@echo "Documentation generation complete!"
 
 # =============================================================================
 # DOCKER REGISTRY

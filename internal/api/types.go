@@ -8,15 +8,14 @@ import (
 
 // Route represents an API route
 type Route struct {
-	Method            string
-	Path              string
-	Handler           http.HandlerFunc
-	Middleware        []func(http.HandlerFunc) http.HandlerFunc // Legacy middleware for backward compatibility
-	Description       string
-	AuthRequired      bool
-	SuperUserRequired bool
-	Claims            []models.Claim
-	Roles             []models.Role
+	Method        string
+	Path          string
+	Handler       http.HandlerFunc
+	Middleware    []func(http.HandlerFunc) http.HandlerFunc // Legacy middleware for backward compatibility
+	Description   string
+	SecurityLevel models.ApiKeySecurityLevel
+	Claims        []models.Claim
+	Roles         []models.Role
 }
 
 // RouteGroup represents a group of related routes

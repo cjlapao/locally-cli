@@ -52,7 +52,6 @@ func NewMigrationService(db *gorm.DB) *MigrationService {
 
 	// Load existing migrations
 	service.loadAppliedMigrations()
-
 	return service
 }
 

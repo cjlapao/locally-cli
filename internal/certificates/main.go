@@ -218,14 +218,14 @@ func generatePfx(certificate *x509.Certificate, privateKey *rsa.PrivateKey, pass
 // }
 
 type CertificateService struct {
-	store *stores.CertificatesDataStore
+	store stores.CertificatesDataStoreInterface
 }
 
 func (s *CertificateService) GetName() string {
 	return "CertificateService"
 }
 
-func Initialize(store *stores.CertificatesDataStore) *CertificateService {
+func Initialize(store stores.CertificatesDataStoreInterface) *CertificateService {
 	logging.Info("Initializing Certificate Service")
 	certificateServiceOnce.Do(func() {
 		if store == nil {
@@ -248,7 +248,7 @@ func GetInstance() *CertificateService {
 	return certificateService
 }
 
-func New(store *stores.CertificatesDataStore) *CertificateService {
+func New(store stores.CertificatesDataStoreInterface) *CertificateService {
 	return &CertificateService{
 		store: store,
 	}
