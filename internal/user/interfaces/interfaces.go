@@ -2,7 +2,7 @@
 package interfaces
 
 import (
-	"github.com/cjlapao/locally-cli/internal/api"
+	api_models "github.com/cjlapao/locally-cli/internal/api/models"
 	"github.com/cjlapao/locally-cli/internal/appctx"
 	"github.com/cjlapao/locally-cli/internal/database/filters"
 	"github.com/cjlapao/locally-cli/internal/user/models"
@@ -12,7 +12,7 @@ import (
 
 type UserServiceInterface interface {
 	GetName() string
-	GetUsersByFilter(ctx *appctx.AppContext, tenantID string, filter *filters.Filter) (*api.PaginatedResponse[pkg_models.User], *diagnostics.Diagnostics)
+	GetUsersByFilter(ctx *appctx.AppContext, tenantID string, filter *filters.Filter) (*api_models.PaginatedResponse[pkg_models.User], *diagnostics.Diagnostics)
 	GetUserByID(ctx *appctx.AppContext, tenantID string, id string) (*pkg_models.User, *diagnostics.Diagnostics)
 	GetUserByUsername(ctx *appctx.AppContext, tenantID string, username string) (*pkg_models.User, *diagnostics.Diagnostics)
 	CreateUser(ctx *appctx.AppContext, tenantID string, role string, user *models.CreateUserRequest) (*models.CreateUserResponse, *diagnostics.Diagnostics)

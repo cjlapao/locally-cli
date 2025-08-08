@@ -22,5 +22,7 @@ type SystemServiceInterface interface {
 	GetRoleBySecurityLevel(securityLevel models.SecurityLevel) (*models.Role, error)
 	GetSystemSummary() map[string]interface{}
 	String() string
+	GetRoleByName(name string) *models.Role
+	GetServiceModuleByName(service, module string) *models.ModuleDefinition
 	LogSummary(ctx *appctx.AppContext)
 }

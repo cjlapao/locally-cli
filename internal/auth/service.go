@@ -4,7 +4,6 @@ package auth
 import (
 	"crypto/rand"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -12,7 +11,6 @@ import (
 
 	"github.com/cjlapao/locally-cli/internal/appctx"
 	"github.com/cjlapao/locally-cli/internal/config"
-	"github.com/cjlapao/locally-cli/internal/database/entities"
 	"github.com/cjlapao/locally-cli/internal/database/stores"
 	"github.com/cjlapao/locally-cli/internal/encryption"
 	"github.com/cjlapao/locally-cli/internal/mappers"
@@ -45,12 +43,12 @@ func (s *AuthServiceConfig) Validate() error {
 
 type AuthService struct {
 	authConfig    *AuthServiceConfig
-	AuthDataStore stores.AuthDataStoreInterface
+	AuthDataStore stores.ApiKeyStoreInterface
 	UserStore     stores.UserDataStoreInterface
 	TenantStore   stores.TenantDataStoreInterface
 }
 
-func Initialize(cfg AuthServiceConfig, authDataStore stores.AuthDataStoreInterface, userStore stores.UserDataStoreInterface, tenantStore stores.TenantDataStoreInterface) (*AuthService, *diagnostics.Diagnostics) {
+func Initialize(cfg AuthServiceConfig, authDataStore stores.ApiKeyStoreInterface, userStore stores.UserDataStoreInterface, tenantStore stores.TenantDataStoreInterface) (*AuthService, *diagnostics.Diagnostics) {
 	diag := diagnostics.New("auth_service")
 	var newDiag *diagnostics.Diagnostics
 	authServiceOnce.Do(func() {
@@ -79,7 +77,7 @@ func Reset() {
 }
 
 // NewService creates a new authentication service
-func new(cfg AuthServiceConfig, authDataStore stores.AuthDataStoreInterface, userStore stores.UserDataStoreInterface, tenantStore stores.TenantDataStoreInterface) (*AuthService, *diagnostics.Diagnostics) {
+func new(cfg AuthServiceConfig, authDataStore stores.ApiKeyStoreInterface, userStore stores.UserDataStoreInterface, tenantStore stores.TenantDataStoreInterface) (*AuthService, *diagnostics.Diagnostics) {
 	diag := diagnostics.New("auth_service")
 	if err := cfg.Validate(); err != nil {
 		diag.AddError("auth_service", "failed to validate auth service configuration", err.Error())
@@ -92,6 +90,20 @@ func new(cfg AuthServiceConfig, authDataStore stores.AuthDataStoreInterface, use
 		UserStore:     userStore,
 		TenantStore:   tenantStore,
 	}, diag
+}
+
+func (s *AuthService) GetUserByID(ctx *appctx.AppContext, tenantID string, userID string) (*models.User, *diagnostics.Diagnostics) {
+	diag := diagnostics.New("get_user_by_id")
+	user, err := s.UserStore.GetUserByID(ctx, tenantID, userID)
+	if err != nil {
+		diag.AddError("get_user_by_id", "failed to get user by id", err.Error())
+		return nil, diag
+	}
+	if user == nil {
+		diag.AddError("get_user_by_id", "user not found", "")
+		return nil, diag
+	}
+	return mappers.MapUserToDto(user), nil
 }
 
 // GenerateSecureAPIKey generates a cryptographically secure API key
@@ -193,6 +205,9 @@ func (s *AuthService) GenerateToken(ctx *appctx.AppContext, user *models.User, t
 	}
 
 	return &TokenResponse{
+		TenantID:     tenantID,
+		UserID:       user.ID,
+		Username:     user.Username,
 		Token:        tokenString,
 		RefreshToken: refreshTokenString,
 		ExpiresAt:    expiresAt,
@@ -202,6 +217,13 @@ func (s *AuthService) GenerateToken(ctx *appctx.AppContext, user *models.User, t
 // AuthenticateWithPassword authenticates a user with username/password
 func (s *AuthService) AuthenticateWithPassword(ctx *appctx.AppContext, creds AuthCredentials) (*TokenResponse, *diagnostics.Diagnostics) {
 	diag := diagnostics.New("authenticate_with_password")
+	errorToken := &TokenResponse{
+		TenantID: creds.TenantID,
+		UserID:   creds.Username,
+		Username: creds.Username,
+		Error:    "Invalid credentials",
+		Token:    "",
+	}
 
 	// Check if user exists and password matches
 	if creds.TenantID == "" {
@@ -213,48 +235,61 @@ func (s *AuthService) AuthenticateWithPassword(ctx *appctx.AppContext, creds Aut
 		tenant, err := s.TenantStore.GetTenantByIdOrSlug(ctx, creds.TenantID)
 		if err != nil {
 			diag.AddError("authenticate_with_password", "failed to get tenant", err.Error())
-			return nil, diag
+			errorToken.Error = fmt.Sprintf("failed to get tenant: %s", err.Error())
+			return errorToken, diag
 		}
 		if tenant == nil {
 			diag.AddError("authenticate_with_password", "tenant not found", "")
-			return nil, diag
+			errorToken.Error = "tenant not found"
+			return errorToken, diag
 		}
 
 		creds.TenantID = tenant.ID
 	}
+	errorToken.TenantID = creds.TenantID
+
 	// Get the user by username
 	dbUser, err := s.UserStore.GetUserByUsername(ctx, creds.TenantID, creds.Username)
 	if err != nil {
 		diag.AddError("authenticate_with_password", "failed to get user", err.Error())
-		return nil, diag
+		errorToken.Error = fmt.Sprintf("failed to get user: %s", err.Error())
+		errorToken.UserID = config.UnknownUserID
+		return errorToken, diag
 	}
 	if dbUser == nil {
 		diag.AddError("authenticate_with_password", "invalid credentials", "")
-		return nil, diag
+		errorToken.Error = "invalid credentials"
+		errorToken.UserID = config.UnknownUserID
+		return errorToken, diag
 	}
 	// Map the user to a DTO
+	errorToken.UserID = dbUser.ID
 	user := mappers.MapUserToDto(dbUser)
 	encryptionService := encryption.GetInstance()
 	err = encryptionService.VerifyPassword(creds.Password, dbUser.Password)
 	if err != nil {
 		diag.AddError("authenticate_with_password", "invalid credentials", err.Error())
-		return nil, diag
+		errorToken.Error = "invalid credentials"
+		return errorToken, diag
 	}
 	if dbUser.Blocked {
 		diag.AddError("authenticate_with_password", "user is blocked", "")
-		return nil, diag
+		errorToken.Error = "user is blocked"
+		return errorToken, diag
 	}
 
 	if dbUser.TenantID != creds.TenantID {
 		if !isSuperUser(user.Roles) {
 			diag.AddError("authenticate_with_password", "invalid tenant", "")
-			return nil, diag
+			errorToken.Error = "user not authorized to access this tenant"
+			return errorToken, diag
 		}
 	}
 
 	token, diag := s.GenerateToken(ctx, user, creds.TenantID, "password", "")
 	if diag.HasErrors() {
-		return nil, diag
+		errorToken.Error = fmt.Sprintf("failed to generate token: %s", diag.GetSummary())
+		return errorToken, diag
 	}
 	return token, nil
 }
@@ -306,7 +341,7 @@ func (s *AuthService) AuthenticateWithAPIKey(ctx *appctx.AppContext, creds APIKe
 	}
 
 	// Get the dbUser associated with this API key
-	dbUser, err := s.UserStore.GetUserByID(ctx, apiKey.TenantID, apiKey.UserID)
+	dbUser, err := s.UserStore.GetUserByID(ctx, apiKey.TenantID, apiKey.CreatedBy)
 	if err != nil {
 		diag.AddError("authenticate_with_api_key", "failed to get user", err.Error())
 		return nil, diag
@@ -328,13 +363,6 @@ func (s *AuthService) AuthenticateWithAPIKey(ctx *appctx.AppContext, creds APIKe
 		return nil, diag
 	}
 
-	// Update last used timestamp
-	err = s.AuthDataStore.UpdateAPIKeyLastUsed(ctx, apiKey.ID)
-	if err != nil {
-		// Log but don't fail authentication
-		fmt.Printf("Warning: failed to update API key last used: %v\n", err)
-	}
-
 	// Use API key's tenant ID if not specified
 	tenantID := creds.TenantID
 	if tenantID == "" {
@@ -354,101 +382,6 @@ func (s *AuthService) AuthenticateWithAPIKey(ctx *appctx.AppContext, creds APIKe
 // Authenticate is the main authentication method that supports both password and API key
 func (s *AuthService) Authenticate(ctx *appctx.AppContext, creds AuthCredentials) (*TokenResponse, *diagnostics.Diagnostics) {
 	return s.AuthenticateWithPassword(ctx, creds)
-}
-
-// CreateAPIKey creates a new API key for a user
-func (s *AuthService) CreateAPIKey(ctx *appctx.AppContext, userID string, req CreateAPIKeyRequest, createdBy string) (*CreateAPIKeyResponse, error) {
-	// Generate a secure API key
-	apiKeyString, diag := s.GenerateSecureAPIKey()
-	if diag.HasErrors() {
-		return nil, fmt.Errorf("failed to generate API key: %v", diag.GetSummary())
-	}
-
-	// Serialize permissions to JSON
-	permissionsJSON, err := json.Marshal(req.Permissions)
-	if err != nil {
-		return nil, fmt.Errorf("failed to serialize permissions: %v", err.Error())
-	}
-
-	// Create API key record
-	apiKey := &entities.APIKey{
-		UserID:      userID,
-		Name:        req.Name,
-		KeyHash:     apiKeyString,                              // Will be hashed in CreateAPIKey
-		KeyPrefix:   apiKeyString[:8+len(config.ApiKeyPrefix)], // First 8 chars after prefix
-		Permissions: string(permissionsJSON),
-		TenantID:    req.TenantID,
-		ExpiresAt:   req.ExpiresAt,
-		IsActive:    true,
-		CreatedBy:   createdBy,
-	}
-
-	// Save to database
-	dbAPIKey, err := s.AuthDataStore.CreateAPIKey(ctx, apiKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create API key: %w", err)
-	}
-
-	return &CreateAPIKeyResponse{
-		ID:          dbAPIKey.ID,
-		Name:        dbAPIKey.Name,
-		APIKey:      apiKeyString, // Return the original key (only shown once)
-		KeyPrefix:   dbAPIKey.KeyPrefix,
-		Permissions: req.Permissions,
-		TenantID:    dbAPIKey.TenantID,
-		ExpiresAt:   dbAPIKey.ExpiresAt,
-		CreatedAt:   dbAPIKey.CreatedAt,
-		CreatedBy:   dbAPIKey.CreatedBy,
-	}, nil
-}
-
-// ListAPIKeys lists all API keys for a user
-func (s *AuthService) ListAPIKeys(ctx *appctx.AppContext, userID string) (*ListAPIKeysResponse, error) {
-	apiKeys, err := s.AuthDataStore.ListAPIKeysByUserID(ctx, userID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list API keys: %w", err)
-	}
-
-	var items []APIKeyListItem
-	for _, key := range apiKeys {
-		var permissions entities.APIKeyPermissions
-		if key.Permissions != "" {
-			if err := json.Unmarshal([]byte(key.Permissions), &permissions); err != nil {
-				// Log error but continue
-				fmt.Printf("Warning: failed to unmarshal permissions for key %s: %v\n", key.ID, err)
-			}
-		}
-
-		items = append(items, APIKeyListItem{
-			ID:          key.ID,
-			Name:        key.Name,
-			KeyPrefix:   key.KeyPrefix,
-			Permissions: permissions,
-			TenantID:    key.TenantID,
-			ExpiresAt:   key.ExpiresAt,
-			LastUsedAt:  key.LastUsedAt,
-			IsActive:    key.IsActive,
-			CreatedAt:   key.CreatedAt,
-			CreatedBy:   key.CreatedBy,
-			RevokedAt:   key.RevokedAt,
-			RevokedBy:   key.RevokedBy,
-		})
-	}
-
-	return &ListAPIKeysResponse{
-		APIKeys: items,
-		Total:   int64(len(items)),
-	}, nil
-}
-
-// RevokeAPIKey revokes an API key
-func (s *AuthService) RevokeAPIKey(ctx *appctx.AppContext, apiKeyID string, revokedBy string, reason string) error {
-	return s.AuthDataStore.RevokeAPIKey(ctx, apiKeyID, revokedBy, reason)
-}
-
-// DeleteAPIKey permanently deletes an API key
-func (s *AuthService) DeleteAPIKey(ctx *appctx.AppContext, apiKeyID string) error {
-	return s.AuthDataStore.DeleteAPIKey(ctx, apiKeyID)
 }
 
 // ValidateToken validates a JWT token and returns claims

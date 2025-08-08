@@ -2,13 +2,13 @@ package api
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/cjlapao/locally-cli/internal/appctx"
 	"github.com/cjlapao/locally-cli/internal/config"
+	"github.com/cjlapao/locally-cli/pkg/diagnostics"
 	"github.com/cjlapao/locally-cli/pkg/types"
 	"github.com/stretchr/testify/assert"
 )
@@ -41,7 +41,7 @@ func TestRequestIDMiddleware_PreservesAppContext(t *testing.T) {
 
 	// Create middleware chain with RequestID middleware
 	chain := NewMiddlewareChain()
-	chain.AddPreMiddleware(RequestIDMiddleware())
+	chain.AddPreMiddleware(RequestInformationMiddleware())
 
 	// Apply the middleware chain
 	middleware := chain.Execute(handler)
@@ -91,7 +91,7 @@ func TestRequestIDMiddleware_GeneratesRequestID(t *testing.T) {
 
 	// Create middleware chain with RequestID middleware
 	chain := NewMiddlewareChain()
-	chain.AddPreMiddleware(RequestIDMiddleware())
+	chain.AddPreMiddleware(RequestInformationMiddleware())
 
 	// Apply the middleware chain
 	middleware := chain.Execute(handler)
@@ -145,7 +145,7 @@ func TestRequestIDMiddleware_ExistingContextRequestID(t *testing.T) {
 
 	// Create middleware chain with RequestID middleware
 	chain := NewMiddlewareChain()
-	chain.AddPreMiddleware(RequestIDMiddleware())
+	chain.AddPreMiddleware(RequestInformationMiddleware())
 
 	// Apply the middleware chain
 	middleware := chain.Execute(handler)
@@ -222,7 +222,7 @@ func TestMiddlewareChain_ShortCircuit(t *testing.T) {
 	shortCircuitMiddleware := PreMiddlewareFunc(func(w http.ResponseWriter, r *http.Request) MiddlewareResult {
 		w.WriteHeader(http.StatusForbidden)
 		w.Write([]byte("access denied"))
-		return MiddlewareResult{Continue: false, Error: fmt.Errorf("access denied")}
+		return MiddlewareResult{Continue: false, Diagnostics: diagnostics.New("short_circuit_middleware")}
 	})
 
 	// Create a request

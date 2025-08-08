@@ -3,6 +3,7 @@ package entities
 import (
 	"time"
 
+	activity_types "github.com/cjlapao/locally-cli/internal/activity/types"
 	"github.com/cjlapao/locally-cli/internal/database/types"
 )
 
@@ -10,26 +11,20 @@ import (
 type Activity struct {
 	BaseModelWithTenant
 	// Core activity information
-	ActivityType  string `json:"activity_type" gorm:"not null;type:text;index"`  // e.g., "user_login", "api_call", "system_event"
-	ActivityLevel string `json:"activity_level" gorm:"not null;type:text;index"` // "info", "warning", "error", "critical"
-	Description   string `json:"description" gorm:"not null;type:text"`
-	Module        string `json:"module" gorm:"not null;type:text;index"`  // e.g., "auth", "pipeline", "infrastructure"
-	Service       string `json:"service" gorm:"not null;type:text;index"` // e.g., "user_service", "certificate_service"
+	ActivityType  activity_types.ActivityType  `json:"activity_type" gorm:"not null;type:text;index"`  // e.g., "user_login", "api_call", "system_event"
+	ActivityLevel activity_types.ActivityLevel `json:"activity_level" gorm:"not null;type:text;index"` // "info", "warning", "error", "critical"
+	Message       string                       `json:"message" gorm:"not null;type:text"`
+	Service       string                       `json:"service" gorm:"not null;type:text;index"` // e.g., "user_service", "certificate_service"
+	Module        string                       `json:"module" gorm:"not null;type:text;index"`  // e.g., "auth", "pipeline", "infrastructure"
 
 	// Actor information
-	ActorType string `json:"actor_type" gorm:"not null;type:text;index"` // "user", "system", "api_key", "service"
-	ActorID   string `json:"actor_id" gorm:"type:text;index"`            // ID of the user, API key, or service
-	ActorName string `json:"actor_name" gorm:"type:text"`                // Human-readable name
-	ActorIP   string `json:"actor_ip" gorm:"type:text"`                  // IP address of the actor
-	UserAgent string `json:"user_agent" gorm:"type:text"`                // User agent string
-
-	// Target information
-	TargetType string `json:"target_type" gorm:"type:text;index"` // "user", "certificate", "pipeline", "infrastructure"
-	TargetID   string `json:"target_id" gorm:"type:text;index"`   // ID of the affected resource
-	TargetName string `json:"target_name" gorm:"type:text"`       // Human-readable name of the target
+	ActorType activity_types.ActorType `json:"actor_type" gorm:"not null;type:text;index"` // "user", "system", "api_key", "service"
+	ActorID   string                   `json:"actor_id" gorm:"type:text;index"`            // ID of the user, API key, or service
+	ActorName string                   `json:"actor_name" gorm:"type:text"`                // Human-readable name
+	ActorIP   string                   `json:"actor_ip" gorm:"type:text"`                  // IP address of the actor
+	UserAgent string                   `json:"user_agent" gorm:"type:text"`                // User agent string
 
 	// Context information
-	SessionID     string `json:"session_id" gorm:"type:text;index"`     // Session identifier
 	RequestID     string `json:"request_id" gorm:"type:text;index"`     // Request identifier for tracing
 	CorrelationID string `json:"correlation_id" gorm:"type:text;index"` // Correlation ID for distributed tracing
 
@@ -38,7 +33,7 @@ type Activity struct {
 	Tags     types.StringSlice                        `json:"tags" gorm:"type:text"`     // Searchable tags
 
 	// Timing information
-	StartedAt   time.Time  `json:"started_at" gorm:"type:timestamp;not null;default:CURRENT_TIMESTAMP"`
+	StartedAt   *time.Time `json:"started_at" gorm:"type:timestamp;not null;default:CURRENT_TIMESTAMP"`
 	CompletedAt *time.Time `json:"completed_at" gorm:"type:timestamp"` // For long-running activities
 	DurationMs  int64      `json:"duration_ms" gorm:"type:bigint"`     // Duration in milliseconds
 

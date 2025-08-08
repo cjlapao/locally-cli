@@ -101,4 +101,35 @@ var SystemBlueprint = []*models.ServiceDefinition{
 			},
 		},
 	},
+	{
+		Name:        "api_key",
+		Description: "API key service",
+		Modules: map[string]*models.ModuleDefinition{
+			"api": {
+				Name:        "api",
+				Description: "API module",
+				Actions: []models.AccessLevel{
+					models.AccessLevelRead,
+					models.AccessLevelWrite,
+					models.AccessLevelDelete,
+					models.AccessLevelApprove,
+					models.AccessLevelRevoke,
+				},
+			},
+		},
+	},
+	{
+		Name:        "activity",
+		Description: "Activity service",
+		Modules: map[string]*models.ModuleDefinition{
+			"audits": {
+				Name:        "audits",
+				Description: "Audits module",
+				Actions: []models.AccessLevel{
+					models.AccessLevelWrite,
+					models.AccessLevelAudit,
+				},
+			},
+		},
+	},
 }

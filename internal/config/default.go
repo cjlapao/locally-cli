@@ -62,6 +62,9 @@ func DefaultConfig() *Config {
 			{Key: MessageProcessorCleanupIntervalKey, Value: "4h", EnvName: MessageProcessorCleanupIntervalEnvKey, FlagName: FlagMessageProcessorCleanupInterval},
 			{Key: MessageProcessorKeepCompleteMessagesKey, Value: "false", EnvName: MessageProcessorKeepCompleteMessagesEnvKey, FlagName: FlagMessageProcessorKeepCompleteMessages},
 			{Key: MessageProcessorDebugKey, Value: "false", EnvName: MessageProcessorDebugEnvKey, FlagName: FlagMessageProcessorDebug},
+
+			// Activity Default Values
+			{Key: ActivityRetentionDaysKey, Value: "90", EnvName: ActivityRetentionDaysEnvKey, FlagName: FlagActivityRetentionDays},
 		},
 	}
 }

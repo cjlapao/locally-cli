@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/cjlapao/locally-cli/internal/api/types"
+	"github.com/cjlapao/locally-cli/internal/auth"
 	"github.com/cjlapao/locally-cli/internal/config"
 	"github.com/cjlapao/locally-cli/internal/logging"
 	"github.com/cjlapao/locally-cli/pkg/models"
@@ -22,7 +24,8 @@ type Server struct {
 	handler             *Handler
 	router              *mux.Router
 	middlewareChain     *MiddlewareChain
-	routeGroups         []RouteGroup
+	routeGroups         []types.RouteGroup
+	authService         *auth.AuthService
 	authMiddleware      PreMiddleware
 	superUserMiddleware PreMiddleware
 	roleMiddleware      PreMiddleware
@@ -34,6 +37,8 @@ type Config struct {
 	Port                int
 	Hostname            string
 	Prefix              string
+	AuthService         *auth.AuthService
+	NewAuthMiddleware   PreMiddleware
 	AuthMiddleware      PreMiddleware
 	SuperUserMiddleware PreMiddleware
 	RoleMiddleware      PreMiddleware
@@ -48,7 +53,7 @@ func NewServer(cfg Config, handler *Handler) *Server {
 	// Create middleware chain with default middlewares
 	middlewareChain := NewMiddlewareChain()
 	middlewareChain.AddPreMiddleware(CORSMiddleware(readCorsConfigFromConfiguration(appCfg)))
-	middlewareChain.AddPreMiddleware(RequestIDMiddleware())
+	middlewareChain.AddPreMiddleware(RequestInformationMiddleware())
 	middlewareChain.AddPreMiddleware(RequestLoggingMiddleware())
 	middlewareChain.AddPostMiddleware(ResponseLoggingMiddleware())
 
@@ -59,7 +64,8 @@ func NewServer(cfg Config, handler *Handler) *Server {
 		prefix:              cfg.Prefix,
 		router:              mux.NewRouter(),
 		middlewareChain:     middlewareChain,
-		routeGroups:         make([]RouteGroup, 0),
+		routeGroups:         make([]types.RouteGroup, 0),
+		authService:         cfg.AuthService,
 		authMiddleware:      cfg.AuthMiddleware,
 		superUserMiddleware: cfg.SuperUserMiddleware,
 		roleMiddleware:      cfg.RoleMiddleware,
@@ -68,7 +74,7 @@ func NewServer(cfg Config, handler *Handler) *Server {
 }
 
 // RegisterRoutes registers routes from a RouteRegistrar
-func (s *Server) RegisterRoutes(registrar RouteRegistrar) {
+func (s *Server) RegisterRoutes(registrar types.RouteRegistrar) {
 	routes := registrar.Routes()
 	for _, route := range routes {
 		s.registerRoute(route)
@@ -76,7 +82,7 @@ func (s *Server) RegisterRoutes(registrar RouteRegistrar) {
 }
 
 // RegisterRouteGroup registers a group of routes with common prefix and middleware
-func (s *Server) RegisterRouteGroup(group RouteGroup) {
+func (s *Server) RegisterRouteGroup(group types.RouteGroup) {
 	s.routeGroups = append(s.routeGroups, group)
 }
 
@@ -91,7 +97,7 @@ func (s *Server) AddPostMiddleware(middleware PostMiddleware) {
 }
 
 // registerRoute registers a single route with the server
-func (s *Server) registerRoute(route Route) {
+func (s *Server) registerRoute(route types.Route) {
 	handler := route.Handler
 
 	// Apply route-specific middleware first
@@ -106,6 +112,9 @@ func (s *Server) registerRoute(route Route) {
 	for _, middleware := range s.middlewareChain.preMiddlewares {
 		routeChain.AddPreMiddleware(middleware)
 	}
+
+	// Add new auth middleware if required
+	routeChain.AddPreMiddleware(NewAuthorizationPreMiddleware(s.authService, &route))
 
 	// Add auth middleware if required
 	if route.SecurityLevel.RequiresAuthentication() && s.authMiddleware != nil {

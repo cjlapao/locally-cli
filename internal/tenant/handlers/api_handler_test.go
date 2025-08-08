@@ -8,7 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/cjlapao/locally-cli/internal/api"
+	api_models "github.com/cjlapao/locally-cli/internal/api/models"
 	"github.com/cjlapao/locally-cli/internal/appctx"
 	"github.com/cjlapao/locally-cli/internal/config"
 	"github.com/cjlapao/locally-cli/internal/database/filters"
@@ -31,12 +31,12 @@ func (m *MockTenantService) GetName() string {
 	return args.String(0)
 }
 
-func (m *MockTenantService) GetTenantsByFilter(ctx *appctx.AppContext, filter *filters.Filter) (*api.PaginatedResponse[models.Tenant], *diagnostics.Diagnostics) {
+func (m *MockTenantService) GetTenantsByFilter(ctx *appctx.AppContext, filter *filters.Filter) (*api_models.PaginatedResponse[models.Tenant], *diagnostics.Diagnostics) {
 	args := m.Called(ctx, filter)
 	if args.Get(0) == nil {
 		return nil, args.Get(1).(*diagnostics.Diagnostics)
 	}
-	return args.Get(0).(*api.PaginatedResponse[models.Tenant]), args.Get(1).(*diagnostics.Diagnostics)
+	return args.Get(0).(*api_models.PaginatedResponse[models.Tenant]), args.Get(1).(*diagnostics.Diagnostics)
 }
 
 func (m *MockTenantService) GetTenantByIDOrSlug(ctx *appctx.AppContext, idOrSlug string) (*models.Tenant, *diagnostics.Diagnostics) {
@@ -117,12 +117,12 @@ func TestHandleGetTenants(t *testing.T) {
 			name:        "Success - Get all tenants",
 			queryParams: "",
 			mockSetup: func(mockService *MockTenantService) {
-				expectedResponse := &api.PaginatedResponse[models.Tenant]{
+				expectedResponse := &api_models.PaginatedResponse[models.Tenant]{
 					Data: []models.Tenant{
 						{ID: "1", Name: "Tenant 1", Domain: "tenant1.com"},
 						{ID: "2", Name: "Tenant 2", Domain: "tenant2.com"},
 					},
-					Pagination: api.Pagination{Page: 1, PageSize: 10, TotalPages: 1},
+					Pagination: api_models.Pagination{Page: 1, PageSize: 10, TotalPages: 1},
 					TotalCount: 2,
 				}
 				diag := diagnostics.New("test")
@@ -136,9 +136,9 @@ func TestHandleGetTenants(t *testing.T) {
 			name:        "Success - With pagination",
 			queryParams: "?page=2&page_size=5",
 			mockSetup: func(mockService *MockTenantService) {
-				expectedResponse := &api.PaginatedResponse[models.Tenant]{
+				expectedResponse := &api_models.PaginatedResponse[models.Tenant]{
 					Data:       []models.Tenant{},
-					Pagination: api.Pagination{Page: 2, PageSize: 5, TotalPages: 1},
+					Pagination: api_models.Pagination{Page: 2, PageSize: 5, TotalPages: 1},
 					TotalCount: 0,
 				}
 				diag := diagnostics.New("test")

@@ -2,85 +2,30 @@ package models
 
 import (
 	"time"
-)
 
-// ActivityType constants
-const (
-	ActivityTypeUserLogin            = "user_login"
-	ActivityTypeUserLogout           = "user_logout"
-	ActivityTypeUserCreate           = "user_create"
-	ActivityTypeUserUpdate           = "user_update"
-	ActivityTypeUserDelete           = "user_delete"
-	ActivityTypeUserBlock            = "user_block"
-	ActivityTypeUserUnblock          = "user_unblock"
-	ActivityTypeAPICall              = "api_call"
-	ActivityTypeAPICreate            = "api_create"
-	ActivityTypeAPIUpdate            = "api_update"
-	ActivityTypeAPIDelete            = "api_delete"
-	ActivityTypeCertificateCreate    = "certificate_create"
-	ActivityTypeCertificateUpdate    = "certificate_update"
-	ActivityTypeCertificateDelete    = "certificate_delete"
-	ActivityTypePipelineStart        = "pipeline_start"
-	ActivityTypePipelineComplete     = "pipeline_complete"
-	ActivityTypePipelineFail         = "pipeline_fail"
-	ActivityTypeInfrastructureCreate = "infrastructure_create"
-	ActivityTypeInfrastructureUpdate = "infrastructure_update"
-	ActivityTypeInfrastructureDelete = "infrastructure_delete"
-	ActivityTypeSystemEvent          = "system_event"
-	ActivityTypeSecurityEvent        = "security_event"
-)
-
-// ActivityLevel constants
-const (
-	ActivityLevelInfo     = "info"
-	ActivityLevelWarning  = "warning"
-	ActivityLevelError    = "error"
-	ActivityLevelCritical = "critical"
-)
-
-// ActorType constants
-const (
-	ActorTypeUser    = "user"
-	ActorTypeSystem  = "system"
-	ActorTypeAPIKey  = "api_key"
-	ActorTypeService = "service"
-)
-
-// TargetType constants
-const (
-	TargetTypeUser           = "user"
-	TargetTypeCertificate    = "certificate"
-	TargetTypePipeline       = "pipeline"
-	TargetTypeInfrastructure = "infrastructure"
-	TargetTypeAPIKey         = "api_key"
-	TargetTypeTenant         = "tenant"
-	TargetTypeConfiguration  = "configuration"
+	"github.com/cjlapao/locally-cli/internal/activity/types"
 )
 
 // Activity represents a user or system activity for API responses
 type Activity struct {
 	ID            string                 `json:"id" yaml:"id"`
 	Slug          string                 `json:"slug" yaml:"slug"`
-	ActivityType  string                 `json:"activity_type" yaml:"activity_type"`
-	ActivityLevel string                 `json:"activity_level" yaml:"activity_level"`
-	Description   string                 `json:"description" yaml:"description"`
-	Module        string                 `json:"module" yaml:"module"`
+	TenantID      string                 `json:"tenant_id" yaml:"tenant_id"`
+	ActivityType  types.ActivityType     `json:"activity_type" yaml:"activity_type"`
+	ActivityLevel types.ActivityLevel    `json:"activity_level" yaml:"activity_level"`
+	Message       string                 `json:"message" yaml:"message"`
 	Service       string                 `json:"service" yaml:"service"`
-	ActorType     string                 `json:"actor_type" yaml:"actor_type"`
+	Module        string                 `json:"module" yaml:"module"`
+	ActorType     types.ActorType        `json:"actor_type" yaml:"actor_type"`
 	ActorID       string                 `json:"actor_id" yaml:"actor_id"`
 	ActorName     string                 `json:"actor_name" yaml:"actor_name"`
 	ActorIP       string                 `json:"actor_ip" yaml:"actor_ip"`
 	UserAgent     string                 `json:"user_agent" yaml:"user_agent"`
-	TargetType    string                 `json:"target_type" yaml:"target_type"`
-	TargetID      string                 `json:"target_id" yaml:"target_id"`
-	TargetName    string                 `json:"target_name" yaml:"target_name"`
-	TenantID      string                 `json:"tenant_id" yaml:"tenant_id"`
-	SessionID     string                 `json:"session_id" yaml:"session_id"`
 	RequestID     string                 `json:"request_id" yaml:"request_id"`
 	CorrelationID string                 `json:"correlation_id" yaml:"correlation_id"`
 	Metadata      map[string]interface{} `json:"metadata" yaml:"metadata"`
 	Tags          []string               `json:"tags" yaml:"tags"`
-	StartedAt     time.Time              `json:"started_at" yaml:"started_at"`
+	StartedAt     *time.Time             `json:"started_at" yaml:"started_at"`
 	CompletedAt   *time.Time             `json:"completed_at" yaml:"completed_at"`
 	DurationMs    int64                  `json:"duration_ms" yaml:"duration_ms"`
 	Success       bool                   `json:"success" yaml:"success"`
@@ -137,20 +82,16 @@ type ActivityFilter struct {
 
 // CreateActivityRequest represents a request to create a new activity
 type CreateActivityRequest struct {
-	ActivityType  string                 `json:"activity_type" yaml:"activity_type" validate:"required"`
-	ActivityLevel string                 `json:"activity_level" yaml:"activity_level" validate:"required"`
-	Description   string                 `json:"description" yaml:"description" validate:"required"`
+	ActivityType  types.ActivityType     `json:"activity_type" yaml:"activity_type" validate:"required"`
+	ActivityLevel types.ActivityLevel    `json:"activity_level" yaml:"activity_level" validate:"required"`
+	Message       string                 `json:"message" yaml:"message" validate:"required"`
 	Module        string                 `json:"module" yaml:"module" validate:"required"`
 	Service       string                 `json:"service" yaml:"service" validate:"required"`
-	ActorType     string                 `json:"actor_type" yaml:"actor_type" validate:"required"`
+	ActorType     types.ActorType        `json:"actor_type" yaml:"actor_type" validate:"required"`
 	ActorID       string                 `json:"actor_id" yaml:"actor_id"`
 	ActorName     string                 `json:"actor_name" yaml:"actor_name"`
 	ActorIP       string                 `json:"actor_ip" yaml:"actor_ip"`
 	UserAgent     string                 `json:"user_agent" yaml:"user_agent"`
-	TargetType    string                 `json:"target_type" yaml:"target_type"`
-	TargetID      string                 `json:"target_id" yaml:"target_id"`
-	TargetName    string                 `json:"target_name" yaml:"target_name"`
-	SessionID     string                 `json:"session_id" yaml:"session_id"`
 	RequestID     string                 `json:"request_id" yaml:"request_id"`
 	CorrelationID string                 `json:"correlation_id" yaml:"correlation_id"`
 	Metadata      map[string]interface{} `json:"metadata" yaml:"metadata"`
@@ -168,7 +109,7 @@ type CreateActivityRequest struct {
 
 // UpdateActivityRequest represents a request to update an existing activity
 type UpdateActivityRequest struct {
-	Description   string                 `json:"description" yaml:"description"`
+	Message       string                 `json:"message" yaml:"message"`
 	CompletedAt   *time.Time             `json:"completed_at" yaml:"completed_at"`
 	DurationMs    int64                  `json:"duration_ms" yaml:"duration_ms"`
 	Success       bool                   `json:"success" yaml:"success"`

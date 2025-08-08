@@ -5,7 +5,7 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/cjlapao/locally-cli/internal/api"
+	api_models "github.com/cjlapao/locally-cli/internal/api/models"
 	"github.com/cjlapao/locally-cli/internal/appctx"
 	claimsvc "github.com/cjlapao/locally-cli/internal/claim/interfaces"
 	claim_models "github.com/cjlapao/locally-cli/internal/claim/models"
@@ -78,7 +78,7 @@ func (s *TenantService) GetName() string {
 	return "tenant"
 }
 
-func (s *TenantService) GetTenantsByFilter(ctx *appctx.AppContext, filter *filters.Filter) (*api.PaginatedResponse[models.Tenant], *diagnostics.Diagnostics) {
+func (s *TenantService) GetTenantsByFilter(ctx *appctx.AppContext, filter *filters.Filter) (*api_models.PaginatedResponse[models.Tenant], *diagnostics.Diagnostics) {
 	diag := diagnostics.New("get_tenants")
 	defer diag.Complete()
 
@@ -91,15 +91,15 @@ func (s *TenantService) GetTenantsByFilter(ctx *appctx.AppContext, filter *filte
 	}
 
 	tenants := mappers.MapTenantsToDto(dbTenants.Items)
-	pagination := api.Pagination{
+	pagination := api_models.Pagination{
 		Page:       dbTenants.Page,
 		PageSize:   dbTenants.PageSize,
 		TotalPages: dbTenants.TotalPages,
 	}
 
-	response := api.PaginatedResponse[models.Tenant]{
+	response := api_models.PaginatedResponse[models.Tenant]{
 		Data:       tenants,
-		TotalCount: int(dbTenants.Total),
+		TotalCount: dbTenants.Total,
 		Pagination: pagination,
 	}
 

@@ -12,7 +12,6 @@ import (
 	user_models "github.com/cjlapao/locally-cli/internal/user/models"
 	"github.com/cjlapao/locally-cli/pkg/diagnostics"
 	"github.com/cjlapao/locally-cli/pkg/models"
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -74,7 +73,7 @@ func (e *DefaultRootUsersMigrationWorker) Up(ctx *appctx.AppContext) *diagnostic
 	}
 
 	createdUser, createDiag := e.userService.CreateUser(ctx, config.GlobalTenantID, role.Slug, &user_models.CreateUserRequest{
-		ID:       uuid.Nil.String(),
+		ID:       config.DefaultSuperUserUserID,
 		Username: username,
 		Password: cfg.GetString(config.RootUserPasswordKey, "root"),
 		Email:    "root@locally.internal",

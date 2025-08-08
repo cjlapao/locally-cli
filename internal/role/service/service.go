@@ -4,7 +4,7 @@ package service
 import (
 	"sync"
 
-	"github.com/cjlapao/locally-cli/internal/api"
+	api_models "github.com/cjlapao/locally-cli/internal/api/models"
 	"github.com/cjlapao/locally-cli/internal/appctx"
 	claim_interfaces "github.com/cjlapao/locally-cli/internal/claim/interfaces"
 	"github.com/cjlapao/locally-cli/internal/config"
@@ -85,7 +85,7 @@ func (s *RoleService) GetRoles(ctx *appctx.AppContext, tenantID string) ([]pkg_m
 	return roles, diag
 }
 
-func (s *RoleService) GetRolesByFilter(ctx *appctx.AppContext, tenantID string, filter *filters.Filter) (*api.PaginatedResponse[pkg_models.Role], *diagnostics.Diagnostics) {
+func (s *RoleService) GetRolesByFilter(ctx *appctx.AppContext, tenantID string, filter *filters.Filter) (*api_models.PaginatedResponse[pkg_models.Role], *diagnostics.Diagnostics) {
 	diag := diagnostics.New("get_roles_by_filter")
 	defer diag.Complete()
 
@@ -98,15 +98,15 @@ func (s *RoleService) GetRolesByFilter(ctx *appctx.AppContext, tenantID string, 
 	}
 
 	roles := mappers.MapRolesToDto(dbRoles.Items)
-	pagination := api.Pagination{
+	pagination := api_models.Pagination{
 		Page:       dbRoles.Page,
 		PageSize:   dbRoles.PageSize,
 		TotalPages: dbRoles.TotalPages,
 	}
 
-	response := api.PaginatedResponse[pkg_models.Role]{
+	response := api_models.PaginatedResponse[pkg_models.Role]{
 		Data:       roles,
-		TotalCount: int(dbRoles.Total),
+		TotalCount: dbRoles.Total,
 		Pagination: pagination,
 	}
 
@@ -228,7 +228,7 @@ func (s *RoleService) DeleteRole(ctx *appctx.AppContext, tenantID string, id str
 	return diag
 }
 
-func (s *RoleService) GetRoleUsers(ctx *appctx.AppContext, tenantID string, id string, pagination *pkg_models.Pagination) (*api.PaginatedResponse[pkg_models.User], *diagnostics.Diagnostics) {
+func (s *RoleService) GetRoleUsers(ctx *appctx.AppContext, tenantID string, id string, pagination *pkg_models.Pagination) (*api_models.PaginatedResponse[pkg_models.User], *diagnostics.Diagnostics) {
 	diag := diagnostics.New("get_role_users")
 	defer diag.Complete()
 	cfg := config.GetInstance().Get()
@@ -250,10 +250,10 @@ func (s *RoleService) GetRoleUsers(ctx *appctx.AppContext, tenantID string, id s
 		return nil, diag
 	}
 
-	response := api.PaginatedResponse[pkg_models.User]{
+	response := api_models.PaginatedResponse[pkg_models.User]{
 		Data:       mappers.MapUsersToDto(dbUsers.Items),
-		TotalCount: int(dbUsers.Total),
-		Pagination: api.Pagination{
+		TotalCount: dbUsers.Total,
+		Pagination: api_models.Pagination{
 			Page:       dbUsers.Page,
 			PageSize:   dbUsers.PageSize,
 			TotalPages: dbUsers.TotalPages,
@@ -327,7 +327,7 @@ func (s *RoleService) GetRoleClaims(ctx *appctx.AppContext, tenantID string, rol
 	return claims, diag
 }
 
-func (s *RoleService) GetPaginatedRoleClaims(ctx *appctx.AppContext, tenantID string, roleID string, pagination *pkg_models.Pagination) (*api.PaginatedResponse[pkg_models.Claim], *diagnostics.Diagnostics) {
+func (s *RoleService) GetPaginatedRoleClaims(ctx *appctx.AppContext, tenantID string, roleID string, pagination *pkg_models.Pagination) (*api_models.PaginatedResponse[pkg_models.Claim], *diagnostics.Diagnostics) {
 	diag := diagnostics.New("get_paginated_role_claims")
 	defer diag.Complete()
 
@@ -346,10 +346,10 @@ func (s *RoleService) GetPaginatedRoleClaims(ctx *appctx.AppContext, tenantID st
 	}
 
 	claims := mappers.MapClaimsToDto(dbClaims.Items)
-	response := api.PaginatedResponse[pkg_models.Claim]{
+	response := api_models.PaginatedResponse[pkg_models.Claim]{
 		Data:       claims,
-		TotalCount: int(dbClaims.Total),
-		Pagination: api.Pagination{
+		TotalCount: dbClaims.Total,
+		Pagination: api_models.Pagination{
 			Page:       dbClaims.Page,
 			PageSize:   dbClaims.PageSize,
 			TotalPages: dbClaims.TotalPages,

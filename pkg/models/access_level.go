@@ -19,6 +19,8 @@ const (
 	AccessLevelReset   AccessLevel = "reset"
 	AccessLevelUnlock  AccessLevel = "unlock"
 	AccessLevelLock    AccessLevel = "lock"
+	AccessLevelRevoke  AccessLevel = "revoke"
+	AccessLevelAudit   AccessLevel = "audit"
 )
 
 // IsParentOf checks if the current level is a parent of the given level
@@ -55,6 +57,10 @@ func (a AccessLevel) IsParentOf(child AccessLevel) bool {
 		return child == AccessLevelRead || child == AccessLevelView
 	case AccessLevelUnlock:
 		return child == AccessLevelRead || child == AccessLevelView
+	case AccessLevelRevoke:
+		return child == AccessLevelRead || child == AccessLevelView
+	case AccessLevelAudit:
+		return child == AccessLevelRead || child == AccessLevelView
 	case AccessLevelNone:
 		return false
 	}
@@ -76,9 +82,9 @@ func (a AccessLevel) IsChildOf(parent AccessLevel) bool {
 	case AccessLevelDelete:
 		return parent == AccessLevelAll
 	case AccessLevelRead:
-		return parent == AccessLevelAll || parent == AccessLevelWrite || parent == AccessLevelUpdate || parent == AccessLevelCreate || parent == AccessLevelDelete || parent == AccessLevelApprove || parent == AccessLevelReject || parent == AccessLevelCancel || parent == AccessLevelSuspend || parent == AccessLevelResume || parent == AccessLevelReset || parent == AccessLevelLock || parent == AccessLevelUnlock
+		return parent == AccessLevelAll || parent == AccessLevelWrite || parent == AccessLevelUpdate || parent == AccessLevelCreate || parent == AccessLevelDelete || parent == AccessLevelApprove || parent == AccessLevelReject || parent == AccessLevelCancel || parent == AccessLevelSuspend || parent == AccessLevelResume || parent == AccessLevelReset || parent == AccessLevelLock || parent == AccessLevelUnlock || parent == AccessLevelRevoke || parent == AccessLevelAudit
 	case AccessLevelView:
-		return parent == AccessLevelAll || parent == AccessLevelWrite || parent == AccessLevelUpdate || parent == AccessLevelCreate || parent == AccessLevelDelete || parent == AccessLevelApprove || parent == AccessLevelReject || parent == AccessLevelCancel || parent == AccessLevelSuspend || parent == AccessLevelResume || parent == AccessLevelReset || parent == AccessLevelLock || parent == AccessLevelUnlock || parent == AccessLevelRead
+		return parent == AccessLevelAll || parent == AccessLevelWrite || parent == AccessLevelUpdate || parent == AccessLevelCreate || parent == AccessLevelDelete || parent == AccessLevelApprove || parent == AccessLevelReject || parent == AccessLevelCancel || parent == AccessLevelSuspend || parent == AccessLevelResume || parent == AccessLevelReset || parent == AccessLevelLock || parent == AccessLevelUnlock || parent == AccessLevelRead || parent == AccessLevelRevoke || parent == AccessLevelAudit
 	case AccessLevelApprove:
 		return parent == AccessLevelAll
 	case AccessLevelReject:
@@ -95,8 +101,12 @@ func (a AccessLevel) IsChildOf(parent AccessLevel) bool {
 		return parent == AccessLevelAll
 	case AccessLevelUnlock:
 		return parent == AccessLevelAll
+	case AccessLevelRevoke:
+		return parent == AccessLevelAll
+	case AccessLevelAudit:
+		return parent == AccessLevelAll
 	case AccessLevelNone:
-		return parent == AccessLevelAll || parent == AccessLevelWrite || parent == AccessLevelUpdate || parent == AccessLevelCreate || parent == AccessLevelDelete || parent == AccessLevelApprove || parent == AccessLevelReject || parent == AccessLevelCancel || parent == AccessLevelSuspend || parent == AccessLevelResume || parent == AccessLevelReset || parent == AccessLevelLock || parent == AccessLevelUnlock || parent == AccessLevelRead || parent == AccessLevelView
+		return parent == AccessLevelAll || parent == AccessLevelWrite || parent == AccessLevelUpdate || parent == AccessLevelCreate || parent == AccessLevelDelete || parent == AccessLevelApprove || parent == AccessLevelReject || parent == AccessLevelCancel || parent == AccessLevelSuspend || parent == AccessLevelResume || parent == AccessLevelReset || parent == AccessLevelLock || parent == AccessLevelUnlock || parent == AccessLevelRead || parent == AccessLevelView || parent == AccessLevelRevoke || parent == AccessLevelAudit
 	}
 	return false
 }
@@ -118,6 +128,8 @@ func (a AccessLevel) IsHigherThan(other AccessLevel) bool {
 		AccessLevelReset,
 		AccessLevelLock,
 		AccessLevelUnlock,
+		AccessLevelRevoke,
+		AccessLevelAudit,
 		AccessLevelRead,
 		AccessLevelView,
 		AccessLevelNone,

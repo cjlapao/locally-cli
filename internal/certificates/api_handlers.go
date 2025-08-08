@@ -5,6 +5,8 @@ import (
 	"net/http"
 
 	"github.com/cjlapao/locally-cli/internal/api"
+	api_models "github.com/cjlapao/locally-cli/internal/api/models"
+	api_types "github.com/cjlapao/locally-cli/internal/api/types"
 	"github.com/cjlapao/locally-cli/internal/appctx"
 	"github.com/cjlapao/locally-cli/internal/config"
 	"github.com/cjlapao/locally-cli/internal/database/stores"
@@ -25,8 +27,8 @@ func NewApiHandlers(certificateService *CertificateService, store stores.Certifi
 	}
 }
 
-func (h *ApiHandlers) Routes() []api.Route {
-	return []api.Route{
+func (h *ApiHandlers) Routes() []api_types.Route {
+	return []api_types.Route{
 		{
 			Method:        http.MethodGet,
 			Path:          "/v1/certificates/root",
@@ -146,7 +148,7 @@ func (h *ApiHandlers) HandleDeleteRootCertificate(w http.ResponseWriter, r *http
 		return
 	}
 
-	response := api.StatusResponse{
+	response := api_models.StatusResponse{
 		ID:     config.RootCertificateSlug,
 		Status: "deleted",
 	}

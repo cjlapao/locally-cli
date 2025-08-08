@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/cjlapao/locally-cli/internal/api"
+	api_types "github.com/cjlapao/locally-cli/internal/api/types"
 	"github.com/cjlapao/locally-cli/internal/appctx"
 	"github.com/cjlapao/locally-cli/internal/role/interfaces"
 	"github.com/cjlapao/locally-cli/internal/role/models"
@@ -21,8 +22,8 @@ func NewRolesApiHandler(roleService interfaces.RoleServiceInterface) *RolesApiHa
 	return &RolesApiHandler{roleService: roleService}
 }
 
-func (h *RolesApiHandler) Routes() []api.Route {
-	return []api.Route{
+func (h *RolesApiHandler) Routes() []api_types.Route {
+	return []api_types.Route{
 		{
 			Method:        http.MethodGet,
 			Path:          "/v1/roles",

@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/cjlapao/locally-cli/internal/api"
+	api_types "github.com/cjlapao/locally-cli/internal/api/types"
 	"github.com/cjlapao/locally-cli/internal/appctx"
 	"github.com/cjlapao/locally-cli/internal/user/interfaces"
 	"github.com/cjlapao/locally-cli/internal/user/models"
@@ -21,8 +22,8 @@ func NewUsersApiHandler(userService interfaces.UserServiceInterface) *ApiHandler
 	return &ApiHandler{userService: userService}
 }
 
-func (h *ApiHandler) Routes() []api.Route {
-	return []api.Route{
+func (h *ApiHandler) Routes() []api_types.Route {
+	return []api_types.Route{
 		{
 			Method:        http.MethodGet,
 			Path:          "/v1/users",

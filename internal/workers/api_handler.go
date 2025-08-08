@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/cjlapao/locally-cli/internal/api"
+	api_types "github.com/cjlapao/locally-cli/internal/api/types"
 	"github.com/cjlapao/locally-cli/internal/config"
 	"github.com/cjlapao/locally-cli/pkg/models"
 )
@@ -18,8 +19,8 @@ func NewApiHandler(service *SystemWorkerMessageService) *APIHandler {
 	return &APIHandler{service: service}
 }
 
-func (h *APIHandler) Routes() []api.Route {
-	return []api.Route{
+func (h *APIHandler) Routes() []api_types.Route {
+	return []api_types.Route{
 		{
 			Method:        http.MethodPost,
 			Path:          "/v1/messages",

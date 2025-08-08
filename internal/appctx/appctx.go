@@ -19,14 +19,17 @@ import (
 // AppContext wraps context.Context with additional application-specific data
 type AppContext struct {
 	context.Context
-	requestID   string
-	userID      string
-	username    string
-	tenantID    string
-	startTime   time.Time
-	metadata    map[string]interface{}
-	diagnostics *diagnostics.Diagnostics
-	mu          sync.RWMutex
+	requestID     string
+	correlationID string
+	userID        string
+	username      string
+	tenantID      string
+	userIP        string
+	userAgent     string
+	startTime     time.Time
+	metadata      map[string]interface{}
+	diagnostics   *diagnostics.Diagnostics
+	mu            sync.RWMutex
 }
 
 // NewContext creates a new AppContext with the given parent context
@@ -53,6 +56,21 @@ func (c *AppContext) WithRequestID(requestID string) *AppContext {
 
 	// Add to diagnostics
 	newCtx.diagnostics.AddMetadata("request_id", requestID)
+
+	return newCtx
+}
+
+// WithCorrelationID creates a new context with the given correlation ID
+
+func (c *AppContext) WithCorrelationID(correlationID string) *AppContext {
+	newCtx := c.clone()
+	newCtx.correlationID = correlationID
+
+	// Update the underlying context
+	newCtx.Context = context.WithValue(newCtx.Context, types.CorrelationIDKey, correlationID)
+
+	// Add to diagnostics
+	newCtx.diagnostics.AddMetadata("correlation_id", correlationID)
 
 	return newCtx
 }
@@ -96,6 +114,32 @@ func (c *AppContext) WithTenantID(tenantID string) *AppContext {
 
 	// Add to diagnostics
 	newCtx.diagnostics.AddMetadata("tenant_id", tenantID)
+
+	return newCtx
+}
+
+func (c *AppContext) WithUserIP(userIP string) *AppContext {
+	newCtx := c.clone()
+	newCtx.userIP = userIP
+
+	// Update the underlying context
+	newCtx.Context = context.WithValue(newCtx.Context, types.UserIPKey, userIP)
+
+	// Add to diagnostics
+	newCtx.diagnostics.AddMetadata("user_ip", userIP)
+
+	return newCtx
+}
+
+func (c *AppContext) WithUserAgent(userAgent string) *AppContext {
+	newCtx := c.clone()
+	newCtx.userAgent = userAgent
+
+	// Update the underlying context
+	newCtx.Context = context.WithValue(newCtx.Context, types.UserAgentKey, userAgent)
+
+	// Add to diagnostics
+	newCtx.diagnostics.AddMetadata("user_agent", userAgent)
 
 	return newCtx
 }
@@ -160,6 +204,14 @@ func (c *AppContext) GetRequestID() string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.requestID
+}
+
+// GetCorrelationID returns the correlation ID from the context
+
+func (c *AppContext) GetCorrelationID() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.correlationID
 }
 
 // GetUserID returns the user ID from the context
@@ -247,6 +299,20 @@ func (c *AppContext) GetAllMetadata() map[string]interface{} {
 		result[k] = v
 	}
 	return result
+}
+
+// GetUserIP returns the user IP from the context
+func (c *AppContext) GetUserIP() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.userIP
+}
+
+// GetUserAgent returns the user agent from the context
+func (c *AppContext) GetUserAgent() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.userAgent
 }
 
 // GetDiagnostics returns the diagnostics from the context
@@ -502,14 +568,17 @@ func (c *AppContext) clone() *AppContext {
 	defer c.mu.RUnlock()
 
 	newCtx := &AppContext{
-		Context:     c.Context,
-		requestID:   c.requestID,
-		userID:      c.userID,
-		username:    c.username,
-		tenantID:    c.tenantID,
-		startTime:   c.startTime,
-		metadata:    make(map[string]interface{}),
-		diagnostics: diagnostics.New("app_context_clone"),
+		Context:       c.Context,
+		requestID:     c.requestID,
+		correlationID: c.correlationID,
+		userID:        c.userID,
+		username:      c.username,
+		tenantID:      c.tenantID,
+		userIP:        c.userIP,
+		userAgent:     c.userAgent,
+		startTime:     c.startTime,
+		metadata:      make(map[string]interface{}),
+		diagnostics:   diagnostics.New("app_context_clone"),
 	}
 
 	// Copy metadata
@@ -533,6 +602,8 @@ func (c *AppContext) Value(key interface{}) interface{} {
 		switch k {
 		case types.RequestIDKey:
 			return c.GetRequestID()
+		case types.CorrelationIDKey:
+			return c.GetCorrelationID()
 		case types.UserIDKey:
 			return c.GetUserID()
 		case types.UsernameKey:
@@ -549,6 +620,8 @@ func (c *AppContext) Value(key interface{}) interface{} {
 		switch types.AppContextKey(k) {
 		case types.RequestIDKey:
 			return c.GetRequestID()
+		case types.CorrelationIDKey:
+			return c.GetCorrelationID()
 		case types.UserIDKey:
 			return c.GetUserID()
 		case types.TenantIDKey:
@@ -609,12 +682,24 @@ func FromContext(ctx context.Context) *AppContext {
 		appCtx.requestID = requestID
 	}
 
+	if correlationID, ok := ctx.Value(types.CorrelationIDKey).(string); ok {
+		appCtx.correlationID = correlationID
+	}
+
 	if userID, ok := ctx.Value(types.UserIDKey).(string); ok {
 		appCtx.userID = userID
 	}
 
 	if tenantID, ok := ctx.Value(types.TenantIDKey).(string); ok {
 		appCtx.tenantID = tenantID
+	}
+
+	if userIP, ok := ctx.Value(types.UserIPKey).(string); ok {
+		appCtx.userIP = userIP
+	}
+
+	if userAgent, ok := ctx.Value(types.UserAgentKey).(string); ok {
+		appCtx.userAgent = userAgent
 	}
 
 	if startTime, ok := ctx.Value(types.StartTimeKey).(time.Time); ok {
@@ -667,6 +752,25 @@ func GetRequestID(ctx context.Context) string {
 	return ""
 }
 
+// GetCorrelationID extracts the correlation ID from a context
+func GetCorrelationID(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+
+	// Try to get from AppContext first
+	if appCtx, ok := ctx.(*AppContext); ok {
+		return appCtx.GetCorrelationID()
+	}
+
+	// Try to get from standard context
+	if correlationID, ok := ctx.Value(types.CorrelationIDKey).(string); ok {
+		return correlationID
+	}
+
+	return ""
+}
+
 // GetUserID extracts the user ID from a context
 func GetUserID(ctx context.Context) string {
 	if ctx == nil {
@@ -700,6 +804,39 @@ func GetTenantID(ctx context.Context) string {
 	// Try to get from standard context
 	if tenantID, ok := ctx.Value(types.TenantIDKey).(string); ok {
 		return tenantID
+	}
+
+	return ""
+}
+
+// GetUserAgent extracts the user agent from a context
+func GetUserAgent(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+
+	// Try to get from AppContext first
+	if appCtx, ok := ctx.(*AppContext); ok {
+		return appCtx.GetUserAgent()
+	}
+
+	// Try to get from standard context
+	if userAgent, ok := ctx.Value(types.UserAgentKey).(string); ok {
+		return userAgent
+	}
+
+	return ""
+}
+
+// GetUserIP extracts the user IP from a context
+func GetUserIP(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+
+	// Try to get from standard context
+	if userIP, ok := ctx.Value(types.UserIPKey).(string); ok {
+		return userIP
 	}
 
 	return ""

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/cjlapao/locally-cli/internal/api"
+	api_types "github.com/cjlapao/locally-cli/internal/api/types"
 	"github.com/cjlapao/locally-cli/internal/auth"
 	"github.com/cjlapao/locally-cli/pkg/models"
 	"github.com/google/uuid"
@@ -26,8 +27,8 @@ func NewApiHandler(eventService *EventService, authService *auth.AuthService) *A
 }
 
 // Routes implements the RouteRegistrar interface
-func (h *APIHandler) Routes() []api.Route {
-	return []api.Route{
+func (h *APIHandler) Routes() []api_types.Route {
+	return []api_types.Route{
 		{
 			Method:        http.MethodGet,
 			Path:          "/v1/events/stream",

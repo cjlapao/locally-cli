@@ -14,6 +14,7 @@ import (
 	"github.com/cjlapao/locally-cli/internal/database/utils"
 	"github.com/cjlapao/locally-cli/internal/logging"
 	"github.com/cjlapao/locally-cli/pkg/diagnostics"
+	pkg_utils "github.com/cjlapao/locally-cli/pkg/utils"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -28,6 +29,7 @@ type ActivityDataStoreInterface interface {
 	CreateActivity(ctx *appctx.AppContext, tenantID string, activity *entities.Activity) (*entities.Activity, error)
 	GetActivityByID(ctx *appctx.AppContext, tenantID string, id string) (*entities.Activity, error)
 	GetActivitiesByFilter(ctx *appctx.AppContext, tenantID string, filterObj *filters.Filter) (*filters.FilterResponse[entities.Activity], error)
+	GetPaginatedActivities(ctx *appctx.AppContext, tenantID string, pagination *filters.Pagination) (*filters.PaginationResponse[entities.Activity], error)
 	UpdateActivity(ctx *appctx.AppContext, tenantID string, activity *entities.Activity) error
 	DeleteActivity(ctx *appctx.AppContext, tenantID string, id string) error
 
@@ -107,7 +109,7 @@ func (s *ActivityDataStore) Migrate() *diagnostics.Diagnostics {
 		diag.AddError("failed_to_create_activities_index", "failed to create activities index", "activity_data_store", nil)
 	}
 
-	if err := s.GetDB().Exec("CREATE INDEX IF NOT EXISTS idx_activities_actor_target ON activities(actor_type, actor_id, target_type, target_id)").Error; err != nil {
+	if err := s.GetDB().Exec("CREATE INDEX IF NOT EXISTS idx_activities_actor_target ON activities(actor_type, actor_id)").Error; err != nil {
 		diag.AddError("failed_to_create_activities_actor_target_index", "failed to create activities actor target index", "activity_data_store", nil)
 	}
 
@@ -128,15 +130,19 @@ func (s *ActivityDataStore) CreateActivity(ctx *appctx.AppContext, tenantID stri
 	}
 
 	if activity.Slug == "" {
-		activity.Slug = fmt.Sprintf("activity-%s", activity.ID)
+		activity.Slug = pkg_utils.Slugify(fmt.Sprintf("activity-%s", activity.ID))
 	}
 
 	activity.TenantID = tenantID
+	if activity.TenantID == "" {
+		activity.TenantID = config.UnknownTenantID
+	}
 	activity.CreatedAt = time.Now()
 	activity.UpdatedAt = time.Now()
 
-	if activity.StartedAt.IsZero() {
-		activity.StartedAt = time.Now()
+	if activity.StartedAt == nil {
+		now := time.Now()
+		activity.StartedAt = &now
 	}
 
 	if err := s.GetDB().Create(activity).Error; err != nil {
@@ -171,6 +177,10 @@ func (s *ActivityDataStore) GetActivityByID(ctx *appctx.AppContext, tenantID str
 
 func (s *ActivityDataStore) GetActivitiesByFilter(ctx *appctx.AppContext, tenantID string, filterObj *filters.Filter) (*filters.FilterResponse[entities.Activity], error) {
 	return utils.PaginatedFilteredQuery(s.GetDB(), tenantID, filterObj, entities.Activity{})
+}
+
+func (s *ActivityDataStore) GetPaginatedActivities(ctx *appctx.AppContext, tenantID string, pagination *filters.Pagination) (*filters.PaginationResponse[entities.Activity], error) {
+	return utils.PaginatedQuery(s.GetDB(), tenantID, pagination, entities.Activity{})
 }
 
 func (s *ActivityDataStore) UpdateActivity(ctx *appctx.AppContext, tenantID string, activity *entities.Activity) error {

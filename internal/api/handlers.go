@@ -1,6 +1,10 @@
 package api
 
-import "net/http"
+import (
+	"net/http"
+
+	"github.com/cjlapao/locally-cli/internal/api/types"
+)
 
 // Handler represents the main API handler
 // This can be used for general API functionality that doesn't belong to specific domains
@@ -11,8 +15,8 @@ func NewHandler() *Handler {
 	return &Handler{}
 }
 
-func (h *Handler) Routes() []Route {
-	return []Route{
+func (h *Handler) Routes() []types.Route {
+	return []types.Route{
 		{
 			Method:  http.MethodGet,
 			Path:    "/v1/health",
