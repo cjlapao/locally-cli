@@ -19,6 +19,10 @@ func MapRoleToDto(role *entities.Role) *models.Role {
 		Claims:        make([]models.Claim, len(role.Claims)),
 	}
 
+	for i, claim := range role.Claims {
+		result.Claims[i] = *MapClaimToDto(&claim)
+	}
+
 	return result
 }
 

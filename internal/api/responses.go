@@ -25,6 +25,16 @@ func WriteObjectResponse[T any](w http.ResponseWriter, r *http.Request, data T) 
 	json.NewEncoder(w).Encode(data)
 }
 
+func WriteObjectResponseWithStatus[T any](w http.ResponseWriter, r *http.Request, status int, data T) {
+	w.Header().Set("Content-Type", "application/json")
+	if status == 0 {
+		status = http.StatusOK
+	}
+	w.WriteHeader(status)
+
+	json.NewEncoder(w).Encode(data)
+}
+
 func WriteSuccessResponse(w http.ResponseWriter, r *http.Request, id, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)

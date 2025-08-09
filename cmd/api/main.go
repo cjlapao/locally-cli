@@ -17,6 +17,7 @@ import (
 	"github.com/cjlapao/locally-cli/internal/appctx"
 	"github.com/cjlapao/locally-cli/internal/auth"
 	"github.com/cjlapao/locally-cli/internal/auth/handlers"
+	auth_interfaces "github.com/cjlapao/locally-cli/internal/auth/interfaces"
 	"github.com/cjlapao/locally-cli/internal/certificates"
 	"github.com/cjlapao/locally-cli/internal/claim"
 	claim_interfaces "github.com/cjlapao/locally-cli/internal/claim/interfaces"
@@ -366,7 +367,7 @@ func initializeEncryptionService(cfg *config.Config) (*encryption.EncryptionServ
 }
 
 // initializeAuthService initializes the auth service
-func initializeAuthService(cfg *config.Config, authDataStore stores.ApiKeyStoreInterface, userStore stores.UserDataStoreInterface, tenantStore stores.TenantDataStoreInterface) (*auth.AuthService, *diagnostics.Diagnostics) {
+func initializeAuthService(cfg *config.Config, authDataStore stores.ApiKeyStoreInterface, userStore stores.UserDataStoreInterface, tenantStore stores.TenantDataStoreInterface) (auth_interfaces.AuthServiceInterface, *diagnostics.Diagnostics) {
 	logging.Info("Initializing auth service...")
 
 	authService, diag := auth.Initialize(auth.AuthServiceConfig{
@@ -439,7 +440,7 @@ func initializeActivityService(activityStore stores.ActivityDataStoreInterface) 
 }
 
 // initializeAPIServer initializes the API server
-func initializeAPIServer(cfg *config.Config, authService *auth.AuthService) (*api.Server, error) {
+func initializeAPIServer(cfg *config.Config, authService auth_interfaces.AuthServiceInterface) (*api.Server, error) {
 	logging.Info("Initializing API server...")
 	server := api.NewServer(api.Config{
 		AuthService:         authService,
@@ -700,6 +701,8 @@ func run() error {
 	apiServer.RegisterRoutes(api_keys.NewApiHandler(apiKeysService))
 	// Register activity routes
 	apiServer.RegisterRoutes(activity.NewApiHandler(activityService, systemService))
+	// Register auth test routes
+	apiServer.RegisterRoutes(handlers.NewTestHandler(authService, apiKeyStore, activityService))
 	logging.Info("Starting event service...")
 	if err := startEventService(ctx, eventService); err != nil {
 		return err

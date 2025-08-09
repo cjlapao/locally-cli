@@ -26,38 +26,10 @@ func NewApiKeysApiHandler(apiKeysService interfaces.ApiKeysServiceInterface) *Ap
 func (h *ApiKeysApiHandler) Routes() []api_types.Route {
 	return []api_types.Route{
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/api-keys/open",
-			Handler:       h.HandleGetApiKeys,
-			Description:   "Get all API keys",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
-		},
-		{
-			Method:        http.MethodGet,
-			Path:          "/v1/api-keys/open1",
-			Handler:       h.HandleGetApiKeys,
-			Description:   "Get all API keys",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
-			SecurityRequirement: &api_types.SecurityRequirement{
-				SecurityLevel: pkg_models.ApiKeySecurityLevelNone,
-			},
-		},
-		{
-			Method:        http.MethodGet,
-			Path:          "/v1/api-keys/superuser",
-			Handler:       h.HandleGetApiKeys,
-			Description:   "Get all API keys",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
-			SecurityRequirement: &api_types.SecurityRequirement{
-				SecurityLevel: pkg_models.ApiKeySecurityLevelSuperUser,
-			},
-		},
-		{
-			Method:        http.MethodGet,
-			Path:          "/v1/api-keys/claim",
-			Handler:       h.HandleGetApiKeys,
-			Description:   "Get all API keys",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+			Method:      http.MethodGet,
+			Path:        "/v1/api-keys",
+			Handler:     h.HandleGetApiKeys,
+			Description: "Get all API keys",
 			SecurityRequirement: &api_types.SecurityRequirement{
 				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
 				Claims: &api_types.SecurityRequirementClaims{
@@ -67,61 +39,10 @@ func (h *ApiKeysApiHandler) Routes() []api_types.Route {
 			},
 		},
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/api-keys/claims",
-			Handler:       h.HandleGetApiKeys,
-			Description:   "Get all API keys",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
-			SecurityRequirement: &api_types.SecurityRequirement{
-				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
-				Claims: &api_types.SecurityRequirementClaims{
-					Relation: api_types.SecurityRequirementRelationAnd,
-					Items: []pkg_models.Claim{
-						{Service: "auth", Module: "api_keys", Action: pkg_models.AccessLevelRead},
-						{Service: "auth", Module: "api_keys", Action: pkg_models.AccessLevelApprove},
-						{Service: "auth", Module: "api_keys", Action: pkg_models.AccessLevelLock},
-					},
-				},
-			},
-		},
-		{
-			Method:        http.MethodGet,
-			Path:          "/v1/api-keys/role",
-			Handler:       h.HandleGetApiKeys,
-			Description:   "Get all API keys",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
-			SecurityRequirement: &api_types.SecurityRequirement{
-				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
-				Roles: &api_types.SecurityRequirementRoles{
-					Relation: api_types.SecurityRequirementRelationAnd,
-					Items:    []pkg_models.Role{{Name: "admin"}},
-				},
-			},
-		},
-		{
-			Method:        http.MethodGet,
-			Path:          "/v1/api-keys/role_and_claim",
-			Handler:       h.HandleGetApiKeys,
-			Description:   "Get all API keys",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
-			SecurityRequirement: &api_types.SecurityRequirement{
-				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
-				Claims: &api_types.SecurityRequirementClaims{
-					Relation: api_types.SecurityRequirementRelationAnd,
-					Items:    []pkg_models.Claim{{Service: "auth", Module: "api_keys", Action: pkg_models.AccessLevelRead}},
-				},
-				Roles: &api_types.SecurityRequirementRoles{
-					Relation: api_types.SecurityRequirementRelationAnd,
-					Items:    []pkg_models.Role{{Name: "admin"}},
-				},
-			},
-		},
-		{
-			Method:        http.MethodGet,
-			Path:          "/v1/api-keys",
-			Handler:       h.HandleGetApiKeys,
-			Description:   "Get all API keys",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+			Method:      http.MethodGet,
+			Path:        "/v1/api-keys/{id}",
+			Handler:     h.HandleGetApiKey,
+			Description: "Get an API key by ID",
 			SecurityRequirement: &api_types.SecurityRequirement{
 				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
 				Claims: &api_types.SecurityRequirementClaims{
@@ -129,31 +50,12 @@ func (h *ApiKeysApiHandler) Routes() []api_types.Route {
 					Items:    []pkg_models.Claim{{Service: "auth", Module: "api_keys", Action: pkg_models.AccessLevelRead}},
 				},
 			},
-			Roles:  []pkg_models.Role{{Name: "admin"}},
-			Claims: []pkg_models.Claim{{Service: "auth", Module: "api_keys", Action: pkg_models.AccessLevelRead}},
 		},
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/api-keys/{id}",
-			Handler:       h.HandleGetApiKey,
-			Description:   "Get an API key by ID",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
-			SecurityRequirement: &api_types.SecurityRequirement{
-				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
-				Claims: &api_types.SecurityRequirementClaims{
-					Relation: api_types.SecurityRequirementRelationAnd,
-					Items:    []pkg_models.Claim{{Service: "auth", Module: "api_keys", Action: pkg_models.AccessLevelRead}},
-				},
-			},
-			Roles:  []pkg_models.Role{{Name: "admin"}},
-			Claims: []pkg_models.Claim{{Service: "auth", Module: "api_keys", Action: pkg_models.AccessLevelRead}},
-		},
-		{
-			Method:        http.MethodPost,
-			Path:          "/v1/api-keys",
-			Handler:       h.HandleCreateApiKey,
-			Description:   "Create a new API key",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelSuperUser,
+			Method:      http.MethodPost,
+			Path:        "/v1/api-keys",
+			Handler:     h.HandleCreateApiKey,
+			Description: "Create a new API key",
 			SecurityRequirement: &api_types.SecurityRequirement{
 				SecurityLevel: pkg_models.ApiKeySecurityLevelSuperUser,
 				Claims: &api_types.SecurityRequirementClaims{
@@ -161,15 +63,12 @@ func (h *ApiKeysApiHandler) Routes() []api_types.Route {
 					Items:    []pkg_models.Claim{{Service: "auth", Module: "api_keys", Action: pkg_models.AccessLevelWrite}},
 				},
 			},
-			Roles:  []pkg_models.Role{{Name: "admin"}},
-			Claims: []pkg_models.Claim{{Service: "auth", Module: "api_keys", Action: pkg_models.AccessLevelWrite}},
 		},
 		{
-			Method:        http.MethodDelete,
-			Path:          "/v1/api-keys/{id}",
-			Handler:       h.HandleDeleteApiKey,
-			Description:   "Delete an API key",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelSuperUser,
+			Method:      http.MethodDelete,
+			Path:        "/v1/api-keys/{id}",
+			Handler:     h.HandleDeleteApiKey,
+			Description: "Delete an API key",
 			SecurityRequirement: &api_types.SecurityRequirement{
 				SecurityLevel: pkg_models.ApiKeySecurityLevelSuperUser,
 				Claims: &api_types.SecurityRequirementClaims{
@@ -177,15 +76,12 @@ func (h *ApiKeysApiHandler) Routes() []api_types.Route {
 					Items:    []pkg_models.Claim{{Service: "auth", Module: "api_keys", Action: pkg_models.AccessLevelDelete}},
 				},
 			},
-			Roles:  []pkg_models.Role{{Name: "admin"}},
-			Claims: []pkg_models.Claim{{Service: "auth", Module: "api_keys", Action: pkg_models.AccessLevelDelete}},
 		},
 		{
-			Method:        http.MethodPost,
-			Path:          "/v1/api-keys/{id}/revoke",
-			Handler:       h.HandleRevokeApiKey,
-			Description:   "Revoke an API key",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelSuperUser,
+			Method:      http.MethodPost,
+			Path:        "/v1/api-keys/{id}/revoke",
+			Handler:     h.HandleRevokeApiKey,
+			Description: "Revoke an API key",
 			SecurityRequirement: &api_types.SecurityRequirement{
 				SecurityLevel: pkg_models.ApiKeySecurityLevelSuperUser,
 				Claims: &api_types.SecurityRequirementClaims{
@@ -193,8 +89,6 @@ func (h *ApiKeysApiHandler) Routes() []api_types.Route {
 					Items:    []pkg_models.Claim{{Service: "auth", Module: "api_keys", Action: pkg_models.AccessLevelDelete}},
 				},
 			},
-			Roles:  []pkg_models.Role{{Name: "admin"}},
-			Claims: []pkg_models.Claim{{Service: "auth", Module: "api_keys", Action: pkg_models.AccessLevelDelete}},
 		},
 	}
 }

@@ -12,4 +12,5 @@ const (
 	UserAgentKey     AppContextKey = "x-user-agent"
 	StartTimeKey     AppContextKey = "x-start-time"
 	MetadataKey      AppContextKey = "x-metadata"
+	SecurityLevelKey AppContextKey = "x-security-level"
 )

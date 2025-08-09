@@ -11,6 +11,7 @@ import (
 
 	"github.com/cjlapao/locally-cli/internal/logging"
 	"github.com/cjlapao/locally-cli/pkg/diagnostics"
+	pkg_models "github.com/cjlapao/locally-cli/pkg/models"
 	"github.com/cjlapao/locally-cli/pkg/types"
 
 	"github.com/sirupsen/logrus"
@@ -26,6 +27,7 @@ type AppContext struct {
 	tenantID      string
 	userIP        string
 	userAgent     string
+	securityLevel pkg_models.SecurityLevel
 	startTime     time.Time
 	metadata      map[string]interface{}
 	diagnostics   *diagnostics.Diagnostics
@@ -140,6 +142,19 @@ func (c *AppContext) WithUserAgent(userAgent string) *AppContext {
 
 	// Add to diagnostics
 	newCtx.diagnostics.AddMetadata("user_agent", userAgent)
+
+	return newCtx
+}
+
+func (c *AppContext) WithSecurityLevel(securityLevel pkg_models.SecurityLevel) *AppContext {
+	newCtx := c.clone()
+	newCtx.securityLevel = securityLevel
+
+	// Update the underlying context
+	newCtx.Context = context.WithValue(newCtx.Context, types.SecurityLevelKey, securityLevel)
+
+	// Add to diagnostics
+	newCtx.diagnostics.AddMetadata("security_level", securityLevel)
 
 	return newCtx
 }
@@ -313,6 +328,13 @@ func (c *AppContext) GetUserAgent() string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.userAgent
+}
+
+// GetSecurityLevel returns the security level from the context
+func (c *AppContext) GetSecurityLevel() pkg_models.SecurityLevel {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.securityLevel
 }
 
 // GetDiagnostics returns the diagnostics from the context
@@ -614,6 +636,8 @@ func (c *AppContext) Value(key interface{}) interface{} {
 			return c.GetStartTime()
 		case types.MetadataKey:
 			return c.GetAllMetadata()
+		case types.SecurityLevelKey:
+			return c.GetSecurityLevel()
 		}
 	case string:
 		// Check if it's one of our context keys
@@ -630,6 +654,8 @@ func (c *AppContext) Value(key interface{}) interface{} {
 			return c.GetStartTime()
 		case types.MetadataKey:
 			return c.GetAllMetadata()
+		case types.SecurityLevelKey:
+			return c.GetSecurityLevel()
 		}
 
 		// Check if it's a metadata key
@@ -706,6 +732,10 @@ func FromContext(ctx context.Context) *AppContext {
 		appCtx.startTime = startTime
 	}
 
+	if securityLevel, ok := ctx.Value(types.SecurityLevelKey).(pkg_models.SecurityLevel); ok {
+		appCtx.securityLevel = securityLevel
+	}
+
 	return appCtx
 }
 
@@ -750,6 +780,26 @@ func GetRequestID(ctx context.Context) string {
 	}
 
 	return ""
+}
+
+// GetSecurityLevel extracts the security level from a context
+
+func GetSecurityLevel(ctx context.Context) pkg_models.SecurityLevel {
+	if ctx == nil {
+		return pkg_models.SecurityLevelNone
+	}
+
+	// Try to get from AppContext first
+	if appCtx, ok := ctx.(*AppContext); ok {
+		return appCtx.GetSecurityLevel()
+	}
+
+	// Try to get from standard context
+	if securityLevel, ok := ctx.Value(types.SecurityLevelKey).(pkg_models.SecurityLevel); ok {
+		return securityLevel
+	}
+
+	return pkg_models.SecurityLevelNone
 }
 
 // GetCorrelationID extracts the correlation ID from a context

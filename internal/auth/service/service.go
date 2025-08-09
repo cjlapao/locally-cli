@@ -1,5 +1,5 @@
-// Package auth implements a service that authenticates users and manages tokens.
-package auth
+// Package service provides the authentication service implementation.
+package service
 
 import (
 	"crypto/rand"
@@ -10,12 +10,14 @@ import (
 	"time"
 
 	"github.com/cjlapao/locally-cli/internal/appctx"
+	auth_interfaces "github.com/cjlapao/locally-cli/internal/auth/interfaces"
+	auth_models "github.com/cjlapao/locally-cli/internal/auth/models"
 	"github.com/cjlapao/locally-cli/internal/config"
 	"github.com/cjlapao/locally-cli/internal/database/stores"
 	"github.com/cjlapao/locally-cli/internal/encryption"
 	"github.com/cjlapao/locally-cli/internal/mappers"
 	"github.com/cjlapao/locally-cli/pkg/diagnostics"
-	"github.com/cjlapao/locally-cli/pkg/models"
+	pkg_models "github.com/cjlapao/locally-cli/pkg/models"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -48,7 +50,8 @@ type AuthService struct {
 	TenantStore   stores.TenantDataStoreInterface
 }
 
-func Initialize(cfg AuthServiceConfig, authDataStore stores.ApiKeyStoreInterface, userStore stores.UserDataStoreInterface, tenantStore stores.TenantDataStoreInterface) (*AuthService, *diagnostics.Diagnostics) {
+// Initialize initializes the auth service singleton
+func Initialize(cfg AuthServiceConfig, authDataStore stores.ApiKeyStoreInterface, userStore stores.UserDataStoreInterface, tenantStore stores.TenantDataStoreInterface) (auth_interfaces.AuthServiceInterface, *diagnostics.Diagnostics) {
 	diag := diagnostics.New("auth_service")
 	var newDiag *diagnostics.Diagnostics
 	authServiceOnce.Do(func() {
@@ -61,7 +64,8 @@ func Initialize(cfg AuthServiceConfig, authDataStore stores.ApiKeyStoreInterface
 	return globalAuthService, diag
 }
 
-func GetInstance() *AuthService {
+// GetInstance returns the initialized auth service instance
+func GetInstance() auth_interfaces.AuthServiceInterface {
 	if globalAuthService == nil {
 		panic("auth service not initialized")
 	}
@@ -76,7 +80,7 @@ func Reset() {
 	authServiceOnce = sync.Once{}
 }
 
-// NewService creates a new authentication service
+// new creates a new authentication service
 func new(cfg AuthServiceConfig, authDataStore stores.ApiKeyStoreInterface, userStore stores.UserDataStoreInterface, tenantStore stores.TenantDataStoreInterface) (*AuthService, *diagnostics.Diagnostics) {
 	diag := diagnostics.New("auth_service")
 	if err := cfg.Validate(); err != nil {
@@ -92,7 +96,9 @@ func new(cfg AuthServiceConfig, authDataStore stores.ApiKeyStoreInterface, userS
 	}, diag
 }
 
-func (s *AuthService) GetUserByID(ctx *appctx.AppContext, tenantID string, userID string) (*models.User, *diagnostics.Diagnostics) {
+func (s *AuthService) GetName() string { return "auth" }
+
+func (s *AuthService) GetUserByID(ctx *appctx.AppContext, tenantID string, userID string) (*pkg_models.User, *diagnostics.Diagnostics) {
 	diag := diagnostics.New("get_user_by_id")
 	user, err := s.UserStore.GetUserByID(ctx, tenantID, userID)
 	if err != nil {
@@ -125,7 +131,7 @@ func (s *AuthService) GenerateSecureAPIKey() (string, *diagnostics.Diagnostics) 
 }
 
 // GenerateToken generates a JWT token for a user or API key
-func (s *AuthService) GenerateToken(ctx *appctx.AppContext, user *models.User, tenantID string, authType string, apiKeyID string) (*TokenResponse, *diagnostics.Diagnostics) {
+func (s *AuthService) GenerateToken(ctx *appctx.AppContext, user *pkg_models.User, tenantID string, authType string, apiKeyID string) (*auth_models.TokenResponse, *diagnostics.Diagnostics) {
 	diag := diagnostics.New("generate_token")
 	// Create token expiry time (24 hours from now)
 	expiresAt := time.Now().Add(24 * time.Hour)
@@ -136,7 +142,7 @@ func (s *AuthService) GenerateToken(ctx *appctx.AppContext, user *models.User, t
 	}
 
 	// Create the Claims
-	claims := AuthClaims{
+	claims := auth_models.AuthClaims{
 		Username:  user.Username,
 		UserID:    user.ID,
 		ExpiresAt: expiresAt.Unix(),
@@ -148,7 +154,7 @@ func (s *AuthService) GenerateToken(ctx *appctx.AppContext, user *models.User, t
 		APIKeyID:  apiKeyID,
 	}
 
-	highestSecurityLevel := models.SecurityLevelGuest
+	highestSecurityLevel := pkg_models.SecurityLevelGuest
 	for _, role := range user.Roles {
 		if role.SecurityLevel.IsHigherThan(highestSecurityLevel) {
 			highestSecurityLevel = role.SecurityLevel
@@ -204,7 +210,7 @@ func (s *AuthService) GenerateToken(ctx *appctx.AppContext, user *models.User, t
 		}
 	}
 
-	return &TokenResponse{
+	return &auth_models.TokenResponse{
 		TenantID:     tenantID,
 		UserID:       user.ID,
 		Username:     user.Username,
@@ -215,9 +221,9 @@ func (s *AuthService) GenerateToken(ctx *appctx.AppContext, user *models.User, t
 }
 
 // AuthenticateWithPassword authenticates a user with username/password
-func (s *AuthService) AuthenticateWithPassword(ctx *appctx.AppContext, creds AuthCredentials) (*TokenResponse, *diagnostics.Diagnostics) {
+func (s *AuthService) AuthenticateWithPassword(ctx *appctx.AppContext, creds auth_models.AuthCredentials) (*auth_models.TokenResponse, *diagnostics.Diagnostics) {
 	diag := diagnostics.New("authenticate_with_password")
-	errorToken := &TokenResponse{
+	errorToken := &auth_models.TokenResponse{
 		TenantID: creds.TenantID,
 		UserID:   creds.Username,
 		Username: creds.Username,
@@ -295,7 +301,7 @@ func (s *AuthService) AuthenticateWithPassword(ctx *appctx.AppContext, creds Aut
 }
 
 // AuthenticateWithAPIKey authenticates a user with an API key
-func (s *AuthService) AuthenticateWithAPIKey(ctx *appctx.AppContext, creds APIKeyCredentials) (*TokenResponse, *diagnostics.Diagnostics) {
+func (s *AuthService) AuthenticateWithAPIKey(ctx *appctx.AppContext, creds auth_models.APIKeyCredentials) (*auth_models.TokenResponse, *diagnostics.Diagnostics) {
 	diag := diagnostics.New("authenticate_with_api_key")
 	if creds.TenantID == "" {
 		creds.TenantID = "global"
@@ -309,16 +315,17 @@ func (s *AuthService) AuthenticateWithAPIKey(ctx *appctx.AppContext, creds APIKe
 		return nil, diag
 	}
 
-	// Hash the provided API key for comparison
-	encryptionService := encryption.GetInstance()
-	keyHash, err := encryptionService.HashPassword(creds.APIKey)
-	if err != nil {
-		diag.AddError("authenticate_with_api_key", "failed to hash API key", err.Error())
+	// Look up by key prefix
+	// The stored prefix is the first 8 chars after the configured prefix
+	prefixLen := len(config.ApiKeyPrefix) + 8
+	if len(creds.APIKey) < prefixLen {
+		diag.AddError("authenticate_with_api_key", "invalid API key length", "")
 		return nil, diag
 	}
+	keyPrefix := creds.APIKey[:prefixLen]
 
-	// Find the API key in the database
-	apiKey, err := s.AuthDataStore.GetAPIKeyByHash(ctx, keyHash)
+	// Find the API key in the database by prefix
+	apiKey, err := s.AuthDataStore.GetAPIKeyByPrefix(ctx, keyPrefix)
 	if err != nil {
 		diag.AddError("authenticate_with_api_key", "failed to get API key", err.Error())
 		return nil, diag
@@ -337,6 +344,13 @@ func (s *AuthService) AuthenticateWithAPIKey(ctx *appctx.AppContext, creds APIKe
 	// Check if API key is expired
 	if apiKey.ExpiresAt != nil && apiKey.ExpiresAt.Before(time.Now()) {
 		diag.AddError("authenticate_with_api_key", "API key has expired", "")
+		return nil, diag
+	}
+
+	// Verify the provided API key against the stored bcrypt hash
+	encryptionService := encryption.GetInstance()
+	if err := encryptionService.VerifyPassword(creds.APIKey, apiKey.KeyHash); err != nil {
+		diag.AddError("authenticate_with_api_key", "invalid API key", "")
 		return nil, diag
 	}
 
@@ -380,12 +394,12 @@ func (s *AuthService) AuthenticateWithAPIKey(ctx *appctx.AppContext, creds APIKe
 }
 
 // Authenticate is the main authentication method that supports both password and API key
-func (s *AuthService) Authenticate(ctx *appctx.AppContext, creds AuthCredentials) (*TokenResponse, *diagnostics.Diagnostics) {
+func (s *AuthService) Authenticate(ctx *appctx.AppContext, creds auth_models.AuthCredentials) (*auth_models.TokenResponse, *diagnostics.Diagnostics) {
 	return s.AuthenticateWithPassword(ctx, creds)
 }
 
 // ValidateToken validates a JWT token and returns claims
-func (s *AuthService) ValidateToken(tokenString string) (*AuthClaims, error) {
+func (s *AuthService) ValidateToken(tokenString string) (*auth_models.AuthClaims, error) {
 	// Parse takes the token string and a function for looking up the key
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		// Validate the algorithm is what we expect
@@ -429,7 +443,7 @@ func (s *AuthService) ValidateToken(tokenString string) (*AuthClaims, error) {
 			}
 		}
 
-		return &AuthClaims{
+		return &auth_models.AuthClaims{
 			Username:      claims["username"].(string),
 			UserID:        claims["user_id"].(string),
 			ExpiresAt:     int64(claims["exp"].(float64)),
@@ -439,14 +453,14 @@ func (s *AuthService) ValidateToken(tokenString string) (*AuthClaims, error) {
 			TenantID:      claims["tenant_id"].(string),
 			AuthType:      authType,
 			APIKeyID:      apiKeyID,
-			SecurityLevel: models.SecurityLevel(claims["security_level"].(string)),
+			SecurityLevel: pkg_models.SecurityLevel(claims["security_level"].(string)),
 		}, nil
 	}
 
 	return nil, fmt.Errorf("invalid token claims")
 }
 
-func (s *AuthService) RefreshToken(ctx *appctx.AppContext, refreshTokenString string) (*TokenResponse, error) {
+func (s *AuthService) RefreshToken(ctx *appctx.AppContext, refreshTokenString string) (*auth_models.TokenResponse, error) {
 	refreshToken, err := jwt.Parse(refreshTokenString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
@@ -461,7 +475,7 @@ func (s *AuthService) RefreshToken(ctx *appctx.AppContext, refreshTokenString st
 		return nil, fmt.Errorf("invalid refresh token")
 	}
 	// Extract claims
-	var user *models.User
+	var user *pkg_models.User
 	var tenantID string
 	if claims, ok := refreshToken.Claims.(jwt.MapClaims); ok {
 		dbUser, userErr := s.UserStore.GetUserByID(ctx, claims["tenant_id"].(string), claims["id"].(string))
@@ -488,18 +502,18 @@ func (s *AuthService) RefreshToken(ctx *appctx.AppContext, refreshTokenString st
 	return token, nil
 }
 
-func isSuperUser(roles []models.Role) bool {
+func isSuperUser(roles []pkg_models.Role) bool {
 	for _, role := range roles {
-		if role.SecurityLevel == models.SecurityLevelSuperUser {
+		if role.SecurityLevel == pkg_models.SecurityLevelSuperUser {
 			return true
 		}
 	}
 	return false
 }
 
-func isAdminUser(roles []models.Role) bool {
+func isAdminUser(roles []pkg_models.Role) bool {
 	for _, role := range roles {
-		if role.SecurityLevel == models.SecurityLevelAdmin {
+		if role.SecurityLevel == pkg_models.SecurityLevelAdmin {
 			return true
 		}
 	}

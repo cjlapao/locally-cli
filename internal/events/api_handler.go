@@ -7,7 +7,8 @@ import (
 
 	"github.com/cjlapao/locally-cli/internal/api"
 	api_types "github.com/cjlapao/locally-cli/internal/api/types"
-	"github.com/cjlapao/locally-cli/internal/auth"
+	"github.com/cjlapao/locally-cli/internal/appctx"
+	auth_interfaces "github.com/cjlapao/locally-cli/internal/auth/interfaces"
 	"github.com/cjlapao/locally-cli/pkg/models"
 	"github.com/google/uuid"
 )
@@ -19,7 +20,7 @@ type APIHandler struct {
 }
 
 // NewApiHandler creates a new API handler for events
-func NewApiHandler(eventService *EventService, authService *auth.AuthService) *APIHandler {
+func NewApiHandler(eventService *EventService, authService auth_interfaces.AuthServiceInterface) *APIHandler {
 	return &APIHandler{
 		eventService: eventService,
 		sseHandler:   newSSEService(eventService, authService),
@@ -30,32 +31,40 @@ func NewApiHandler(eventService *EventService, authService *auth.AuthService) *A
 func (h *APIHandler) Routes() []api_types.Route {
 	return []api_types.Route{
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/events/stream",
-			Handler:       h.sseHandler.HandleSSE,
-			Description:   "Server-Sent Events stream for real-time updates",
-			SecurityLevel: models.ApiKeySecurityLevelAny,
+			Method:      http.MethodGet,
+			Path:        "/v1/events/stream",
+			Handler:     h.sseHandler.HandleSSE,
+			Description: "Server-Sent Events stream for real-time updates",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: models.ApiKeySecurityLevelAny,
+			},
 		},
 		{
-			Method:        http.MethodPost,
-			Path:          "/v1/events/push",
-			Handler:       h.HandlePushEvent,
-			Description:   "Push an event to the event service",
-			SecurityLevel: models.ApiKeySecurityLevelAny,
+			Method:      http.MethodPost,
+			Path:        "/v1/events/push",
+			Handler:     h.HandlePushEvent,
+			Description: "Push an event to the event service",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: models.ApiKeySecurityLevelAny,
+			},
 		},
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/events/stats",
-			Handler:       h.HandleGetStats,
-			Description:   "Get event service statistics",
-			SecurityLevel: models.ApiKeySecurityLevelAny,
+			Method:      http.MethodGet,
+			Path:        "/v1/events/stats",
+			Handler:     h.HandleGetStats,
+			Description: "Get event service statistics",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: models.ApiKeySecurityLevelAny,
+			},
 		},
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/events/health",
-			Handler:       h.HandleHealthCheck,
-			Description:   "Health check for event service",
-			SecurityLevel: models.ApiKeySecurityLevelAny,
+			Method:      http.MethodGet,
+			Path:        "/v1/events/health",
+			Handler:     h.HandleHealthCheck,
+			Description: "Health check for event service",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: models.ApiKeySecurityLevelAny,
+			},
 		},
 	}
 }
@@ -86,13 +95,17 @@ type HealthResponse struct {
 
 // HandlePushEvent handles push event requests
 func (h *APIHandler) HandlePushEvent(w http.ResponseWriter, r *http.Request) {
-	// Get claims from context (added by auth middleware)
-	claims := auth.GetClaims(r.Context())
-	if claims == nil {
+	ctx := appctx.FromContext(r.Context())
+	userID := ctx.GetUserID()
+	tenantID := ctx.GetTenantID()
+	if userID == "" {
 		api.WriteUnauthorized(w, r, "No authentication claims found", "")
 		return
 	}
-
+	if tenantID == "" {
+		api.WriteUnauthorized(w, r, "No authentication claims found", "")
+		return
+	}
 	// Parse request body
 	var req PushEventRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -114,7 +127,7 @@ func (h *APIHandler) HandlePushEvent(w http.ResponseWriter, r *http.Request) {
 	eventData := map[string]interface{}{
 		"message": req.Message,
 		"source":  "api_test",
-		"user":    claims.Username,
+		"user":    userID,
 	}
 
 	if req.Data != nil {
@@ -123,7 +136,6 @@ func (h *APIHandler) HandlePushEvent(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	tenantID := claims.TenantID
 	if req.TenantID != "" {
 		tenantID = req.TenantID
 	}
@@ -160,25 +172,32 @@ func (h *APIHandler) HandlePushEvent(w http.ResponseWriter, r *http.Request) {
 
 // HandleGetStats handles requests for event service statistics
 func (h *APIHandler) HandleGetStats(w http.ResponseWriter, r *http.Request) {
-	// Get claims from context (added by auth middleware)
-	claims := auth.GetClaims(r.Context())
-	if claims == nil {
+	ctx := appctx.FromContext(r.Context())
+	userID := ctx.GetUserID()
+	tenantID := ctx.GetTenantID()
+	securityLevel := ctx.GetSecurityLevel()
+
+	if userID == "" {
+		api.WriteUnauthorized(w, r, "No authentication claims found", "")
+		return
+	}
+	if tenantID == "" {
 		api.WriteUnauthorized(w, r, "No authentication claims found", "")
 		return
 	}
 
 	// Get statistics for the user's tenant
-	connectedClients := h.eventService.GetConnectedClients(claims.TenantID)
+	connectedClients := h.eventService.GetConnectedClients(tenantID)
 
 	response := StatsResponse{
 		ConnectedClients: connectedClients,
-		TenantID:         claims.TenantID,
+		TenantID:         tenantID,
 		ServiceStatus:    "active",
 		Timestamp:        time.Now().Format(time.RFC3339),
 	}
 
 	// If user has admin role, include all tenant statistics
-	if claims.SecurityLevel == models.SecurityLevelSuperUser {
+	if securityLevel == models.SecurityLevelSuperUser {
 		response.AllTenantConnections = h.eventService.GetAllConnectedClients()
 	}
 

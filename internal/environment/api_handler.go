@@ -22,18 +22,22 @@ func NewApiHandler(environment *Environment) *ApiHandler {
 func (h *ApiHandler) Routes() []api_types.Route {
 	return []api_types.Route{
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/environment/vaults",
-			Handler:       h.HandleGetVaults,
-			Description:   "Get all vaults from the environment",
-			SecurityLevel: models.ApiKeySecurityLevelAny,
+			Method:      http.MethodGet,
+			Path:        "/v1/environment/vaults",
+			Handler:     h.HandleGetVaults,
+			Description: "Get all vaults from the environment",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: models.ApiKeySecurityLevelAny,
+			},
 		},
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/environment/{vault_name}/get/{key}",
-			Handler:       h.HandleGetVaultKey,
-			Description:   "Get a specific vault from the  environment",
-			SecurityLevel: models.ApiKeySecurityLevelAny,
+			Method:      http.MethodGet,
+			Path:        "/v1/environment/{vault_name}/get/{key}",
+			Handler:     h.HandleGetVaultKey,
+			Description: "Get a specific vault from the  environment",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: models.ApiKeySecurityLevelAny,
+			},
 		},
 	}
 }

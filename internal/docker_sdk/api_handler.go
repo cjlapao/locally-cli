@@ -27,39 +27,49 @@ func NewApiHandler(service *DockerService) *APIHandler {
 func (h *APIHandler) Routes() []api_types.Route {
 	return []api_types.Route{
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/docker/containers",
-			Handler:       h.GetAllContainers,
-			Description:   "Get all containers",
-			SecurityLevel: models.ApiKeySecurityLevelAny,
+			Method:      http.MethodGet,
+			Path:        "/v1/docker/containers",
+			Handler:     h.GetAllContainers,
+			Description: "Get all containers",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: models.ApiKeySecurityLevelAny,
+			},
 		},
 		{
-			Method:        http.MethodPost,
-			Path:          "/v1/docker/containers",
-			Handler:       h.CreateContainer,
-			Description:   "Create a new container",
-			SecurityLevel: models.ApiKeySecurityLevelAny,
+			Method:      http.MethodPost,
+			Path:        "/v1/docker/containers",
+			Handler:     h.CreateContainer,
+			Description: "Create a new container",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: models.ApiKeySecurityLevelAny,
+			},
 		},
 		{
-			Method:        http.MethodPut,
-			Path:          "/v1/docker/containers/{id}/start",
-			Handler:       h.StartContainer,
-			Description:   "Start a container",
-			SecurityLevel: models.ApiKeySecurityLevelAny,
+			Method:      http.MethodPut,
+			Path:        "/v1/docker/containers/{id}/start",
+			Handler:     h.StartContainer,
+			Description: "Start a container",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: models.ApiKeySecurityLevelAny,
+			},
 		},
 		{
-			Method:        http.MethodPut,
-			Path:          "/v1/docker/containers/{id}/stop",
-			Handler:       h.StopContainer,
-			Description:   "Stop a container",
-			SecurityLevel: models.ApiKeySecurityLevelAny,
+			Method:      http.MethodPut,
+			Path:        "/v1/docker/containers/{id}/stop",
+			Handler:     h.StopContainer,
+			Description: "Stop a container",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: models.ApiKeySecurityLevelAny,
+			},
 		},
 		{
-			Method:        http.MethodDelete,
-			Path:          "/v1/docker/containers/{id}",
-			Handler:       h.RemoveContainer,
-			Description:   "Remove a container",
-			SecurityLevel: models.ApiKeySecurityLevelAny,
+			Method:      http.MethodDelete,
+			Path:        "/v1/docker/containers/{id}",
+			Handler:     h.RemoveContainer,
+			Description: "Remove a container",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: models.ApiKeySecurityLevelAny,
+			},
 		},
 	}
 }

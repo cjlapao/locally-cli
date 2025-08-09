@@ -15,9 +15,6 @@ type Route struct {
 	Middleware          []func(http.HandlerFunc) http.HandlerFunc // Legacy middleware for backward compatibility
 	Description         string
 	SecurityRequirement *SecurityRequirement
-	SecurityLevel       models.ApiKeySecurityLevel
-	Claims              []models.Claim
-	Roles               []models.Role
 }
 
 // RouteGroup represents a group of related routes

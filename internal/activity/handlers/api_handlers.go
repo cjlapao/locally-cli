@@ -40,13 +40,21 @@ func (h *ActivityApiHandler) Routes() []api_types.Route {
 
 	return []api_types.Route{
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/audits",
-			Handler:       h.HandleGetAudits,
-			Description:   "Get all audits",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
-			Roles:         []pkg_models.Role{*adminRole, *auditorRole},
-			Claims:        []pkg_models.Claim{{Service: module.System, Module: module.Name, Action: pkg_models.AccessLevelRead}},
+			Method:      http.MethodGet,
+			Path:        "/v1/audits",
+			Handler:     h.HandleGetAudits,
+			Description: "Get all audits",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Roles: &api_types.SecurityRequirementRoles{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Role{*adminRole, *auditorRole},
+				},
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: module.System, Module: module.Name, Action: pkg_models.AccessLevelRead}},
+				},
+			},
 		},
 	}
 }

@@ -30,39 +30,49 @@ func NewApiHandlers(certificateService *CertificateService, store stores.Certifi
 func (h *ApiHandlers) Routes() []api_types.Route {
 	return []api_types.Route{
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/certificates/root",
-			Handler:       h.HandleGetRootCertificate,
-			Description:   "Get the root certificate",
-			SecurityLevel: models.ApiKeySecurityLevelAny,
+			Method:      http.MethodGet,
+			Path:        "/v1/certificates/root",
+			Handler:     h.HandleGetRootCertificate,
+			Description: "Get the root certificate",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: models.ApiKeySecurityLevelAny,
+			},
 		},
 		{
-			Method:        http.MethodPost,
-			Path:          "/v1/certificates/root",
-			Handler:       h.HandleCreateRootCertificate,
-			Description:   "Create a new root certificate",
-			SecurityLevel: models.ApiKeySecurityLevelSuperUser,
+			Method:      http.MethodPost,
+			Path:        "/v1/certificates/root",
+			Handler:     h.HandleCreateRootCertificate,
+			Description: "Create a new root certificate",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: models.ApiKeySecurityLevelSuperUser,
+			},
 		},
 		{
-			Method:        http.MethodDelete,
-			Path:          "/v1/certificates/root",
-			Handler:       h.HandleDeleteRootCertificate,
-			Description:   "Delete a root certificate",
-			SecurityLevel: models.ApiKeySecurityLevelSuperUser,
+			Method:      http.MethodDelete,
+			Path:        "/v1/certificates/root",
+			Handler:     h.HandleDeleteRootCertificate,
+			Description: "Delete a root certificate",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: models.ApiKeySecurityLevelSuperUser,
+			},
 		},
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/certificates/ca",
-			Handler:       h.HandleGetIntermediateCertificate,
-			Description:   "Get the intermediate certificate",
-			SecurityLevel: models.ApiKeySecurityLevelAny,
+			Method:      http.MethodGet,
+			Path:        "/v1/certificates/ca",
+			Handler:     h.HandleGetIntermediateCertificate,
+			Description: "Get the intermediate certificate",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: models.ApiKeySecurityLevelAny,
+			},
 		},
 		{
-			Method:        http.MethodPost,
-			Path:          "/v1/certificates/ca",
-			Handler:       h.HandleCreateIntermediateCertificate,
-			Description:   "Create a new intermediate certificate",
-			SecurityLevel: models.ApiKeySecurityLevelSuperUser,
+			Method:      http.MethodPost,
+			Path:        "/v1/certificates/ca",
+			Handler:     h.HandleCreateIntermediateCertificate,
+			Description: "Create a new intermediate certificate",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: models.ApiKeySecurityLevelSuperUser,
+			},
 		},
 	}
 }

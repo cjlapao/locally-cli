@@ -11,9 +11,10 @@ import (
 
 	api_types "github.com/cjlapao/locally-cli/internal/api/types"
 	"github.com/cjlapao/locally-cli/internal/appctx"
-	"github.com/cjlapao/locally-cli/internal/auth"
+	auth_interfaces "github.com/cjlapao/locally-cli/internal/auth/interfaces"
+	auth_models "github.com/cjlapao/locally-cli/internal/auth/models"
+	authctx "github.com/cjlapao/locally-cli/internal/authctx"
 	"github.com/cjlapao/locally-cli/internal/config"
-	"github.com/cjlapao/locally-cli/internal/mappers"
 	"github.com/cjlapao/locally-cli/pkg/diagnostics"
 	"github.com/cjlapao/locally-cli/pkg/models"
 	"github.com/cjlapao/locally-cli/pkg/types"
@@ -21,7 +22,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func NewAuthorizationPreMiddleware(authService *auth.AuthService, route *api_types.Route) PreMiddleware {
+func NewAuthorizationPreMiddleware(authService auth_interfaces.AuthServiceInterface, route *api_types.Route) PreMiddleware {
 	return PreMiddlewareFunc(func(w http.ResponseWriter, r *http.Request) MiddlewareResult {
 		// Debug logging to see if auth middleware is being called
 		debugCtx := appctx.FromContext(r.Context())
@@ -65,12 +66,24 @@ func NewAuthorizationPreMiddleware(authService *auth.AuthService, route *api_typ
 			}
 		}
 
+		if authHeader.AuthorizationType == api_types.AuthorizationHeaderTypeApiKey {
+			valid, err := validateApiKey(debugCtx, r, authService, route, authHeader.Token)
+			if err != nil {
+				writeUnauthorizedError(w, r, "Invalid API key", err.Error())
+				return MiddlewareResult{Continue: false, Diagnostics: diag}
+			}
+			if !valid {
+				writeUnauthorizedError(w, r, "Invalid API key", "Invalid API key")
+				return MiddlewareResult{Continue: false, Diagnostics: diag}
+			}
+		}
+
 		return MiddlewareResult{Continue: true}
 	})
 }
 
 // NewRequireAuthPreMiddleware creates a pre-middleware that validates JWT tokens
-func NewRequireAuthPreMiddleware(authService *auth.AuthService) PreMiddleware {
+func NewRequireAuthPreMiddleware(authService auth_interfaces.AuthServiceInterface) PreMiddleware {
 	return PreMiddlewareFunc(func(w http.ResponseWriter, r *http.Request) MiddlewareResult {
 		diag := diagnostics.New("auth_middleware")
 		defer diag.Complete()
@@ -117,7 +130,7 @@ func NewRequireAuthPreMiddleware(authService *auth.AuthService) PreMiddleware {
 
 		// Add claims to the underlying context for backward compatibility
 		// We need to update the AppContext's underlying context directly
-		appCtx.Context = context.WithValue(appCtx.Context, auth.ClaimsKey, claims)
+		appCtx.Context = context.WithValue(appCtx.Context, authctx.ClaimsKey, claims)
 		appCtx.Context = context.WithValue(appCtx.Context, types.TenantIDKey, claims.TenantID)
 		appCtx.Context = context.WithValue(appCtx.Context, types.UserIDKey, claims.Username)
 
@@ -136,7 +149,7 @@ func NewRequireAuthPreMiddleware(authService *auth.AuthService) PreMiddleware {
 	})
 }
 
-func NewRequireSuperUserPreMiddleware(authService *auth.AuthService) PreMiddleware {
+func NewRequireSuperUserPreMiddleware(authService auth_interfaces.AuthServiceInterface) PreMiddleware {
 	return PreMiddlewareFunc(func(w http.ResponseWriter, r *http.Request) MiddlewareResult {
 		// Debug logging to see if auth middleware is being called
 		diag := diagnostics.New("auth_middleware")
@@ -184,11 +197,11 @@ func NewRequireSuperUserPreMiddleware(authService *auth.AuthService) PreMiddlewa
 }
 
 // NewRequireRolePreMiddleware creates a middleware that requires a specific role
-func NewRequireRolePreMiddleware(requiredRoles []models.Role) PreMiddleware {
+func NewRequireRolePreMiddleware(authService auth_interfaces.AuthServiceInterface, requiredRoles []models.Role) PreMiddleware {
 	return PreMiddlewareFunc(func(w http.ResponseWriter, r *http.Request) MiddlewareResult {
 		diag := diagnostics.New("auth_middleware")
 		defer diag.Complete()
-		authService := auth.GetInstance()
+		//
 		// Debug logging
 		debugCtx := appctx.FromContext(r.Context())
 		debugCtx.LogInfo("Role middleware: Starting role validation")
@@ -228,23 +241,19 @@ func NewRequireRolePreMiddleware(requiredRoles []models.Role) PreMiddleware {
 			return MiddlewareResult{Continue: true}
 		}
 
-		// Get user from database to validate roles
+		// Get user to validate roles
 		appCtx := appctx.FromContext(r.Context())
-		user, err := authService.UserStore.GetUserByUsername(appCtx, claims.TenantID, claims.Username)
-		if err != nil {
-			debugCtx.LogWithError(err).Error("Role middleware: Failed to get user from database")
+		userModel, getUserDiag := authService.GetUserByID(appCtx, claims.TenantID, claims.UserID)
+		if getUserDiag != nil && getUserDiag.HasErrors() {
+			debugCtx.LogError("Role middleware: Failed to get user from service")
 			writeForbiddenError(w, r, "Forbidden", "Failed to get user information")
 			return MiddlewareResult{Continue: false, Diagnostics: diag}
 		}
-
-		if user == nil {
-			debugCtx.LogError("Role middleware: User not found in database")
+		if userModel == nil {
+			debugCtx.LogError("Role middleware: User not found")
 			writeForbiddenError(w, r, "Forbidden", "User not found")
 			return MiddlewareResult{Continue: false, Diagnostics: diag}
 		}
-
-		// Convert entity to model for role checking
-		userModel := mappers.MapUserToDto(user)
 
 		// Check if user has any of the required roles
 		hasRequiredRole := false
@@ -282,11 +291,11 @@ func NewRequireRolePreMiddleware(requiredRoles []models.Role) PreMiddleware {
 }
 
 // NewRequireClaimPreMiddleware creates a middleware that requires a specific claim
-func NewRequireClaimPreMiddleware(requiredClaims []models.Claim) PreMiddleware {
+func NewRequireClaimPreMiddleware(authService auth_interfaces.AuthServiceInterface, requiredClaims []models.Claim) PreMiddleware {
 	return PreMiddlewareFunc(func(w http.ResponseWriter, r *http.Request) MiddlewareResult {
 		diag := diagnostics.New("auth_middleware")
 		defer diag.Complete()
-		authService := auth.GetInstance()
+		// using injected authService
 		// Debug logging
 		debugCtx := appctx.FromContext(r.Context())
 		debugCtx.LogInfo("Claim middleware: Starting claim validation")
@@ -326,22 +335,20 @@ func NewRequireClaimPreMiddleware(requiredClaims []models.Claim) PreMiddleware {
 			return MiddlewareResult{Continue: true}
 		}
 
-		// Get user from database to validate claims
+		// Get user to validate claims
 		appCtx := appctx.FromContext(r.Context())
-		dbClaims, err := authService.UserStore.GetUserClaims(appCtx, claims.TenantID, claims.Username)
-		if err != nil {
-			debugCtx.LogWithError(err).Error("Claim middleware: Failed to get user from database")
+		currentUser, getUserDiag := authService.GetUserByID(appCtx, claims.TenantID, claims.UserID)
+		if getUserDiag != nil && getUserDiag.HasErrors() {
+			debugCtx.LogError("Claim middleware: Failed to get user from service")
 			writeForbiddenError(w, r, "Forbidden", "Failed to get user information")
 			return MiddlewareResult{Continue: false, Diagnostics: diag}
 		}
-
-		if len(dbClaims) == 0 {
-			debugCtx.LogError("Claim middleware: User not found in database")
+		if currentUser == nil {
+			debugCtx.LogError("Claim middleware: User not found")
 			writeForbiddenError(w, r, "Forbidden", "User not found")
 			return MiddlewareResult{Continue: false, Diagnostics: diag}
 		}
-
-		userClaims := mappers.MapClaimsToDto(dbClaims)
+		userClaims := currentUser.Claims
 
 		// Check if user has any of the required claims
 		hasRequiredClaim := false
@@ -534,7 +541,7 @@ func extractAuthorizationHeaders(ctx *appctx.AppContext, r *http.Request) *api_t
 
 	// we did not find a bearer token so trying to extract the api key
 	apiKey := r.Header.Get(config.ApiKeyAuthorizationHeader)
-	if apiKey == "" {
+	if apiKey != "" {
 		response := api_types.AuthorizationHeader{
 			AuthorizationType: api_types.AuthorizationHeaderTypeApiKey,
 			Token:             apiKey,
@@ -554,7 +561,7 @@ func extractAuthorizationHeaders(ctx *appctx.AppContext, r *http.Request) *api_t
 	return &response
 }
 
-func validateBearerToken(ctx *appctx.AppContext, r *http.Request, authService *auth.AuthService, route *api_types.Route, authHeader string) (bool, error) {
+func validateBearerToken(ctx *appctx.AppContext, r *http.Request, authService auth_interfaces.AuthServiceInterface, route *api_types.Route, authHeader string) (bool, error) {
 	// Validate the token using the provided auth service
 	ctx.LogInfo("Auth middleware: Validating token")
 	claims, err := authService.ValidateToken(authHeader)
@@ -566,6 +573,20 @@ func validateBearerToken(ctx *appctx.AppContext, r *http.Request, authService *a
 
 	// Super users can do anything
 	if claims.SecurityLevel == models.SecurityLevelSuperUser {
+		// Add claims to context using AppContext
+		appCtx := appctx.FromContext(ctx.Context)
+		appCtx = appCtx.WithTenantID(claims.TenantID)
+		appCtx = appCtx.WithUserID(claims.UserID)
+		appCtx = appCtx.WithUsername(claims.Username)
+
+		// Add claims to the underlying context for backward compatibility
+		// We need to update the AppContext's underlying context directly
+		appCtx.Context = context.WithValue(appCtx.Context, authctx.ClaimsKey, claims)
+		appCtx.Context = context.WithValue(appCtx.Context, types.TenantIDKey, claims.TenantID)
+		appCtx.Context = context.WithValue(appCtx.Context, types.UserIDKey, claims.Username)
+
+		*r = *r.WithContext(appCtx)
+
 		return true, nil
 	}
 
@@ -634,7 +655,7 @@ func validateBearerToken(ctx *appctx.AppContext, r *http.Request, authService *a
 
 	// Add claims to the underlying context for backward compatibility
 	// We need to update the AppContext's underlying context directly
-	appCtx.Context = context.WithValue(appCtx.Context, auth.ClaimsKey, claims)
+	appCtx.Context = context.WithValue(appCtx.Context, authctx.ClaimsKey, claims)
 	appCtx.Context = context.WithValue(appCtx.Context, types.TenantIDKey, claims.TenantID)
 	appCtx.Context = context.WithValue(appCtx.Context, types.UserIDKey, claims.Username)
 
@@ -648,6 +669,119 @@ func validateBearerToken(ctx *appctx.AppContext, r *http.Request, authService *a
 		"roles":             claims.Roles,
 		"auth_context_addr": fmt.Sprintf("%p", appCtx),
 	}).Info("Auth middleware: Claims set in context")
+
+	return true, nil
+}
+
+// validateApiKey validates an API key header and sets context if valid
+func validateApiKey(ctx *appctx.AppContext, r *http.Request, authService auth_interfaces.AuthServiceInterface, route *api_types.Route, apiKey string) (bool, error) {
+	// Build credentials
+	tenantID := ctx.GetTenantID()
+	creds := auth_models.APIKeyCredentials{
+		APIKey:   strings.TrimSpace(apiKey),
+		TenantID: tenantID,
+	}
+
+	// Authenticate via service
+	token, diag := authService.AuthenticateWithAPIKey(ctx, creds)
+	if diag != nil && diag.HasErrors() {
+		return false, fmt.Errorf(diag.GetSummary())
+	}
+	if token == nil || token.Token == "" {
+		return false, errors.New("invalid API key")
+	}
+
+	// Create synthetic claims from token
+	claims := &auth_models.AuthClaims{
+		Username:  token.Username,
+		UserID:    token.UserID,
+		ExpiresAt: token.ExpiresAt.Unix(),
+		IssuedAt:  time.Now().Unix(),
+		Issuer:    "api", // informational
+		Roles:     []string{},
+		TenantID:  token.TenantID,
+		AuthType:  "api_key",
+		APIKeyID:  "",
+	}
+
+	// Super users can do anything; note security checked via bearer tokens typically. For API keys we rely on route checks below.
+
+	// If route requires superuser explicitly, we need to load user and check security level
+	if route.SecurityRequirement != nil && route.SecurityRequirement.SecurityLevel == models.ApiKeySecurityLevelSuperUser {
+		currentUser, userDiag := authService.GetUserByID(ctx, token.TenantID, token.UserID)
+		if userDiag != nil && userDiag.HasErrors() {
+			return false, errors.New("failed to get user by id")
+		}
+		if currentUser == nil {
+			return false, errors.New("user not found")
+		}
+		// Require superuser level
+		isSuper := false
+		for _, r := range currentUser.Roles {
+			if r.SecurityLevel == models.SecurityLevelSuperUser {
+				isSuper = true
+				break
+			}
+		}
+		if !isSuper {
+			return false, errors.New("this endpoint is only available to superusers")
+		}
+	}
+
+	// Check role/claim requirements if present
+	var currentUser *models.User
+	var userDiag *diagnostics.Diagnostics
+	if route.SecurityRequirement != nil && (route.SecurityRequirement.Claims != nil || route.SecurityRequirement.Roles != nil) {
+		currentUser, userDiag = authService.GetUserByID(ctx, token.TenantID, token.UserID)
+		if userDiag != nil && userDiag.HasErrors() {
+			return false, errors.New("failed to get user by id")
+		}
+		if currentUser == nil {
+			return false, errors.New("user not found")
+		}
+	}
+
+	if route.SecurityRequirement != nil && route.SecurityRequirement.Roles != nil {
+		for _, role := range route.SecurityRequirement.Roles.Items {
+			if !hasRole(currentUser, role.Name) {
+				return false, errors.New("user does not have the required role")
+			}
+		}
+	}
+
+	if route.SecurityRequirement != nil && route.SecurityRequirement.Claims != nil {
+		switch route.SecurityRequirement.Claims.Relation {
+		case api_types.SecurityRequirementRelationAnd:
+			for _, claim := range route.SecurityRequirement.Claims.Items {
+				if !userHasClaims(currentUser, claim) {
+					return false, errors.New("user does not have the required claim")
+				}
+			}
+		case api_types.SecurityRequirementRelationOr:
+			hasAnyClaim := false
+			for _, claim := range route.SecurityRequirement.Claims.Items {
+				if userHasClaims(currentUser, claim) {
+					hasAnyClaim = true
+					break
+				}
+			}
+			if !hasAnyClaim {
+				return false, errors.New("user does not have the required claim")
+			}
+		default:
+			return false, errors.New("invalid claim relation")
+		}
+	}
+
+	// Set context with claims for downstream handlers
+	appCtx := appctx.FromContext(ctx.Context)
+	appCtx = appCtx.WithTenantID(token.TenantID)
+	appCtx = appCtx.WithUserID(token.UserID)
+	appCtx = appCtx.WithUsername(token.Username)
+	appCtx.Context = context.WithValue(appCtx.Context, authctx.ClaimsKey, claims)
+	appCtx.Context = context.WithValue(appCtx.Context, types.TenantIDKey, token.TenantID)
+	appCtx.Context = context.WithValue(appCtx.Context, types.UserIDKey, token.Username)
+	*r = *r.WithContext(appCtx)
 
 	return true, nil
 }

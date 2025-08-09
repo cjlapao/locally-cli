@@ -11,7 +11,8 @@ import (
 	"github.com/cjlapao/locally-cli/internal/api"
 	api_types "github.com/cjlapao/locally-cli/internal/api/types"
 	"github.com/cjlapao/locally-cli/internal/appctx"
-	"github.com/cjlapao/locally-cli/internal/auth"
+	auth_interfaces "github.com/cjlapao/locally-cli/internal/auth/interfaces"
+	auth_models "github.com/cjlapao/locally-cli/internal/auth/models"
 	"github.com/cjlapao/locally-cli/internal/config"
 	"github.com/cjlapao/locally-cli/internal/database/stores"
 	"github.com/cjlapao/locally-cli/internal/validation"
@@ -19,38 +20,44 @@ import (
 	"github.com/google/uuid"
 )
 
-type Handler struct {
-	authService     *auth.AuthService
+type AuthApiHandler struct {
+	authService     auth_interfaces.AuthServiceInterface
 	store           stores.ApiKeyStoreInterface
 	activityService activity_interfaces.ActivityServiceInterface
 }
 
-func NewApiHandler(authService *auth.AuthService, store stores.ApiKeyStoreInterface, activityService activity_interfaces.ActivityServiceInterface) *Handler {
-	return &Handler{authService: authService, store: store, activityService: activityService}
+func NewApiHandler(authService auth_interfaces.AuthServiceInterface, store stores.ApiKeyStoreInterface, activityService activity_interfaces.ActivityServiceInterface) *AuthApiHandler {
+	return &AuthApiHandler{authService: authService, store: store, activityService: activityService}
 }
 
-func (h *Handler) Routes() []api_types.Route {
+func (h *AuthApiHandler) Routes() []api_types.Route {
 	return []api_types.Route{
 		{
-			Method:        http.MethodPost,
-			Path:          "/v1/auth/login",
-			Handler:       h.HandleLogin,
-			Description:   "Login to the system with username/password",
-			SecurityLevel: models.ApiKeySecurityLevelNone,
+			Method:      http.MethodPost,
+			Path:        "/v1/auth/login",
+			Handler:     h.HandleLogin,
+			Description: "Login to the system with username/password",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: models.ApiKeySecurityLevelNone,
+			},
 		},
 		{
-			Method:        http.MethodPost,
-			Path:          "/v1/auth/login/api-key",
-			Handler:       h.HandleAPIKeyLogin,
-			Description:   "Login to the system with API key",
-			SecurityLevel: models.ApiKeySecurityLevelNone,
+			Method:      http.MethodPost,
+			Path:        "/v1/auth/login/api-key",
+			Handler:     h.HandleAPIKeyLogin,
+			Description: "Login to the system with API key",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: models.ApiKeySecurityLevelNone,
+			},
 		},
 		{
-			Method:        http.MethodPost,
-			Path:          "/v1/auth/refresh",
-			Handler:       h.HandleRefresh,
-			Description:   "Refresh the token",
-			SecurityLevel: models.ApiKeySecurityLevelAny,
+			Method:      http.MethodPost,
+			Path:        "/v1/auth/refresh",
+			Handler:     h.HandleRefresh,
+			Description: "Refresh the token",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: models.ApiKeySecurityLevelAny,
+			},
 		},
 	}
 }
@@ -65,15 +72,15 @@ func (h *Handler) Routes() []api_types.Route {
 // @Failure      400  {object}  api.ErrorResponse
 // @Failure      401  {object}  api.ErrorResponse
 // @Router       /auth/login [post]
-func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
+func (h *AuthApiHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	ctx := appctx.FromContext(r.Context())
 	cfg := config.GetInstance().Get()
 	suUser := cfg.GetString(config.RootUserUsernameKey, "")
 
-	var creds auth.AuthCredentials
+	var creds auth_models.AuthCredentials
 	tenantID, _ := api.GetTenantIDFromRequest(r)
 
-	creds, parseDiags := api.ParseAndValidateBody[auth.AuthCredentials](r)
+	creds, parseDiags := api.ParseAndValidateBody[auth_models.AuthCredentials](r)
 	if parseDiags.HasErrors() {
 		h.activityService.RecordErrorActivity(ctx, activity_types.ActivityTypeLogin, activity_types.ActivityErrorData{
 			ErrorCode:    "invalid_request_body",
@@ -185,9 +192,9 @@ func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 // @Failure      400  {object}  api.ErrorResponse
 // @Failure      401  {object}  api.ErrorResponse
 // @Router       /auth/login/api-key [post]
-func (h *Handler) HandleAPIKeyLogin(w http.ResponseWriter, r *http.Request) {
+func (h *AuthApiHandler) HandleAPIKeyLogin(w http.ResponseWriter, r *http.Request) {
 	ctx := appctx.FromContext(r.Context())
-	var creds auth.APIKeyCredentials
+	var creds auth_models.APIKeyCredentials
 	if err := json.NewDecoder(r.Body).Decode(&creds); err != nil {
 		api.WriteBadRequest(w, r, "Invalid request body", "Failed to parse JSON: "+err.Error())
 		return
@@ -223,7 +230,7 @@ func (h *Handler) HandleAPIKeyLogin(w http.ResponseWriter, r *http.Request) {
 // @Failure      400  {object}  api.ErrorResponse
 // @Failure      401  {object}  api.ErrorResponse
 // @Router       /auth/refresh [post]
-func (h *Handler) HandleRefresh(w http.ResponseWriter, r *http.Request) {
+func (h *AuthApiHandler) HandleRefresh(w http.ResponseWriter, r *http.Request) {
 	ctx := appctx.FromContext(r.Context())
 	refreshToken := r.Header.Get("Authorization")
 	if refreshToken == "" {
