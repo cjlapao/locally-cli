@@ -7,6 +7,7 @@ const (
 	SecurityLevelAdmin     SecurityLevel = "admin"
 	SecurityLevelManager   SecurityLevel = "manager"
 	SecurityLevelUser      SecurityLevel = "user"
+	SecurityLevelAuditor   SecurityLevel = "auditor"
 	SecurityLevelGuest     SecurityLevel = "guest"
 	SecurityLevelNone      SecurityLevel = "none"
 )
@@ -16,12 +17,14 @@ const (
 func (c SecurityLevel) IsParentOf(child SecurityLevel) bool {
 	switch c {
 	case SecurityLevelSuperUser:
-		return child == SecurityLevelAdmin || child == SecurityLevelManager || child == SecurityLevelUser || child == SecurityLevelGuest || child == SecurityLevelNone
+		return child == SecurityLevelAdmin || child == SecurityLevelManager || child == SecurityLevelUser || child == SecurityLevelAuditor || child == SecurityLevelGuest || child == SecurityLevelNone
 	case SecurityLevelAdmin:
-		return child == SecurityLevelManager || child == SecurityLevelUser || child == SecurityLevelGuest || child == SecurityLevelNone
+		return child == SecurityLevelManager || child == SecurityLevelUser || child == SecurityLevelAuditor || child == SecurityLevelGuest || child == SecurityLevelNone
 	case SecurityLevelManager:
-		return child == SecurityLevelUser || child == SecurityLevelGuest || child == SecurityLevelNone
+		return child == SecurityLevelUser || child == SecurityLevelAuditor || child == SecurityLevelGuest || child == SecurityLevelNone
 	case SecurityLevelUser:
+		return child == SecurityLevelAuditor || child == SecurityLevelGuest || child == SecurityLevelNone
+	case SecurityLevelAuditor:
 		return child == SecurityLevelGuest || child == SecurityLevelNone
 	case SecurityLevelGuest:
 		return child == SecurityLevelNone
@@ -43,10 +46,12 @@ func (c SecurityLevel) IsChildOf(parent SecurityLevel) bool {
 		return parent == SecurityLevelSuperUser || parent == SecurityLevelAdmin
 	case SecurityLevelUser:
 		return parent == SecurityLevelSuperUser || parent == SecurityLevelAdmin || parent == SecurityLevelManager
-	case SecurityLevelGuest:
+	case SecurityLevelAuditor:
 		return parent == SecurityLevelSuperUser || parent == SecurityLevelAdmin || parent == SecurityLevelManager || parent == SecurityLevelUser
+	case SecurityLevelGuest:
+		return parent == SecurityLevelSuperUser || parent == SecurityLevelAdmin || parent == SecurityLevelManager || parent == SecurityLevelUser || parent == SecurityLevelAuditor
 	case SecurityLevelNone:
-		return parent == SecurityLevelSuperUser || parent == SecurityLevelAdmin || parent == SecurityLevelManager || parent == SecurityLevelUser || parent == SecurityLevelGuest
+		return parent == SecurityLevelSuperUser || parent == SecurityLevelAdmin || parent == SecurityLevelManager || parent == SecurityLevelUser || parent == SecurityLevelAuditor || parent == SecurityLevelGuest
 	}
 	return false
 }
@@ -62,8 +67,10 @@ func (c SecurityLevel) GetParent() SecurityLevel {
 		return SecurityLevelAdmin
 	case SecurityLevelUser:
 		return SecurityLevelManager
-	case SecurityLevelGuest:
+	case SecurityLevelAuditor:
 		return SecurityLevelUser
+	case SecurityLevelGuest:
+		return SecurityLevelAuditor
 	case SecurityLevelNone:
 		return SecurityLevelGuest
 	}
@@ -80,6 +87,8 @@ func (c SecurityLevel) GetChildren() []SecurityLevel {
 	case SecurityLevelManager:
 		return []SecurityLevel{SecurityLevelUser}
 	case SecurityLevelUser:
+		return []SecurityLevel{SecurityLevelAuditor}
+	case SecurityLevelAuditor:
 		return []SecurityLevel{SecurityLevelGuest}
 	case SecurityLevelGuest:
 		return []SecurityLevel{SecurityLevelNone}
@@ -93,12 +102,14 @@ func (c SecurityLevel) GetChildren() []SecurityLevel {
 func (c SecurityLevel) GetAllChildren() []SecurityLevel {
 	switch c {
 	case SecurityLevelSuperUser:
-		return []SecurityLevel{SecurityLevelAdmin, SecurityLevelManager, SecurityLevelUser, SecurityLevelGuest, SecurityLevelNone}
+		return []SecurityLevel{SecurityLevelAdmin, SecurityLevelManager, SecurityLevelUser, SecurityLevelAuditor, SecurityLevelGuest, SecurityLevelNone}
 	case SecurityLevelAdmin:
-		return []SecurityLevel{SecurityLevelManager, SecurityLevelUser, SecurityLevelGuest, SecurityLevelNone}
+		return []SecurityLevel{SecurityLevelManager, SecurityLevelUser, SecurityLevelAuditor, SecurityLevelGuest, SecurityLevelNone}
 	case SecurityLevelManager:
-		return []SecurityLevel{SecurityLevelUser, SecurityLevelGuest, SecurityLevelNone}
+		return []SecurityLevel{SecurityLevelUser, SecurityLevelAuditor, SecurityLevelGuest, SecurityLevelNone}
 	case SecurityLevelUser:
+		return []SecurityLevel{SecurityLevelAuditor, SecurityLevelGuest, SecurityLevelNone}
+	case SecurityLevelAuditor:
 		return []SecurityLevel{SecurityLevelGuest, SecurityLevelNone}
 	case SecurityLevelGuest:
 		return []SecurityLevel{SecurityLevelNone}
@@ -116,6 +127,7 @@ func (c SecurityLevel) IsHigherThan(other SecurityLevel) bool {
 		SecurityLevelAdmin,
 		SecurityLevelManager,
 		SecurityLevelUser,
+		SecurityLevelAuditor,
 		SecurityLevelGuest,
 		SecurityLevelNone,
 	}
@@ -145,7 +157,7 @@ func (c SecurityLevel) IsEqual(other SecurityLevel) bool {
 	return c == other
 }
 
-// GetLevel returns the numeric level (0 = highest privilege, 5 = lowest privilege)
+// GetLevel returns the numeric level (0 = highest privilege, 6 = lowest privilege)
 func (c SecurityLevel) GetLevel() int {
 	switch c {
 	case SecurityLevelSuperUser:
@@ -156,12 +168,14 @@ func (c SecurityLevel) GetLevel() int {
 		return 2
 	case SecurityLevelUser:
 		return 3
-	case SecurityLevelGuest:
+	case SecurityLevelAuditor:
 		return 4
-	case SecurityLevelNone:
+	case SecurityLevelGuest:
 		return 5
+	case SecurityLevelNone:
+		return 6
 	}
-	return 5 // Default to lowest level
+	return 6 // Default to lowest level
 }
 
 // String returns the string representation of the security level

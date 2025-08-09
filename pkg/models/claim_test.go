@@ -4,68 +4,6 @@ import (
 	"testing"
 )
 
-func TestAccessLevel_IsParentOf(t *testing.T) {
-	tests := []struct {
-		name     string
-		parent   AccessLevel
-		child    AccessLevel
-		expected bool
-	}{
-		{"All is parent of Write", AccessLevelAll, AccessLevelWrite, true},
-		{"All is parent of Read", AccessLevelAll, AccessLevelRead, true},
-		{"All is parent of View", AccessLevelAll, AccessLevelView, true},
-		{"Write is parent of Read", AccessLevelWrite, AccessLevelRead, true},
-		{"Write is parent of Update", AccessLevelWrite, AccessLevelUpdate, true},
-		{"Write is parent of Create", AccessLevelWrite, AccessLevelCreate, true},
-		{"Update is parent of Read", AccessLevelUpdate, AccessLevelRead, true},
-		{"Read is parent of View", AccessLevelRead, AccessLevelView, true},
-		{"View is parent of None", AccessLevelView, AccessLevelNone, true},
-		{"Read is not parent of Write", AccessLevelRead, AccessLevelWrite, false},
-		{"View is not parent of Read", AccessLevelView, AccessLevelRead, false},
-		{"None is not parent of anything", AccessLevelNone, AccessLevelView, false},
-		{"All is not parent of itself", AccessLevelAll, AccessLevelAll, false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := tt.parent.IsParentOf(tt.child)
-			if result != tt.expected {
-				t.Errorf("IsParentOf() = %v, want %v", result, tt.expected)
-			}
-		})
-	}
-}
-
-func TestAccessLevel_CanAccess(t *testing.T) {
-	tests := []struct {
-		name     string
-		have     AccessLevel
-		required AccessLevel
-		expected bool
-	}{
-		{"All can access everything", AccessLevelAll, AccessLevelWrite, true},
-		{"All can access itself", AccessLevelAll, AccessLevelAll, true},
-		{"Write can access Read", AccessLevelWrite, AccessLevelRead, true},
-		{"Write can access Update", AccessLevelWrite, AccessLevelUpdate, true},
-		{"Write can access Create", AccessLevelWrite, AccessLevelCreate, true},
-		{"Update can access Read", AccessLevelUpdate, AccessLevelRead, true},
-		{"Read can access View", AccessLevelRead, AccessLevelView, true},
-		{"Same level can access itself", AccessLevelRead, AccessLevelRead, true},
-		{"Read cannot access Write", AccessLevelRead, AccessLevelWrite, false},
-		{"View cannot access Read", AccessLevelView, AccessLevelRead, false},
-		{"None cannot access anything", AccessLevelNone, AccessLevelView, false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := tt.have.CanAccess(tt.required)
-			if result != tt.expected {
-				t.Errorf("CanAccess() = %v, want %v", result, tt.expected)
-			}
-		})
-	}
-}
-
 func TestParseClaim(t *testing.T) {
 	tests := []struct {
 		name        string

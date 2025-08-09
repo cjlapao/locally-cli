@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/cjlapao/locally-cli/internal/api"
+	api_types "github.com/cjlapao/locally-cli/internal/api/types"
 	"github.com/cjlapao/locally-cli/internal/appctx"
 	"github.com/cjlapao/locally-cli/pkg/models"
 	"github.com/gorilla/mux"
@@ -18,70 +19,88 @@ func NewApiHandler(ncontext *NContext) *ApiHandler {
 	return &ApiHandler{ncontext: ncontext}
 }
 
-func (h *ApiHandler) Routes() []api.Route {
-	return []api.Route{
+func (h *ApiHandler) Routes() []api_types.Route {
+	return []api_types.Route{
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/ncontext/status",
-			Handler:       h.HandleGetStatus,
-			Description:   "Get the status of the NContext service",
-			SecurityLevel: models.ApiKeySecurityLevelAny,
+			Method:      http.MethodGet,
+			Path:        "/v1/ncontext/status",
+			Handler:     h.HandleGetStatus,
+			Description: "Get the status of the NContext service",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: models.ApiKeySecurityLevelAny,
+			},
 		},
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/ncontext/contexts",
-			Handler:       h.HandleGetContexts,
-			Description:   "Get all contexts",
-			SecurityLevel: models.ApiKeySecurityLevelAny,
+			Method:      http.MethodGet,
+			Path:        "/v1/ncontext/contexts",
+			Handler:     h.HandleGetContexts,
+			Description: "Get all contexts",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: models.ApiKeySecurityLevelAny,
+			},
 		},
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/ncontext/contexts/{id}",
-			Handler:       h.HandleGetContext,
-			Description:   "Get a specific context by ID",
-			SecurityLevel: models.ApiKeySecurityLevelAny,
+			Method:      http.MethodGet,
+			Path:        "/v1/ncontext/contexts/{id}",
+			Handler:     h.HandleGetContext,
+			Description: "Get a specific context by ID",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: models.ApiKeySecurityLevelAny,
+			},
 		},
 		{
-			Method:        http.MethodPost,
-			Path:          "/v1/ncontext/contexts",
-			Handler:       h.HandleCreateContext,
-			Description:   "Create a new context",
-			SecurityLevel: models.ApiKeySecurityLevelAny,
+			Method:      http.MethodPost,
+			Path:        "/v1/ncontext/contexts",
+			Handler:     h.HandleCreateContext,
+			Description: "Create a new context",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: models.ApiKeySecurityLevelAny,
+			},
 		},
 		{
-			Method:        http.MethodPut,
-			Path:          "/v1/ncontext/contexts/{id}",
-			Handler:       h.HandleUpdateContext,
-			Description:   "Update a context",
-			SecurityLevel: models.ApiKeySecurityLevelAny,
+			Method:      http.MethodPut,
+			Path:        "/v1/ncontext/contexts/{id}",
+			Handler:     h.HandleUpdateContext,
+			Description: "Update a context",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: models.ApiKeySecurityLevelAny,
+			},
 		},
 		{
-			Method:        http.MethodDelete,
-			Path:          "/v1/ncontext/contexts/{id}",
-			Handler:       h.HandleDeleteContext,
-			Description:   "Delete a context",
-			SecurityLevel: models.ApiKeySecurityLevelAny,
+			Method:      http.MethodDelete,
+			Path:        "/v1/ncontext/contexts/{id}",
+			Handler:     h.HandleDeleteContext,
+			Description: "Delete a context",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: models.ApiKeySecurityLevelAny,
+			},
 		},
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/ncontext/services",
-			Handler:       h.HandleGetServices,
-			Description:   "Get all registered services",
-			SecurityLevel: models.ApiKeySecurityLevelAny,
+			Method:      http.MethodGet,
+			Path:        "/v1/ncontext/services",
+			Handler:     h.HandleGetServices,
+			Description: "Get all registered services",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: models.ApiKeySecurityLevelAny,
+			},
 		},
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/ncontext/default-context",
-			Handler:       h.HandleGetDefaultContext,
-			Description:   "Get the default context",
-			SecurityLevel: models.ApiKeySecurityLevelAny,
+			Method:      http.MethodGet,
+			Path:        "/v1/ncontext/default-context",
+			Handler:     h.HandleGetDefaultContext,
+			Description: "Get the default context",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: models.ApiKeySecurityLevelAny,
+			},
 		},
 		{
-			Method:        http.MethodPut,
-			Path:          "/v1/ncontext/default-context/{id}",
-			Handler:       h.HandleSetDefaultContext,
-			Description:   "Set the default context",
-			SecurityLevel: models.ApiKeySecurityLevelAny,
+			Method:      http.MethodPut,
+			Path:        "/v1/ncontext/default-context/{id}",
+			Handler:     h.HandleSetDefaultContext,
+			Description: "Set the default context",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: models.ApiKeySecurityLevelAny,
+			},
 		},
 	}
 }

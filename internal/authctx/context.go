@@ -1,8 +1,6 @@
-package auth
+package authctx
 
-import (
-	"context"
-)
+import "context"
 
 type contextKey string
 
@@ -11,12 +9,12 @@ const (
 )
 
 // WithClaims adds claims to the context
-func WithClaims(ctx context.Context, claims *AuthClaims) context.Context {
+func WithClaims(ctx context.Context, claims interface{}) context.Context {
 	return context.WithValue(ctx, ClaimsKey, claims)
 }
 
 // GetClaims retrieves claims from the context
-func GetClaims(ctx context.Context) *AuthClaims {
-	claims, _ := ctx.Value(ClaimsKey).(*AuthClaims)
+func GetClaims[T any](ctx context.Context) *T {
+	claims, _ := ctx.Value(ClaimsKey).(*T)
 	return claims
 }

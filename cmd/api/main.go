@@ -9,10 +9,15 @@ import (
 	"time"
 
 	"github.com/cjlapao/common-go/version"
+	"github.com/cjlapao/locally-cli/internal/activity"
+	activity_interfaces "github.com/cjlapao/locally-cli/internal/activity/interfaces"
 	"github.com/cjlapao/locally-cli/internal/api"
+	"github.com/cjlapao/locally-cli/internal/api_keys"
+	api_keys_interfaces "github.com/cjlapao/locally-cli/internal/api_keys/interfaces"
 	"github.com/cjlapao/locally-cli/internal/appctx"
 	"github.com/cjlapao/locally-cli/internal/auth"
 	"github.com/cjlapao/locally-cli/internal/auth/handlers"
+	auth_interfaces "github.com/cjlapao/locally-cli/internal/auth/interfaces"
 	"github.com/cjlapao/locally-cli/internal/certificates"
 	"github.com/cjlapao/locally-cli/internal/claim"
 	claim_interfaces "github.com/cjlapao/locally-cli/internal/claim/interfaces"
@@ -224,17 +229,17 @@ func initializeConfigurationStore() (stores.ConfigurationDataStoreInterface, *di
 	return configurationStore, diag
 }
 
-// initializeAuthStore initializes the auth store
-func initializeAuthStore() (stores.AuthDataStoreInterface, *diagnostics.Diagnostics) {
-	logging.Info("Initializing auth store...")
-	diag := diagnostics.New("initialize_auth_store")
-	authStore, initDiag := stores.InitializeAuthDataStore()
+// initializeApiKeyStore initializes the api key store
+func initializeApiKeyStore() (stores.ApiKeyStoreInterface, *diagnostics.Diagnostics) {
+	logging.Info("Initializing api key store...")
+	diag := diagnostics.New("initialize_api_key_store")
+	apiKeyStore, initDiag := stores.InitializeApiKeyDataStore()
 	if initDiag.HasErrors() {
 		diag.Append(initDiag)
 		return nil, diag
 	}
-	logging.Info("Auth store initialized successfully")
-	return authStore, diag
+	logging.Info("Api key store initialized successfully")
+	return apiKeyStore, diag
 }
 
 // initializeMessageStore initializes the message store
@@ -315,6 +320,19 @@ func initializeClaimStore() (stores.ClaimDataStoreInterface, *diagnostics.Diagno
 	return claimStore, diag
 }
 
+// initializeActivityStore initializes the activity store
+func initializeActivityStore() (stores.ActivityDataStoreInterface, *diagnostics.Diagnostics) {
+	logging.Info("Initializing activity store...")
+	diag := diagnostics.New("initialize_activity_store")
+	activityStore, initDiag := stores.InitializeActivityDataStore()
+	if initDiag.HasErrors() {
+		diag.Append(initDiag)
+		return nil, diag
+	}
+	logging.Info("Activity store initialized successfully")
+	return activityStore, diag
+}
+
 // initializeValidationService initializes the validation service
 func initializeValidationService() {
 	logging.Info("Initializing validation service...")
@@ -349,7 +367,7 @@ func initializeEncryptionService(cfg *config.Config) (*encryption.EncryptionServ
 }
 
 // initializeAuthService initializes the auth service
-func initializeAuthService(cfg *config.Config, authDataStore stores.AuthDataStoreInterface, userStore stores.UserDataStoreInterface, tenantStore stores.TenantDataStoreInterface) (*auth.AuthService, *diagnostics.Diagnostics) {
+func initializeAuthService(cfg *config.Config, authDataStore stores.ApiKeyStoreInterface, userStore stores.UserDataStoreInterface, tenantStore stores.TenantDataStoreInterface) (auth_interfaces.AuthServiceInterface, *diagnostics.Diagnostics) {
 	logging.Info("Initializing auth service...")
 
 	authService, diag := auth.Initialize(auth.AuthServiceConfig{
@@ -405,10 +423,27 @@ func initializeClaimService(claimStore stores.ClaimDataStoreInterface) claim_int
 	return claimService
 }
 
+// initializeApiKeysService initializes the api keys service
+func initializeApiKeysService(apiKeyStore stores.ApiKeyStoreInterface) api_keys_interfaces.ApiKeysServiceInterface {
+	logging.Info("Initializing api keys service...")
+	apiKeysService := api_keys.Initialize(apiKeyStore)
+	logging.Info("Api keys service initialized successfully")
+	return apiKeysService
+}
+
+// initializeActivityService initializes the activity service
+func initializeActivityService(activityStore stores.ActivityDataStoreInterface) activity_interfaces.ActivityServiceInterface {
+	logging.Info("Initializing activity service...")
+	activityService := activity.Initialize(activityStore)
+	logging.Info("Activity service initialized successfully")
+	return activityService
+}
+
 // initializeAPIServer initializes the API server
-func initializeAPIServer(cfg *config.Config, authService *auth.AuthService) (*api.Server, error) {
+func initializeAPIServer(cfg *config.Config, authService auth_interfaces.AuthServiceInterface) (*api.Server, error) {
 	logging.Info("Initializing API server...")
 	server := api.NewServer(api.Config{
+		AuthService:         authService,
 		Port:                cfg.Get(config.ServerAPIPortKey).GetInt(),
 		Hostname:            cfg.Get(config.ServerBindAddressKey).GetString(),
 		Prefix:              cfg.Get(config.ServerAPIPrefixKey).GetString(),
@@ -461,7 +496,7 @@ func seedDatabaseMigrations(ctx *appctx.AppContext, configSvc *config.ConfigServ
 		return diag
 	}
 	// Getting the auth store
-	authStore := stores.GetAuthDataStoreInstance()
+	authStore := stores.GetApiKeyDataStoreInstance()
 	if authStore == nil {
 		diag.AddError("auth_store_not_initialized", "auth store not initialized", "seed_database_migrations", nil)
 		return diag
@@ -552,9 +587,9 @@ func run() error {
 		return fmt.Errorf("failed to initialize configuration store: %s", configStoreDiag.GetSummary())
 	}
 
-	authDataStore, authStoreDiag := initializeAuthStore()
-	if authStoreDiag.HasErrors() {
-		return fmt.Errorf("failed to initialize auth store: %s", authStoreDiag.GetSummary())
+	apiKeyStore, apiKeyStoreDiag := initializeApiKeyStore()
+	if apiKeyStoreDiag.HasErrors() {
+		return fmt.Errorf("failed to initialize api key store: %s", apiKeyStoreDiag.GetSummary())
 	}
 	messageDataStore, messageStoreDiag := initializeMessageStore()
 	if messageStoreDiag.HasErrors() {
@@ -587,6 +622,12 @@ func run() error {
 		return fmt.Errorf("failed to initialize claim store: %s", claimStoreDiag.GetSummary())
 	}
 
+	// Initialize activity store
+	activityStore, activityStoreDiag := initializeActivityStore()
+	if activityStoreDiag.HasErrors() {
+		return fmt.Errorf("failed to initialize activity store: %s", activityStoreDiag.GetSummary())
+	}
+
 	// initialize environment service
 	vaults := make([]interfaces.EnvironmentVault, 0)
 
@@ -610,7 +651,7 @@ func run() error {
 	// initialize certificate service
 	certificateService := initializeCertificateService(certificatesStore)
 	// initialize auth service
-	authService, authServiceDiag := initializeAuthService(configSvc.Get(), authDataStore, userStore, tenantStore)
+	authService, authServiceDiag := initializeAuthService(configSvc.Get(), apiKeyStore, userStore, tenantStore)
 	if authServiceDiag.HasErrors() {
 		logging.Errorf("Error initializing auth service: %v", authServiceDiag.GetSummary())
 		panic(authServiceDiag.GetSummary())
@@ -624,7 +665,10 @@ func run() error {
 	userService := initializeUserService(userStore, roleService, claimService, systemService)
 	// initialize tenant service
 	tenantService := initializeTenantService(tenantStore, userService, roleService, systemService, claimService)
-
+	// initialize api keys service
+	apiKeysService := initializeApiKeysService(apiKeyStore)
+	// initialize activity service
+	activityService := initializeActivityService(activityStore)
 	// initialize API server
 	apiServer, err := initializeAPIServer(configSvc.Get(), authService)
 	if err != nil {
@@ -636,7 +680,7 @@ func run() error {
 	// Register health check routes
 	apiServer.RegisterRoutes(api.NewHandler())
 	// Register auth routes
-	apiServer.RegisterRoutes(handlers.NewApiHandler(authService, authDataStore))
+	apiServer.RegisterRoutes(handlers.NewApiHandler(authService, apiKeyStore, activityService))
 	// Register event routes using the global singleton
 	apiServer.RegisterRoutes(events.NewApiHandler(events.GetInstance(), authService))
 	// Register message routes
@@ -653,6 +697,12 @@ func run() error {
 	apiServer.RegisterRoutes(role.NewApiHandler(roleService))
 	// Register claim routes
 	apiServer.RegisterRoutes(claim.NewApiHandler(claimService))
+	// Register api key routes
+	apiServer.RegisterRoutes(api_keys.NewApiHandler(apiKeysService))
+	// Register activity routes
+	apiServer.RegisterRoutes(activity.NewApiHandler(activityService, systemService))
+	// Register auth test routes
+	apiServer.RegisterRoutes(handlers.NewTestHandler(authService, apiKeyStore, activityService))
 	logging.Info("Starting event service...")
 	if err := startEventService(ctx, eventService); err != nil {
 		return err

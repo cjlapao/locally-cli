@@ -15,7 +15,7 @@ import (
 	"github.com/cjlapao/locally-cli/internal/context/pipeline_component"
 	"github.com/cjlapao/locally-cli/internal/context/service_component"
 	"github.com/cjlapao/locally-cli/internal/entities"
-	"github.com/cjlapao/locally-cli/internal/interfaces"
+	pkg_interfaces "github.com/cjlapao/locally-cli/pkg/interfaces"
 	"github.com/google/uuid"
 
 	"github.com/cjlapao/common-go/guard"
@@ -43,7 +43,7 @@ type Context struct {
 	Credentials          *context_entities.Credentials                         `json:"credentials,omitempty" yaml:"credentials,omitempty"`
 	BackendConfig        *infrastructure_component.InfrastructureBackendConfig `json:"backendConfig,omitempty" yaml:"backendConfig,omitempty"`
 	Fragments            []*Context                                            `json:"-" yaml:"-"`
-	registeredServices   []interfaces.LocallyService                           `json:"-" yaml:"-"`
+	registeredServices   []pkg_interfaces.LocallyService                       `json:"-" yaml:"-"`
 }
 
 func (ctx *Context) TestConnection() error {
@@ -256,7 +256,7 @@ func (ctx *Context) SaveFragment(fragment *Context) error {
 	return nil
 }
 
-func (ctx *Context) AddRegisteredService(service interfaces.LocallyService) {
+func (ctx *Context) AddRegisteredService(service pkg_interfaces.LocallyService) {
 	found := false
 	for _, existingService := range ctx.registeredServices {
 		if strings.EqualFold(existingService.GetName(), service.GetName()) {
@@ -270,7 +270,7 @@ func (ctx *Context) AddRegisteredService(service interfaces.LocallyService) {
 	}
 }
 
-func (ctx *Context) GetRegisteredService(serviceName string) interfaces.LocallyService {
+func (ctx *Context) GetRegisteredService(serviceName string) pkg_interfaces.LocallyService {
 	for _, existingService := range ctx.registeredServices {
 		if strings.EqualFold(existingService.GetName(), serviceName) {
 			return existingService

@@ -4,7 +4,7 @@ package service
 import (
 	"sync"
 
-	"github.com/cjlapao/locally-cli/internal/api"
+	api_models "github.com/cjlapao/locally-cli/internal/api/models"
 	"github.com/cjlapao/locally-cli/internal/appctx"
 	"github.com/cjlapao/locally-cli/internal/claim/interfaces"
 	"github.com/cjlapao/locally-cli/internal/claim/models"
@@ -78,7 +78,7 @@ func (s *ClaimService) GetClaims(ctx *appctx.AppContext, tenantID string) ([]pkg
 	return claims, diag
 }
 
-func (s *ClaimService) GetClaimsByFilter(ctx *appctx.AppContext, tenantID string, filter *filters.Filter) (*api.PaginatedResponse[pkg_models.Claim], *diagnostics.Diagnostics) {
+func (s *ClaimService) GetClaimsByFilter(ctx *appctx.AppContext, tenantID string, filter *filters.Filter) (*api_models.PaginatedResponse[pkg_models.Claim], *diagnostics.Diagnostics) {
 	diag := diagnostics.New("get_claims_by_filter")
 	defer diag.Complete()
 
@@ -91,15 +91,15 @@ func (s *ClaimService) GetClaimsByFilter(ctx *appctx.AppContext, tenantID string
 	}
 
 	claims := mappers.MapClaimsToDto(dbClaims.Items)
-	pagination := api.Pagination{
+	pagination := api_models.Pagination{
 		Page:       dbClaims.Page,
 		PageSize:   dbClaims.PageSize,
 		TotalPages: dbClaims.TotalPages,
 	}
 
-	response := api.PaginatedResponse[pkg_models.Claim]{
+	response := api_models.PaginatedResponse[pkg_models.Claim]{
 		Data:       claims,
-		TotalCount: int(dbClaims.Total),
+		TotalCount: dbClaims.Total,
 		Pagination: pagination,
 	}
 
@@ -188,7 +188,7 @@ func (s *ClaimService) DeleteClaim(ctx *appctx.AppContext, tenantID string, id s
 	return diag
 }
 
-func (s *ClaimService) GetClaimUsers(ctx *appctx.AppContext, tenantID string, claimID string, pagination *pkg_models.Pagination) (*api.PaginatedResponse[pkg_models.User], *diagnostics.Diagnostics) {
+func (s *ClaimService) GetClaimUsers(ctx *appctx.AppContext, tenantID string, claimID string, pagination *pkg_models.Pagination) (*api_models.PaginatedResponse[pkg_models.User], *diagnostics.Diagnostics) {
 	diag := diagnostics.New("get_claim_users")
 	defer diag.Complete()
 	cfg := config.GetInstance().Get()
@@ -209,10 +209,10 @@ func (s *ClaimService) GetClaimUsers(ctx *appctx.AppContext, tenantID string, cl
 		return nil, diag
 	}
 
-	response := api.PaginatedResponse[pkg_models.User]{
+	response := api_models.PaginatedResponse[pkg_models.User]{
 		Data:       mappers.MapUsersToDto(dbUsers.Items),
-		TotalCount: int(dbUsers.Total),
-		Pagination: api.Pagination{
+		TotalCount: dbUsers.Total,
+		Pagination: api_models.Pagination{
 			Page:       dbUsers.Page,
 			PageSize:   dbUsers.PageSize,
 			TotalPages: dbUsers.TotalPages,

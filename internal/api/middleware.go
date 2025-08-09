@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/cjlapao/locally-cli/internal/appctx"
 	"github.com/cjlapao/locally-cli/internal/config"
 	"github.com/cjlapao/locally-cli/internal/logging"
+	"github.com/cjlapao/locally-cli/pkg/diagnostics"
 	"github.com/cjlapao/locally-cli/pkg/types"
 	"github.com/cjlapao/locally-cli/pkg/utils"
 	"github.com/google/uuid"
@@ -20,8 +22,8 @@ import (
 
 // MiddlewareResult represents the result of middleware execution
 type MiddlewareResult struct {
-	Continue bool
-	Error    error
+	Continue    bool
+	Diagnostics *diagnostics.Diagnostics
 }
 
 // PreMiddleware represents a middleware that runs before the route handler
@@ -95,16 +97,18 @@ func (mc *MiddlewareChain) AddPostMiddlewareFunc(fn func(w http.ResponseWriter, 
 func (mc *MiddlewareChain) Execute(handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
+		diag := diagnostics.New("middleware_chain_execute")
+		defer diag.Complete()
 
 		// Execute pre-middlewares
 		for _, middleware := range mc.preMiddlewares {
 			result := middleware.Execute(w, r)
 			if !result.Continue {
 				// Middleware decided to short-circuit
-				if result.Error != nil {
+				if result.Diagnostics.HasErrors() {
 					// Only log if logging is initialized
 					if logging.Logger != nil {
-						logging.WithError(result.Error).Error("Pre-middleware short-circuited with error")
+						diag.Append(result.Diagnostics)
 					}
 				}
 				return
@@ -362,8 +366,8 @@ func setCORSHeaders(w http.ResponseWriter, config CORSConfig, allowOrigin string
 	}
 }
 
-// RequestIDMiddleware creates a request ID pre-middleware
-func RequestIDMiddleware() PreMiddleware {
+// RequestInformationMiddleware creates a request ID pre-middleware
+func RequestInformationMiddleware() PreMiddleware {
 	return PreMiddlewareFunc(func(w http.ResponseWriter, r *http.Request) MiddlewareResult {
 		requestID := r.Header.Get("X-Request-ID")
 		if requestID == "" {
@@ -376,13 +380,22 @@ func RequestIDMiddleware() PreMiddleware {
 				requestID = uuid.New().String()
 			}
 		}
+		// getting the correlation id from the header if present otherwise use the request id
+		correlationID := r.Header.Get("X-Correlation-ID")
+		if correlationID == "" {
+			correlationID = requestID
+		}
+
+		userIP, userAgent := GetClientInfo(r)
 
 		// Get or create AppContext from the current context
 		appCtx := appctx.FromContext(r.Context())
 
 		// Update the request ID in the AppContext
 		appCtx = appCtx.WithRequestID(requestID)
-
+		appCtx = appCtx.WithCorrelationID(correlationID)
+		appCtx = appCtx.WithUserIP(userIP)
+		appCtx = appCtx.WithUserAgent(userAgent)
 		// Continue with the updated AppContext
 		*r = *r.WithContext(appCtx)
 
@@ -573,4 +586,70 @@ func logSSEResponse(r *http.Request, responseData *ResponseData) {
 	if details, err := json.Marshal(respDetails); err == nil {
 		ctx.LogWithField("sse_response", string(details)).Info("SSE Response")
 	}
+}
+
+// GetClientIP extracts the real client IP from the request
+// It checks multiple headers in order of preference for proxy scenarios
+func GetClientIP(r *http.Request) string {
+	// Check for forwarded headers in order of preference
+	headers := []string{
+		"CF-Connecting-IP", // Cloudflare
+		"X-Forwarded-For",  // Standard proxy header
+		"X-Real-IP",        // Nginx proxy
+		"X-Client-IP",      // Apache proxy
+		"X-Forwarded",      // Alternative proxy header
+		"Forwarded-For",    // RFC 7239
+		"Forwarded",        // RFC 7239
+	}
+
+	for _, header := range headers {
+		if ip := r.Header.Get(header); ip != "" {
+			// Handle comma-separated IPs (take the first one)
+			if commaIdx := strings.Index(ip, ","); commaIdx != -1 {
+				ip = strings.TrimSpace(ip[:commaIdx])
+			}
+			// Validate IP format
+			if parsedIP := net.ParseIP(ip); parsedIP != nil {
+				return ip
+			}
+		}
+	}
+
+	// Fallback to RemoteAddr
+	if r.RemoteAddr != "" {
+		// Remove port if present
+		if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+			return host
+		}
+		return r.RemoteAddr
+	}
+
+	return "unknown"
+}
+
+// GetUserAgent extracts the user agent from the request with fallback
+func GetUserAgent(r *http.Request) string {
+	// Check for user agent header
+	if userAgent := r.Header.Get("User-Agent"); userAgent != "" {
+		return userAgent
+	}
+
+	// Check for alternative user agent headers
+	altHeaders := []string{
+		"X-User-Agent",
+		"HTTP_USER_AGENT",
+	}
+
+	for _, header := range altHeaders {
+		if userAgent := r.Header.Get(header); userAgent != "" {
+			return userAgent
+		}
+	}
+
+	return "Unknown"
+}
+
+// GetClientInfo extracts both IP and User Agent in one call
+func GetClientInfo(r *http.Request) (ip, userAgent string) {
+	return GetClientIP(r), GetUserAgent(r)
 }

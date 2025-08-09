@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/cjlapao/locally-cli/internal/api"
+	api_types "github.com/cjlapao/locally-cli/internal/api/types"
 	"github.com/cjlapao/locally-cli/internal/appctx"
 	"github.com/cjlapao/locally-cli/pkg/models"
 	"github.com/gorilla/mux"
@@ -18,21 +19,25 @@ func NewApiHandler(environment *Environment) *ApiHandler {
 	return &ApiHandler{environment: environment}
 }
 
-func (h *ApiHandler) Routes() []api.Route {
-	return []api.Route{
+func (h *ApiHandler) Routes() []api_types.Route {
+	return []api_types.Route{
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/environment/vaults",
-			Handler:       h.HandleGetVaults,
-			Description:   "Get all vaults from the environment",
-			SecurityLevel: models.ApiKeySecurityLevelAny,
+			Method:      http.MethodGet,
+			Path:        "/v1/environment/vaults",
+			Handler:     h.HandleGetVaults,
+			Description: "Get all vaults from the environment",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: models.ApiKeySecurityLevelAny,
+			},
 		},
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/environment/{vault_name}/get/{key}",
-			Handler:       h.HandleGetVaultKey,
-			Description:   "Get a specific vault from the  environment",
-			SecurityLevel: models.ApiKeySecurityLevelAny,
+			Method:      http.MethodGet,
+			Path:        "/v1/environment/{vault_name}/get/{key}",
+			Handler:     h.HandleGetVaultKey,
+			Description: "Get a specific vault from the  environment",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: models.ApiKeySecurityLevelAny,
+			},
 		},
 	}
 }

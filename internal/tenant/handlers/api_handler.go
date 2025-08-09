@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/cjlapao/locally-cli/internal/api"
+	api_types "github.com/cjlapao/locally-cli/internal/api/types"
 	"github.com/cjlapao/locally-cli/internal/appctx"
 	"github.com/cjlapao/locally-cli/internal/tenant/interfaces"
 	tenant_models "github.com/cjlapao/locally-cli/internal/tenant/models"
@@ -27,42 +28,52 @@ func NewApiHandler(tenantService interfaces.TenantServiceInterface) *APIHandler 
 }
 
 // Routes implements the RouteRegistrar interface
-func (h *APIHandler) Routes() []api.Route {
-	return []api.Route{
+func (h *APIHandler) Routes() []api_types.Route {
+	return []api_types.Route{
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/tenants",
-			Handler:       h.HandleGetTenants,
-			Description:   "Get all tenants",
-			SecurityLevel: models.ApiKeySecurityLevelSuperUser,
+			Method:      http.MethodGet,
+			Path:        "/v1/tenants",
+			Handler:     h.HandleGetTenants,
+			Description: "Get all tenants",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: models.ApiKeySecurityLevelSuperUser,
+			},
 		},
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/tenants/{id}",
-			Handler:       h.HandleGetTenant,
-			Description:   "Get a tenant by ID",
-			SecurityLevel: models.ApiKeySecurityLevelSuperUser,
+			Method:      http.MethodGet,
+			Path:        "/v1/tenants/{id}",
+			Handler:     h.HandleGetTenant,
+			Description: "Get a tenant by ID",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: models.ApiKeySecurityLevelSuperUser,
+			},
 		},
 		{
-			Method:        http.MethodPost,
-			Path:          "/v1/tenants",
-			Handler:       h.HandleCreateTenant,
-			Description:   "Create a new tenant",
-			SecurityLevel: models.ApiKeySecurityLevelSuperUser,
+			Method:      http.MethodPost,
+			Path:        "/v1/tenants",
+			Handler:     h.HandleCreateTenant,
+			Description: "Create a new tenant",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: models.ApiKeySecurityLevelSuperUser,
+			},
 		},
 		{
-			Method:        http.MethodPut,
-			Path:          "/v1/tenants/{id}",
-			Handler:       h.HandleUpdateTenant,
-			Description:   "Update a tenant",
-			SecurityLevel: models.ApiKeySecurityLevelSuperUser,
+			Method:      http.MethodPut,
+			Path:        "/v1/tenants/{id}",
+			Handler:     h.HandleUpdateTenant,
+			Description: "Update a tenant",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: models.ApiKeySecurityLevelSuperUser,
+			},
 		},
 		{
-			Method:        http.MethodDelete,
-			Path:          "/v1/tenants/{id}",
-			Handler:       h.HandleDeleteTenant,
-			Description:   "Delete a tenant",
-			SecurityLevel: models.ApiKeySecurityLevelSuperUser,
+			Method:      http.MethodDelete,
+			Path:        "/v1/tenants/{id}",
+			Handler:     h.HandleDeleteTenant,
+			Description: "Delete a tenant",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: models.ApiKeySecurityLevelSuperUser,
+			},
 		},
 	}
 }

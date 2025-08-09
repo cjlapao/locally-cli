@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/cjlapao/locally-cli/internal/api"
+	api_types "github.com/cjlapao/locally-cli/internal/api/types"
 	"github.com/cjlapao/locally-cli/internal/appctx"
 	"github.com/cjlapao/locally-cli/internal/claim/interfaces"
 	claim_models "github.com/cjlapao/locally-cli/internal/claim/models"
@@ -21,103 +22,177 @@ func NewClaimsApiHandler(claimService interfaces.ClaimServiceInterface) *ClaimsA
 	return &ClaimsApiHandler{claimService: claimService}
 }
 
-func (h *ClaimsApiHandler) Routes() []api.Route {
-	return []api.Route{
+func (h *ClaimsApiHandler) Routes() []api_types.Route {
+	return []api_types.Route{
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/claims",
-			Handler:       h.HandleGetClaims,
-			Description:   "Get all claims",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
-			Roles:         []pkg_models.Role{{Name: "admin"}},
-			Claims:        []pkg_models.Claim{{Service: "user", Module: "roles", Action: pkg_models.AccessLevelRead}},
+			Method:      http.MethodGet,
+			Path:        "/v1/claims",
+			Handler:     h.HandleGetClaims,
+			Description: "Get all claims",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "claim", Module: "api", Action: pkg_models.AccessLevelRead}},
+				},
+			},
 		},
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/claims/{id}",
-			Handler:       h.HandleGetClaim,
-			Description:   "Get a claim by ID",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
-			Roles:         []pkg_models.Role{{Name: "admin"}},
-			Claims:        []pkg_models.Claim{{Service: "user", Module: "roles", Action: pkg_models.AccessLevelRead}},
+			Method:      http.MethodGet,
+			Path:        "/v1/claims/{id}",
+			Handler:     h.HandleGetClaim,
+			Description: "Get a claim by ID",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "claim", Module: "api", Action: pkg_models.AccessLevelRead}},
+				},
+			},
 		},
 		{
-			Method:        http.MethodPost,
-			Path:          "/v1/claims",
-			Handler:       h.HandleCreateClaim,
-			Description:   "Create a new claim",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelSuperUser,
+			Method:      http.MethodPost,
+			Path:        "/v1/claims",
+			Handler:     h.HandleCreateClaim,
+			Description: "Create a new claim",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "claim", Module: "api", Action: pkg_models.AccessLevelWrite}},
+				},
+			},
 		},
 		{
-			Method:        http.MethodPut,
-			Path:          "/v1/claims/{id}",
-			Handler:       h.HandleUpdateClaim,
-			Description:   "Update a claim",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelSuperUser,
+			Method:      http.MethodPut,
+			Path:        "/v1/claims/{id}",
+			Handler:     h.HandleUpdateClaim,
+			Description: "Update a claim",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "claim", Module: "api", Action: pkg_models.AccessLevelWrite}},
+				},
+			},
 		},
 		{
-			Method:        http.MethodDelete,
-			Path:          "/v1/claims/{id}",
-			Handler:       h.HandleDeleteClaim,
-			Description:   "Delete a claim",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelSuperUser,
+			Method:      http.MethodDelete,
+			Path:        "/v1/claims/{id}",
+			Handler:     h.HandleDeleteClaim,
+			Description: "Delete a claim",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "claim", Module: "api", Action: pkg_models.AccessLevelDelete}},
+				},
+			},
 		},
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/claims/{id}/users",
-			Handler:       h.HandleGetClaimUsers,
-			Description:   "Get users by claim",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelSuperUser,
+			Method:      http.MethodGet,
+			Path:        "/v1/claims/{id}/users",
+			Handler:     h.HandleGetClaimUsers,
+			Description: "Get users by claim",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "claim", Module: "api", Action: pkg_models.AccessLevelRead}},
+				},
+			},
 		},
 		{
-			Method:        http.MethodPost,
-			Path:          "/v1/claims/{id}/users/{user_id}",
-			Handler:       h.HandleAddUserToClaim,
-			Description:   "Add users to a claim",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelSuperUser,
+			Method:      http.MethodPost,
+			Path:        "/v1/claims/{id}/users/{user_id}",
+			Handler:     h.HandleAddUserToClaim,
+			Description: "Add users to a claim",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "claim", Module: "api", Action: pkg_models.AccessLevelWrite}},
+				},
+			},
 		},
 		{
-			Method:        http.MethodDelete,
-			Path:          "/v1/claims/{id}/users/{user_id}",
-			Handler:       h.HandleRemoveUserFromClaim,
-			Description:   "Remove users from a claim",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelSuperUser,
+			Method:      http.MethodDelete,
+			Path:        "/v1/claims/{id}/users/{user_id}",
+			Handler:     h.HandleRemoveUserFromClaim,
+			Description: "Remove users from a claim",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "claim", Module: "api", Action: pkg_models.AccessLevelDelete}},
+				},
+			},
 		},
 
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/claims/all/superuser",
-			Handler:       h.HandleGetAllSuperUserLevelClaims,
-			Description:   "Get all superuser level claims",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelSuperUser,
+			Method:      http.MethodGet,
+			Path:        "/v1/claims/all/superuser",
+			Handler:     h.HandleGetAllSuperUserLevelClaims,
+			Description: "Get all superuser level claims",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "claim", Module: "api", Action: pkg_models.AccessLevelRead}},
+				},
+			},
 		},
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/claims/all/admin",
-			Handler:       h.HandleGetAllAdminLevelClaims,
-			Description:   "Get all admin level claims",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelSuperUser,
+			Method:      http.MethodGet,
+			Path:        "/v1/claims/all/admin",
+			Handler:     h.HandleGetAllAdminLevelClaims,
+			Description: "Get all admin level claims",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "claim", Module: "api", Action: pkg_models.AccessLevelRead}},
+				},
+			},
 		},
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/claims/all/manager",
-			Handler:       h.HandleGetAllManagerLevelClaims,
-			Description:   "Get all manager level claims",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelSuperUser,
+			Method:      http.MethodGet,
+			Path:        "/v1/claims/all/manager",
+			Handler:     h.HandleGetAllManagerLevelClaims,
+			Description: "Get all manager level claims",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "claim", Module: "api", Action: pkg_models.AccessLevelRead}},
+				},
+			},
 		},
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/claims/all/user",
-			Handler:       h.HandleGetAllUserLevelClaims,
-			Description:   "Get all user level claims",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelSuperUser,
+			Method:      http.MethodGet,
+			Path:        "/v1/claims/all/user",
+			Handler:     h.HandleGetAllUserLevelClaims,
+			Description: "Get all user level claims",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "claim", Module: "api", Action: pkg_models.AccessLevelRead}},
+				},
+			},
 		},
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/claims/all/guest",
-			Handler:       h.HandleGetAllGuestLevelClaims,
-			Description:   "Get all guest level claims",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelSuperUser,
+			Method:      http.MethodGet,
+			Path:        "/v1/claims/all/guest",
+			Handler:     h.HandleGetAllGuestLevelClaims,
+			Description: "Get all guest level claims",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "claim", Module: "api", Action: pkg_models.AccessLevelRead}},
+				},
+			},
 		},
 	}
 }

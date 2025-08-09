@@ -9,6 +9,7 @@ type ServiceDefinition struct {
 
 // ModuleDefinition defines a module and its allowed actions
 type ModuleDefinition struct {
+	System      string        `json:"-" yaml:"-"`
 	Name        string        `json:"name" yaml:"name"`
 	Description string        `json:"description" yaml:"description"`
 	Actions     []AccessLevel `json:"actions" yaml:"actions"`

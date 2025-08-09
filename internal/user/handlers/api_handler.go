@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/cjlapao/locally-cli/internal/api"
+	api_types "github.com/cjlapao/locally-cli/internal/api/types"
 	"github.com/cjlapao/locally-cli/internal/appctx"
 	"github.com/cjlapao/locally-cli/internal/user/interfaces"
 	"github.com/cjlapao/locally-cli/internal/user/models"
@@ -21,100 +22,139 @@ func NewUsersApiHandler(userService interfaces.UserServiceInterface) *ApiHandler
 	return &ApiHandler{userService: userService}
 }
 
-func (h *ApiHandler) Routes() []api.Route {
-	return []api.Route{
+func (h *ApiHandler) Routes() []api_types.Route {
+	return []api_types.Route{
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/users",
-			Handler:       h.HandleGetUsers,
-			Description:   "Get all users",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
-			Roles:         []pkg_models.Role{{Name: "admin"}},
-			Claims:        []pkg_models.Claim{{Service: "user", Module: "records", Action: pkg_models.AccessLevelRead}},
+			Method:      http.MethodGet,
+			Path:        "/v1/users",
+			Handler:     h.HandleGetUsers,
+			Description: "Get all users",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "user", Module: "api", Action: pkg_models.AccessLevelRead}},
+				},
+			},
 		},
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/users/self",
-			Handler:       h.HandleGetSelfUser,
-			Description:   "Get the current user",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+			Method:      http.MethodGet,
+			Path:        "/v1/users/self",
+			Handler:     h.HandleGetSelfUser,
+			Description: "Get the current user",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+			},
 		},
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/users/{id}",
-			Handler:       h.HandleGetUser,
-			Description:   "Get a user by ID",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
-			Roles:         []pkg_models.Role{{Name: "admin"}},
-			Claims:        []pkg_models.Claim{{Service: "user", Module: "records", Action: pkg_models.AccessLevelRead}},
+			Method:      http.MethodGet,
+			Path:        "/v1/users/{id}",
+			Handler:     h.HandleGetUser,
+			Description: "Get a user by ID",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "user", Module: "api", Action: pkg_models.AccessLevelRead}},
+				},
+			},
 		},
 
 		{
-			Method:        http.MethodPost,
-			Path:          "/v1/users",
-			Handler:       h.HandleCreateUser,
-			Description:   "Create a user",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
-			Roles:         []pkg_models.Role{{Name: "admin"}},
-			Claims:        []pkg_models.Claim{{Service: "user", Module: "records", Action: pkg_models.AccessLevelCreate}},
+			Method:      http.MethodPost,
+			Path:        "/v1/users",
+			Handler:     h.HandleCreateUser,
+			Description: "Create a user",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "user", Module: "api", Action: pkg_models.AccessLevelCreate}},
+				},
+			},
 		},
 		{
-			Method:        http.MethodPut,
-			Path:          "/v1/users/self",
-			Handler:       h.HandleUpdateSelfUser,
-			Description:   "Update the current user",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+			Method:      http.MethodPut,
+			Path:        "/v1/users/self",
+			Handler:     h.HandleUpdateSelfUser,
+			Description: "Update the current user",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+			},
 		},
 		{
-			Method:        http.MethodPut,
-			Path:          "/v1/users/self/password",
-			Handler:       h.HandleUpdateSelfUserPassword,
-			Description:   "Update the current user password",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+			Method:      http.MethodPut,
+			Path:        "/v1/users/self/password",
+			Handler:     h.HandleUpdateSelfUserPassword,
+			Description: "Update the current user password",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+			},
 		},
 		{
-			Method:        http.MethodPut,
-			Path:          "/v1/users/{id}",
-			Handler:       h.HandleUpdateUser,
-			Description:   "Update a user",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
-			Roles:         []pkg_models.Role{{Name: "admin"}},
-			Claims:        []pkg_models.Claim{{Service: "user", Module: "records", Action: pkg_models.AccessLevelUpdate}},
+			Method:      http.MethodPut,
+			Path:        "/v1/users/{id}",
+			Handler:     h.HandleUpdateUser,
+			Description: "Update a user",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "user", Module: "api", Action: pkg_models.AccessLevelUpdate}},
+				},
+			},
 		},
 		{
-			Method:        http.MethodDelete,
-			Path:          "/v1/users/{id}",
-			Handler:       h.HandleDeleteUser,
-			Description:   "Delete a user",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
-			Roles:         []pkg_models.Role{{Name: "admin"}},
-			Claims:        []pkg_models.Claim{{Service: "user", Module: "records", Action: pkg_models.AccessLevelDelete}},
+			Method:      http.MethodDelete,
+			Path:        "/v1/users/{id}",
+			Handler:     h.HandleDeleteUser,
+			Description: "Delete a user",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "user", Module: "api", Action: pkg_models.AccessLevelDelete}},
+				},
+			},
 		},
 		{
-			Method:        http.MethodPut,
-			Path:          "/v1/users/{id}/password",
-			Handler:       h.HandleUpdateUserPassword,
-			Description:   "Update a user password",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
-			Roles:         []pkg_models.Role{{Name: "admin"}},
-			Claims:        []pkg_models.Claim{{Service: "user", Module: "records", Action: pkg_models.AccessLevelUpdate}},
+			Method:      http.MethodPut,
+			Path:        "/v1/users/{id}/password",
+			Handler:     h.HandleUpdateUserPassword,
+			Description: "Update a user password",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "user", Module: "api", Action: pkg_models.AccessLevelUpdate}},
+				},
+			},
 		},
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/users/self/claims",
-			Handler:       h.HandleGetSelfUserClaims,
-			Description:   "Get the current user claims",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
-			Claims:        []pkg_models.Claim{{Service: "user", Module: "records", Action: pkg_models.AccessLevelRead}},
+			Method:      http.MethodGet,
+			Path:        "/v1/users/self/claims",
+			Handler:     h.HandleGetSelfUserClaims,
+			Description: "Get the current user claims",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "user", Module: "api", Action: pkg_models.AccessLevelRead}},
+				},
+			},
 		},
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/users/{id}/claims",
-			Handler:       h.HandleGetUserClaims,
-			Description:   "Get a user claims",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
-			Roles:         []pkg_models.Role{{Name: "admin"}},
-			Claims:        []pkg_models.Claim{{Service: "user", Module: "records", Action: pkg_models.AccessLevelRead}},
+			Method:      http.MethodGet,
+			Path:        "/v1/users/{id}/claims",
+			Handler:     h.HandleGetUserClaims,
+			Description: "Get a user claims",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "user", Module: "api", Action: pkg_models.AccessLevelRead}},
+				},
+			},
 		},
 	}
 }

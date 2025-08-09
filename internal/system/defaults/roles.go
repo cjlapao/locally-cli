@@ -37,6 +37,13 @@ var DefaultRoles = []models.Role{
 		SecurityLevel: models.SecurityLevelUser,
 	},
 	{
+		ID:            config.RoleAuditorUserID,
+		Name:          "Auditor",
+		Slug:          utils.Slugify("Auditor"),
+		Description:   "Auditor role",
+		SecurityLevel: models.SecurityLevelAuditor,
+	},
+	{
 		ID:            config.RoleGuestUserID,
 		Name:          "Guest",
 		Slug:          utils.Slugify("Guest"),
@@ -50,4 +57,13 @@ var DefaultRoles = []models.Role{
 		Description:   "No access role",
 		SecurityLevel: models.SecurityLevelNone,
 	},
+}
+
+func GetRole(name string) *models.Role {
+	for _, role := range DefaultRoles {
+		if role.Name == name {
+			return &role
+		}
+	}
+	return nil
 }

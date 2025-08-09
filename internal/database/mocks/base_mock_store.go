@@ -170,52 +170,52 @@ func (m *BaseMockStore) GetClaimsByFilter(ctx *appctx.AppContext, tenantID strin
 // Auth Store Methods
 // ============================================================================
 
-func (m *BaseMockStore) CreateAPIKey(ctx *appctx.AppContext, apiKey *entities.APIKey) (*entities.APIKey, error) {
+func (m *BaseMockStore) CreateAPIKey(ctx *appctx.AppContext, apiKey *entities.ApiKey) (*entities.ApiKey, error) {
 	args := m.Called(ctx, apiKey)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*entities.APIKey), args.Error(1)
+	return args.Get(0).(*entities.ApiKey), args.Error(1)
 }
 
-func (m *BaseMockStore) GetAPIKeyByHash(ctx *appctx.AppContext, keyHash string) (*entities.APIKey, error) {
+func (m *BaseMockStore) GetAPIKeyByHash(ctx *appctx.AppContext, keyHash string) (*entities.ApiKey, error) {
 	args := m.Called(ctx, keyHash)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*entities.APIKey), args.Error(1)
+	return args.Get(0).(*entities.ApiKey), args.Error(1)
 }
 
-func (m *BaseMockStore) GetAPIKeyByPrefix(ctx *appctx.AppContext, keyPrefix string) (*entities.APIKey, error) {
+func (m *BaseMockStore) GetAPIKeyByPrefix(ctx *appctx.AppContext, keyPrefix string) (*entities.ApiKey, error) {
 	args := m.Called(ctx, keyPrefix)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*entities.APIKey), args.Error(1)
+	return args.Get(0).(*entities.ApiKey), args.Error(1)
 }
 
-func (m *BaseMockStore) GetAPIKeyByID(ctx *appctx.AppContext, id string) (*entities.APIKey, error) {
+func (m *BaseMockStore) GetAPIKeyByID(ctx *appctx.AppContext, id string) (*entities.ApiKey, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*entities.APIKey), args.Error(1)
+	return args.Get(0).(*entities.ApiKey), args.Error(1)
 }
 
-func (m *BaseMockStore) ListAPIKeysByUserID(ctx *appctx.AppContext, userID string) ([]entities.APIKey, error) {
+func (m *BaseMockStore) ListAPIKeysByUserID(ctx *appctx.AppContext, userID string) ([]entities.ApiKey, error) {
 	args := m.Called(ctx, userID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]entities.APIKey), args.Error(1)
+	return args.Get(0).([]entities.ApiKey), args.Error(1)
 }
 
-func (m *BaseMockStore) ListAPIKeysByUserIDWithFilter(ctx *appctx.AppContext, userID string, filterObj *filters.Filter) (*filters.FilterResponse[entities.APIKey], error) {
+func (m *BaseMockStore) ListAPIKeysByUserIDWithFilter(ctx *appctx.AppContext, userID string, filterObj *filters.Filter) (*filters.FilterResponse[entities.ApiKey], error) {
 	args := m.Called(ctx, userID, filterObj)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*filters.FilterResponse[entities.APIKey]), args.Error(1)
+	return args.Get(0).(*filters.FilterResponse[entities.ApiKey]), args.Error(1)
 }
 
 func (m *BaseMockStore) UpdateAPIKeyLastUsed(ctx *appctx.AppContext, id string) error {
@@ -231,19 +231,6 @@ func (m *BaseMockStore) RevokeAPIKey(ctx *appctx.AppContext, id string, revokedB
 func (m *BaseMockStore) DeleteAPIKey(ctx *appctx.AppContext, id string) error {
 	args := m.Called(ctx, id)
 	return args.Error(0)
-}
-
-func (m *BaseMockStore) CreateAPIKeyUsage(ctx *appctx.AppContext, usage *entities.APIKeyUsage) error {
-	args := m.Called(ctx, usage)
-	return args.Error(0)
-}
-
-func (m *BaseMockStore) GetAPIKeyUsageStats(ctx *appctx.AppContext, apiKeyID string, days int) ([]entities.APIKeyUsage, error) {
-	args := m.Called(ctx, apiKeyID, days)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]entities.APIKeyUsage), args.Error(1)
 }
 
 func (m *BaseMockStore) CleanupExpiredAPIKeys(ctx *appctx.AppContext) error {

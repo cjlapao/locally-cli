@@ -4,7 +4,7 @@ package service
 import (
 	"sync"
 
-	"github.com/cjlapao/locally-cli/internal/api"
+	api_models "github.com/cjlapao/locally-cli/internal/api/models"
 	"github.com/cjlapao/locally-cli/internal/appctx"
 	claimsvc "github.com/cjlapao/locally-cli/internal/claim/interfaces"
 	"github.com/cjlapao/locally-cli/internal/database/entities"
@@ -70,7 +70,7 @@ func (s *UserService) GetName() string {
 	return "user"
 }
 
-func (s *UserService) GetUsersByFilter(ctx *appctx.AppContext, tenantID string, filter *filters.Filter) (*api.PaginatedResponse[pkg_models.User], *diagnostics.Diagnostics) {
+func (s *UserService) GetUsersByFilter(ctx *appctx.AppContext, tenantID string, filter *filters.Filter) (*api_models.PaginatedResponse[pkg_models.User], *diagnostics.Diagnostics) {
 	diag := diagnostics.New("get_users")
 	defer diag.Complete()
 
@@ -83,15 +83,15 @@ func (s *UserService) GetUsersByFilter(ctx *appctx.AppContext, tenantID string, 
 	}
 
 	users := mappers.MapUsersToDto(dbUsers.Items)
-	pagination := api.Pagination{
+	pagination := api_models.Pagination{
 		Page:       dbUsers.Page,
 		PageSize:   dbUsers.PageSize,
 		TotalPages: dbUsers.TotalPages,
 	}
 
-	response := api.PaginatedResponse[pkg_models.User]{
+	response := api_models.PaginatedResponse[pkg_models.User]{
 		Data:       users,
-		TotalCount: int(dbUsers.Total),
+		TotalCount: dbUsers.Total,
 		Pagination: pagination,
 	}
 

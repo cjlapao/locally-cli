@@ -292,6 +292,7 @@ func (s *SystemService) GenerateClaimsForSecurityLevels() map[models.SecurityLev
 		models.SecurityLevelAdmin,
 		models.SecurityLevelManager,
 		models.SecurityLevelUser,
+		models.SecurityLevelAuditor,
 		models.SecurityLevelGuest,
 		models.SecurityLevelNone,
 	}
@@ -404,4 +405,27 @@ func (s *SystemService) GetRoleBySecurityLevel(securityLevel models.SecurityLeve
 		}
 	}
 	return nil, fmt.Errorf("role with security level %s not found", securityLevel)
+}
+
+func (s *SystemService) GetRoleByName(name string) *models.Role {
+	for _, role := range defaults.DefaultRoles {
+		if strings.EqualFold(role.Name, name) {
+			return &role
+		}
+	}
+	return nil
+}
+
+func (s *SystemService) GetServiceModuleByName(service, module string) *models.ModuleDefinition {
+	for _, systemService := range s.services {
+		if strings.EqualFold(systemService.Name, service) {
+			for _, systemModule := range systemService.Modules {
+				if strings.EqualFold(systemModule.Name, module) {
+					systemModule.System = systemService.Name
+					return systemModule
+				}
+			}
+		}
+	}
+	return nil
 }

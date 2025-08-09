@@ -2,7 +2,7 @@
 package interfaces
 
 import (
-	"github.com/cjlapao/locally-cli/internal/api"
+	api_models "github.com/cjlapao/locally-cli/internal/api/models"
 	"github.com/cjlapao/locally-cli/internal/appctx"
 	"github.com/cjlapao/locally-cli/internal/database/filters"
 	tenant_models "github.com/cjlapao/locally-cli/internal/tenant/models"
@@ -12,7 +12,7 @@ import (
 
 type TenantServiceInterface interface {
 	GetName() string
-	GetTenantsByFilter(ctx *appctx.AppContext, filter *filters.Filter) (*api.PaginatedResponse[models.Tenant], *diagnostics.Diagnostics)
+	GetTenantsByFilter(ctx *appctx.AppContext, filter *filters.Filter) (*api_models.PaginatedResponse[models.Tenant], *diagnostics.Diagnostics)
 	GetTenantByIDOrSlug(ctx *appctx.AppContext, idOrSlug string) (*models.Tenant, *diagnostics.Diagnostics)
 	CreateTenant(ctx *appctx.AppContext, request *tenant_models.TenantCreateRequest) (*models.Tenant, *diagnostics.Diagnostics)
 	UpdateTenant(ctx *appctx.AppContext, tenantRequest *tenant_models.TenantUpdateRequest) (*models.Tenant, *diagnostics.Diagnostics)

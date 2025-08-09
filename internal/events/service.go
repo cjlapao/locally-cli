@@ -7,7 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cjlapao/locally-cli/internal/auth"
+	auth_interfaces "github.com/cjlapao/locally-cli/internal/auth/interfaces"
+	auth_models "github.com/cjlapao/locally-cli/internal/auth/models"
 	"github.com/cjlapao/locally-cli/internal/config"
 	"github.com/cjlapao/locally-cli/internal/logging"
 	"github.com/google/uuid"
@@ -21,10 +22,10 @@ var (
 
 type SseService struct {
 	eventService *EventService
-	authService  *auth.AuthService
+	authService  auth_interfaces.AuthServiceInterface
 }
 
-func InitializeSseService(eventService *EventService, authService *auth.AuthService) *SseService {
+func InitializeSseService(eventService *EventService, authService auth_interfaces.AuthServiceInterface) *SseService {
 	sseOnce.Do(func() {
 		sseService = newSSEService(eventService, authService)
 	})
@@ -39,14 +40,14 @@ func GetSseServiceInstance() *SseService {
 	return sseService
 }
 
-func newSSEService(eventService *EventService, authService *auth.AuthService) *SseService {
+func newSSEService(eventService *EventService, authService auth_interfaces.AuthServiceInterface) *SseService {
 	return &SseService{
 		eventService: eventService,
 		authService:  authService,
 	}
 }
 
-func (h *SseService) validateJWTFromRequest(r *http.Request) (*auth.AuthClaims, error) {
+func (h *SseService) validateJWTFromRequest(r *http.Request) (*auth_models.AuthClaims, error) {
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
 		return nil, fmt.Errorf("authorization header required")

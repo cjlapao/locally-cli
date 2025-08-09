@@ -16,7 +16,7 @@ func MapCreateActivityRequestToEntity(request *models.CreateActivityRequest) *en
 	activity := &entities.Activity{
 		ActivityType:  request.ActivityType,
 		ActivityLevel: request.ActivityLevel,
-		Description:   request.Description,
+		Message:       request.Message,
 		Module:        request.Module,
 		Service:       request.Service,
 		ActorType:     request.ActorType,
@@ -24,10 +24,6 @@ func MapCreateActivityRequestToEntity(request *models.CreateActivityRequest) *en
 		ActorName:     request.ActorName,
 		ActorIP:       request.ActorIP,
 		UserAgent:     request.UserAgent,
-		TargetType:    request.TargetType,
-		TargetID:      request.TargetID,
-		TargetName:    request.TargetName,
-		SessionID:     request.SessionID,
 		RequestID:     request.RequestID,
 		CorrelationID: request.CorrelationID,
 		DurationMs:    request.DurationMs,
@@ -41,9 +37,10 @@ func MapCreateActivityRequestToEntity(request *models.CreateActivityRequest) *en
 
 	// Set started at time
 	if request.StartedAt != nil {
-		activity.StartedAt = *request.StartedAt
+		activity.StartedAt = request.StartedAt
 	} else {
-		activity.StartedAt = time.Now()
+		now := time.Now()
+		activity.StartedAt = &now
 	}
 
 	// Set completed at time
@@ -72,8 +69,8 @@ func MapUpdateActivityRequestToEntity(request *models.UpdateActivityRequest, exi
 	updatedActivity := *existingActivity
 
 	// Update fields if provided
-	if request.Description != "" {
-		updatedActivity.Description = request.Description
+	if request.Message != "" {
+		updatedActivity.Message = request.Message
 	}
 
 	if request.CompletedAt != nil {
@@ -118,7 +115,7 @@ func MapUpdateActivityRequestToEntity(request *models.UpdateActivityRequest, exi
 }
 
 // MapActivityDtoToEntity converts an activity DTO to an entity
-func MapActivityDtoToEntity(dto *models.Activity) *entities.Activity {
+func MapActivityToEntity(dto *models.Activity) *entities.Activity {
 	if dto == nil {
 		return nil
 	}
@@ -126,7 +123,7 @@ func MapActivityDtoToEntity(dto *models.Activity) *entities.Activity {
 	activity := &entities.Activity{
 		ActivityType:  dto.ActivityType,
 		ActivityLevel: dto.ActivityLevel,
-		Description:   dto.Description,
+		Message:       dto.Message,
 		Module:        dto.Module,
 		Service:       dto.Service,
 		ActorType:     dto.ActorType,
@@ -134,10 +131,6 @@ func MapActivityDtoToEntity(dto *models.Activity) *entities.Activity {
 		ActorName:     dto.ActorName,
 		ActorIP:       dto.ActorIP,
 		UserAgent:     dto.UserAgent,
-		TargetType:    dto.TargetType,
-		TargetID:      dto.TargetID,
-		TargetName:    dto.TargetName,
-		SessionID:     dto.SessionID,
 		RequestID:     dto.RequestID,
 		CorrelationID: dto.CorrelationID,
 		StartedAt:     dto.StartedAt,

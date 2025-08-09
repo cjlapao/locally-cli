@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/cjlapao/locally-cli/internal/api"
+	api_types "github.com/cjlapao/locally-cli/internal/api/types"
 	"github.com/cjlapao/locally-cli/internal/appctx"
 	"github.com/cjlapao/locally-cli/internal/role/interfaces"
 	"github.com/cjlapao/locally-cli/internal/role/models"
@@ -21,90 +22,150 @@ func NewRolesApiHandler(roleService interfaces.RoleServiceInterface) *RolesApiHa
 	return &RolesApiHandler{roleService: roleService}
 }
 
-func (h *RolesApiHandler) Routes() []api.Route {
-	return []api.Route{
+func (h *RolesApiHandler) Routes() []api_types.Route {
+	return []api_types.Route{
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/roles",
-			Handler:       h.HandleGetRoles,
-			Description:   "Get all roles",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
-			Roles:         []pkg_models.Role{{Name: "admin"}},
-			Claims:        []pkg_models.Claim{{Service: "user", Module: "roles", Action: pkg_models.AccessLevelRead}},
+			Method:      http.MethodGet,
+			Path:        "/v1/roles",
+			Handler:     h.HandleGetRoles,
+			Description: "Get all roles",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "role", Module: "api", Action: pkg_models.AccessLevelRead}},
+				},
+			},
 		},
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/roles/{id}",
-			Handler:       h.HandleGetRole,
-			Description:   "Get a role by ID",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
-			Roles:         []pkg_models.Role{{Name: "admin"}},
-			Claims:        []pkg_models.Claim{{Service: "user", Module: "roles", Action: pkg_models.AccessLevelRead}},
+			Method:      http.MethodGet,
+			Path:        "/v1/roles/{id}",
+			Handler:     h.HandleGetRole,
+			Description: "Get a role by ID",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "role", Module: "api", Action: pkg_models.AccessLevelRead}},
+				},
+			},
 		},
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/roles/{id}/claims",
-			Handler:       h.HandleGetRoleClaims,
-			Description:   "Get claims by role",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
-			Roles:         []pkg_models.Role{{Name: "admin"}},
-			Claims:        []pkg_models.Claim{{Service: "user", Module: "roles", Action: pkg_models.AccessLevelRead}},
+			Method:      http.MethodGet,
+			Path:        "/v1/roles/{id}/claims",
+			Handler:     h.HandleGetRoleClaims,
+			Description: "Get claims by role",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "role", Module: "api", Action: pkg_models.AccessLevelRead}},
+				},
+			},
 		},
 		{
-			Method:        http.MethodPost,
-			Path:          "/v1/roles",
-			Handler:       h.HandleCreateRole,
-			Description:   "Create a new role",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelSuperUser,
+			Method:      http.MethodPost,
+			Path:        "/v1/roles",
+			Handler:     h.HandleCreateRole,
+			Description: "Create a new role",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "role", Module: "api", Action: pkg_models.AccessLevelWrite}},
+				},
+			},
 		},
 		{
-			Method:        http.MethodPut,
-			Path:          "/v1/roles/{id}",
-			Handler:       h.HandleUpdateRole,
-			Description:   "Update a role",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelSuperUser,
+			Method:      http.MethodPut,
+			Path:        "/v1/roles/{id}",
+			Handler:     h.HandleUpdateRole,
+			Description: "Update a role",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "role", Module: "api", Action: pkg_models.AccessLevelWrite}},
+				},
+			},
 		},
 		{
-			Method:        http.MethodDelete,
-			Path:          "/v1/roles/{id}",
-			Handler:       h.HandleDeleteRole,
-			Description:   "Delete a role",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelSuperUser,
+			Method:      http.MethodDelete,
+			Path:        "/v1/roles/{id}",
+			Handler:     h.HandleDeleteRole,
+			Description: "Delete a role",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "role", Module: "api", Action: pkg_models.AccessLevelDelete}},
+				},
+			},
 		},
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/roles/{id}/users",
-			Handler:       h.HandleGetRoleUsers,
-			Description:   "Get users by role",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelSuperUser,
+			Method:      http.MethodGet,
+			Path:        "/v1/roles/{id}/users",
+			Handler:     h.HandleGetRoleUsers,
+			Description: "Get users by role",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "role", Module: "api", Action: pkg_models.AccessLevelRead}},
+				},
+			},
 		},
 		{
-			Method:        http.MethodPost,
-			Path:          "/v1/roles/{id}/users/{user_id}",
-			Handler:       h.HandleAddUserToRole,
-			Description:   "Add users to a role",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelSuperUser,
+			Method:      http.MethodPost,
+			Path:        "/v1/roles/{id}/users/{user_id}",
+			Handler:     h.HandleAddUserToRole,
+			Description: "Add users to a role",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "role", Module: "api", Action: pkg_models.AccessLevelWrite}},
+				},
+			},
 		},
 		{
-			Method:        http.MethodDelete,
-			Path:          "/v1/roles/{id}/users/{user_id}",
-			Handler:       h.HandleRemoveUserFromRole,
-			Description:   "Remove users from a role",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelSuperUser,
+			Method:      http.MethodDelete,
+			Path:        "/v1/roles/{id}/users/{user_id}",
+			Handler:     h.HandleRemoveUserFromRole,
+			Description: "Remove users from a role",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "role", Module: "api", Action: pkg_models.AccessLevelDelete}},
+				},
+			},
 		},
 		{
-			Method:        http.MethodPost,
-			Path:          "/v1/roles/{id}/claims/{claim_id}",
-			Handler:       h.HandleAddClaimToRole,
-			Description:   "Add claims to a role",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelSuperUser,
+			Method:      http.MethodPost,
+			Path:        "/v1/roles/{id}/claims/{claim_id}",
+			Handler:     h.HandleAddClaimToRole,
+			Description: "Add claims to a role",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "role", Module: "api", Action: pkg_models.AccessLevelWrite}},
+				},
+			},
 		},
 		{
-			Method:        http.MethodDelete,
-			Path:          "/v1/roles/{id}/claims/{claim_id}",
-			Handler:       h.HandleRemoveClaimFromRole,
-			Description:   "Remove claims from a role",
-			SecurityLevel: pkg_models.ApiKeySecurityLevelSuperUser,
+			Method:      http.MethodDelete,
+			Path:        "/v1/roles/{id}/claims/{claim_id}",
+			Handler:     h.HandleRemoveClaimFromRole,
+			Description: "Remove claims from a role",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "role", Module: "api", Action: pkg_models.AccessLevelDelete}},
+				},
+			},
 		},
 	}
 }

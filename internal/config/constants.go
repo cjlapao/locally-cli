@@ -1,7 +1,10 @@
 package config
 
 const (
-	GlobalTenantID              = "00000000-0000-0000-0000-000000000000"
+	UnknownTenantID             = "00000000-0000-0000-0000-000000000000"
+	UnknownUserID               = "00000000-0000-0000-0000-000000000000"
+	DefaultSuperUserUserID      = "11111111-1111-1111-1111-111111111111"
+	GlobalTenantID              = "11111111-1111-1111-1111-111111111111"
 	GlobalTenantName            = "Global Tenant"
 	SuperUserRole               = "su"
 	RootCertificateSlug         = "locally-root"
@@ -11,13 +14,16 @@ const (
 	SystemStoragePath           = ".locally"
 	DefaultPageSizeInt          = 20
 	DefaultPageSize             = "20"
+	DefaultRetentionDays        = 90
+	ApiKeyAuthorizationHeader   = "X-API-KEY"
 	// UUIDs
 	RoleSuperUserID   = "11111111-1111-1111-1111-111111111111"
 	RoleAdminUserID   = "22222222-2222-2222-2222-222222222222"
 	RoleManagerUserID = "33333333-3333-3333-3333-333333333333"
 	RoleUserID        = "44444444-4444-4444-4444-444444444444"
-	RoleGuestUserID   = "55555555-5555-5555-5555-555555555555"
-	RoleNoneUserID    = "66666666-6666-6666-6666-666666666666"
+	RoleAuditorUserID = "55555555-5555-5555-5555-555555555555"
+	RoleGuestUserID   = "66666666-6666-6666-6666-666666666666"
+	RoleNoneUserID    = "77777777-7777-7777-7777-777777777777"
 )
 
 const (
@@ -89,6 +95,9 @@ const (
 	MessageProcessorCleanupIntervalKey      = "message_processor.cleanup_interval"
 	MessageProcessorKeepCompleteMessagesKey = "message_processor.keep_complete_messages"
 	MessageProcessorDebugKey                = "message_processor.debug"
+
+	// Activity configuration keys
+	ActivityRetentionDaysKey = "activity.retention_days"
 )
 
 // ContextKey is a custom type for context keys to avoid collisions
@@ -160,6 +169,9 @@ const (
 
 	// Pagination configuration keys
 	PaginationDefaultPageSizeEnvKey = EnvPrefix + "PAGINATION_DEFAULT_PAGE_SIZE"
+
+	// Activity configuration keys
+	ActivityRetentionDaysEnvKey = EnvPrefix + "ACTIVITY_RETENTION_DAYS"
 )
 
 // Flags
@@ -210,4 +222,7 @@ const (
 
 	// Pagination flags
 	FlagPaginationDefaultPageSize = "pagination-default-page-size"
+
+	// Activity flags
+	FlagActivityRetentionDays = "activity-retention-days"
 )

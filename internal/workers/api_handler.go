@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/cjlapao/locally-cli/internal/api"
+	api_types "github.com/cjlapao/locally-cli/internal/api/types"
 	"github.com/cjlapao/locally-cli/internal/config"
 	"github.com/cjlapao/locally-cli/pkg/models"
 )
@@ -18,35 +19,43 @@ func NewApiHandler(service *SystemWorkerMessageService) *APIHandler {
 	return &APIHandler{service: service}
 }
 
-func (h *APIHandler) Routes() []api.Route {
-	return []api.Route{
+func (h *APIHandler) Routes() []api_types.Route {
+	return []api_types.Route{
 		{
-			Method:        http.MethodPost,
-			Path:          "/v1/messages",
-			Handler:       h.PostMessage,
-			Description:   "Post a message to the processor",
-			SecurityLevel: models.ApiKeySecurityLevelAny,
+			Method:      http.MethodPost,
+			Path:        "/v1/messages",
+			Handler:     h.PostMessage,
+			Description: "Post a message to the processor",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: models.ApiKeySecurityLevelAny,
+			},
 		},
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/messages/workers",
-			Handler:       h.GetWorkers,
-			Description:   "Get all registered workers",
-			SecurityLevel: models.ApiKeySecurityLevelAny,
+			Method:      http.MethodGet,
+			Path:        "/v1/messages/workers",
+			Handler:     h.GetWorkers,
+			Description: "Get all registered workers",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: models.ApiKeySecurityLevelAny,
+			},
 		},
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/messages/health",
-			Handler:       h.HealthCheck,
-			Description:   "Check service health",
-			SecurityLevel: models.ApiKeySecurityLevelAny,
+			Method:      http.MethodGet,
+			Path:        "/v1/messages/health",
+			Handler:     h.HealthCheck,
+			Description: "Check service health",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: models.ApiKeySecurityLevelAny,
+			},
 		},
 		{
-			Method:        http.MethodGet,
-			Path:          "/v1/messages/config",
-			Handler:       h.GetConfig,
-			Description:   "Get service configuration",
-			SecurityLevel: models.ApiKeySecurityLevelAny,
+			Method:      http.MethodGet,
+			Path:        "/v1/messages/config",
+			Handler:     h.GetConfig,
+			Description: "Get service configuration",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: models.ApiKeySecurityLevelAny,
+			},
 		},
 	}
 }

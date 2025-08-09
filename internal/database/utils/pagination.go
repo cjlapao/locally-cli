@@ -66,6 +66,7 @@ func PaginatedFilteredQuery[T any](
 		if err := query.Where(filterString, args...).
 			Offset(offset).
 			Limit(pageSize).
+			Order("created_at DESC").
 			Find(&items).Error; err != nil {
 			return nil, err
 		}
@@ -139,7 +140,11 @@ func PaginatedFilteredQueryWithPreload[T any](
 		if tenantID != "" {
 			query = query.Where("tenant_id = ?", tenantID)
 		}
-		if err := query.Where(filterString, args...).Offset(offset).Limit(pageSize).Find(&items).Error; err != nil {
+		if err := query.Where(filterString, args...).
+			Offset(offset).
+			Limit(pageSize).
+			Order("created_at DESC").
+			Find(&items).Error; err != nil {
 			return nil, err
 		}
 	}
@@ -160,6 +165,7 @@ func PaginatedQuery[T any](
 	tenantID string,
 	pagination *filters.Pagination,
 	model T,
+	preloads ...string,
 ) (*filters.PaginationResponse[T], error) {
 	cfg := config.GetInstance().Get()
 	var items []T
@@ -186,8 +192,12 @@ func PaginatedQuery[T any](
 	if tenantID != "" {
 		query = query.Where("tenant_id = ?", tenantID)
 	}
+	for _, preload := range preloads {
+		query = query.Preload(preload)
+	}
 	if err := query.Offset(offset).
 		Limit(pagination.PageSize).
+		Order("created_at DESC").
 		Find(&items).Error; err != nil {
 		return nil, err
 	}

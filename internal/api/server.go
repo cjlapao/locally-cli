@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/cjlapao/locally-cli/internal/api/types"
+	auth_interfaces "github.com/cjlapao/locally-cli/internal/auth/interfaces"
 	"github.com/cjlapao/locally-cli/internal/config"
 	"github.com/cjlapao/locally-cli/internal/logging"
 	"github.com/cjlapao/locally-cli/pkg/models"
@@ -22,7 +24,8 @@ type Server struct {
 	handler             *Handler
 	router              *mux.Router
 	middlewareChain     *MiddlewareChain
-	routeGroups         []RouteGroup
+	routeGroups         []types.RouteGroup
+	authService         auth_interfaces.AuthServiceInterface
 	authMiddleware      PreMiddleware
 	superUserMiddleware PreMiddleware
 	roleMiddleware      PreMiddleware
@@ -34,6 +37,8 @@ type Config struct {
 	Port                int
 	Hostname            string
 	Prefix              string
+	AuthService         auth_interfaces.AuthServiceInterface
+	NewAuthMiddleware   PreMiddleware
 	AuthMiddleware      PreMiddleware
 	SuperUserMiddleware PreMiddleware
 	RoleMiddleware      PreMiddleware
@@ -48,7 +53,7 @@ func NewServer(cfg Config, handler *Handler) *Server {
 	// Create middleware chain with default middlewares
 	middlewareChain := NewMiddlewareChain()
 	middlewareChain.AddPreMiddleware(CORSMiddleware(readCorsConfigFromConfiguration(appCfg)))
-	middlewareChain.AddPreMiddleware(RequestIDMiddleware())
+	middlewareChain.AddPreMiddleware(RequestInformationMiddleware())
 	middlewareChain.AddPreMiddleware(RequestLoggingMiddleware())
 	middlewareChain.AddPostMiddleware(ResponseLoggingMiddleware())
 
@@ -59,7 +64,8 @@ func NewServer(cfg Config, handler *Handler) *Server {
 		prefix:              cfg.Prefix,
 		router:              mux.NewRouter(),
 		middlewareChain:     middlewareChain,
-		routeGroups:         make([]RouteGroup, 0),
+		routeGroups:         make([]types.RouteGroup, 0),
+		authService:         cfg.AuthService,
 		authMiddleware:      cfg.AuthMiddleware,
 		superUserMiddleware: cfg.SuperUserMiddleware,
 		roleMiddleware:      cfg.RoleMiddleware,
@@ -68,7 +74,7 @@ func NewServer(cfg Config, handler *Handler) *Server {
 }
 
 // RegisterRoutes registers routes from a RouteRegistrar
-func (s *Server) RegisterRoutes(registrar RouteRegistrar) {
+func (s *Server) RegisterRoutes(registrar types.RouteRegistrar) {
 	routes := registrar.Routes()
 	for _, route := range routes {
 		s.registerRoute(route)
@@ -76,7 +82,7 @@ func (s *Server) RegisterRoutes(registrar RouteRegistrar) {
 }
 
 // RegisterRouteGroup registers a group of routes with common prefix and middleware
-func (s *Server) RegisterRouteGroup(group RouteGroup) {
+func (s *Server) RegisterRouteGroup(group types.RouteGroup) {
 	s.routeGroups = append(s.routeGroups, group)
 }
 
@@ -91,7 +97,7 @@ func (s *Server) AddPostMiddleware(middleware PostMiddleware) {
 }
 
 // registerRoute registers a single route with the server
-func (s *Server) registerRoute(route Route) {
+func (s *Server) registerRoute(route types.Route) {
 	handler := route.Handler
 
 	// Apply route-specific middleware first
@@ -107,25 +113,28 @@ func (s *Server) registerRoute(route Route) {
 		routeChain.AddPreMiddleware(middleware)
 	}
 
-	// Add auth middleware if required
-	if route.SecurityLevel.RequiresAuthentication() && s.authMiddleware != nil {
-		routeChain.AddPreMiddleware(s.authMiddleware)
-	}
+	// Add new auth middleware if required
+	routeChain.AddPreMiddleware(NewAuthorizationPreMiddleware(s.authService, &route))
 
-	// Add super user middleware if required
-	if route.SecurityLevel == models.ApiKeySecurityLevelSuperUser && s.superUserMiddleware != nil {
-		routeChain.AddPreMiddleware(s.superUserMiddleware)
-	}
+	// // Add auth middleware if required
+	// if route.SecurityLevel.RequiresAuthentication() && s.authMiddleware != nil {
+	// 	routeChain.AddPreMiddleware(s.authMiddleware)
+	// }
 
-	// Add role middleware if required
-	if len(route.Roles) > 0 {
-		routeChain.AddPreMiddleware(NewRequireRolePreMiddleware(route.Roles))
-	}
+	// // Add super user middleware if required
+	// if route.SecurityLevel == models.ApiKeySecurityLevelSuperUser && s.superUserMiddleware != nil {
+	// 	routeChain.AddPreMiddleware(s.superUserMiddleware)
+	// }
 
-	// Add claim middleware if required
-	if len(route.Claims) > 0 {
-		routeChain.AddPreMiddleware(NewRequireClaimPreMiddleware(route.Claims))
-	}
+	// // Add role middleware if required
+	// if len(route.Roles) > 0 {
+	// 	routeChain.AddPreMiddleware(NewRequireRolePreMiddleware(s.authService, route.Roles))
+	// }
+
+	// // Add claim middleware if required
+	// if len(route.Claims) > 0 {
+	// 	routeChain.AddPreMiddleware(NewRequireClaimPreMiddleware(s.authService, route.Claims))
+	// }
 
 	// Add global post-middlewares
 	for _, middleware := range s.middlewareChain.postMiddlewares {
@@ -154,11 +163,16 @@ func (s *Server) registerRoute(route Route) {
 		}
 	}
 
+	securityLevel := models.ApiKeySecurityLevelNone
+	if route.SecurityRequirement != nil {
+		securityLevel = route.SecurityRequirement.SecurityLevel
+	}
+
 	logging.WithFields(logrus.Fields{
 		"method":         route.Method,
 		"path":           route.Path,
 		"description":    route.Description,
-		"security_level": route.SecurityLevel,
+		"security_level": securityLevel,
 	}).Info("Registered route")
 }
 
@@ -206,25 +220,27 @@ func (s *Server) Start() error {
 				routeChain.AddPreMiddleware(middleware)
 			}
 
-			// Add auth middleware if required
-			if route.SecurityLevel.RequiresAuthentication() && s.authMiddleware != nil {
-				routeChain.AddPreMiddleware(s.authMiddleware)
-			}
+			routeChain.AddPreMiddleware(NewAuthorizationPreMiddleware(s.authService, &route))
 
-			// Add super user middleware if required
-			if route.SecurityLevel == models.ApiKeySecurityLevelSuperUser && s.superUserMiddleware != nil {
-				routeChain.AddPreMiddleware(s.superUserMiddleware)
-			}
+			// // Add auth middleware if required
+			// if route.SecurityLevel.RequiresAuthentication() && s.authMiddleware != nil {
+			// 	routeChain.AddPreMiddleware(s.authMiddleware)
+			// }
 
-			// Add role middleware if required
-			if len(route.Roles) > 0 {
-				routeChain.AddPreMiddleware(s.roleMiddleware)
-			}
+			// // Add super user middleware if required
+			// if route.SecurityLevel == models.ApiKeySecurityLevelSuperUser && s.superUserMiddleware != nil {
+			// 	routeChain.AddPreMiddleware(s.superUserMiddleware)
+			// }
 
-			// Add claim middleware if required
-			if len(route.Claims) > 0 {
-				routeChain.AddPreMiddleware(s.claimMiddleware)
-			}
+			// // Add role middleware if required
+			// if len(route.Roles) > 0 {
+			// 	routeChain.AddPreMiddleware(s.roleMiddleware)
+			// }
+
+			// // Add claim middleware if required
+			// if len(route.Claims) > 0 {
+			// 	routeChain.AddPreMiddleware(s.claimMiddleware)
+			// }
 
 			// Add global post-middlewares
 			for _, middleware := range s.middlewareChain.postMiddlewares {
@@ -240,11 +256,16 @@ func (s *Server) Start() error {
 				subrouter.HandleFunc(route.Path, s.createOptionsHandler()).Methods(http.MethodOptions)
 			}
 
+			securityLevel := models.ApiKeySecurityLevelNone
+			if route.SecurityRequirement != nil {
+				securityLevel = route.SecurityRequirement.SecurityLevel
+			}
+
 			logging.WithFields(logrus.Fields{
 				"method":         route.Method,
 				"path":           group.Prefix + route.Path,
 				"description":    route.Description,
-				"security_level": route.SecurityLevel,
+				"security_level": securityLevel,
 			}).Info("Registered group route")
 		}
 	}
