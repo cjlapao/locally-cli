@@ -20,4 +20,6 @@ type UserServiceInterface interface {
 	DeleteUser(ctx *appctx.AppContext, tenantID string, userId string) *diagnostics.Diagnostics
 	UpdateUserPassword(ctx *appctx.AppContext, tenantID string, id string, request *models.UpdateUserPasswordRequest) *diagnostics.Diagnostics
 	GetUserClaims(ctx *appctx.AppContext, tenantID string, userID string) ([]pkg_models.Claim, *diagnostics.Diagnostics)
+	AddClaimToUser(ctx *appctx.AppContext, tenantID string, userID string, claimIdOrSlug string) *diagnostics.Diagnostics
+	RemoveClaimFromUser(ctx *appctx.AppContext, tenantID string, userID string, claimIdOrSlug string) *diagnostics.Diagnostics
 }

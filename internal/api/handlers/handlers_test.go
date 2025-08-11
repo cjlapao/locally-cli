@@ -1,10 +1,12 @@
-package api
+package handlers
 
 import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/cjlapao/locally-cli/internal/api"
 )
 
 // TestResponse represents a generic API response for testing
@@ -89,7 +91,7 @@ func TestHandlerErrorHandling(t *testing.T) {
 	// Create a test server
 	mux := http.NewServeMux()
 	mux.HandleFunc("/error", func(w http.ResponseWriter, r *http.Request) {
-		WriteInternalError(w, r, "Test error message")
+		api.WriteInternalError(w, r, "Test error message")
 	})
 
 	server := httptest.NewServer(mux)
@@ -108,14 +110,14 @@ func TestHandlerErrorHandling(t *testing.T) {
 	}
 
 	// Parse error response
-	var errorResponse APIError
+	var errorResponse api.APIError
 	if err := json.NewDecoder(resp.Body).Decode(&errorResponse); err != nil {
 		t.Fatalf("Failed to decode error response: %v", err)
 	}
 
 	// Check error response content
-	if errorResponse.Error.Code != ErrorCodeInternalError {
-		t.Errorf("Expected error code '%s', got '%s'", ErrorCodeInternalError, errorResponse.Error.Code)
+	if errorResponse.Error.Code != api.ErrorCodeInternalError {
+		t.Errorf("Expected error code '%s', got '%s'", api.ErrorCodeInternalError, errorResponse.Error.Code)
 	}
 	if errorResponse.Error.Message != "Test error message" {
 		t.Errorf("Expected error message 'Test error message', got '%s'", errorResponse.Error.Message)
@@ -129,7 +131,7 @@ func TestHandlerMethodNotAllowed(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/test", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			WriteMethodNotAllowed(w, r, "Only GET method is allowed")
+			api.WriteMethodNotAllowed(w, r, "Only GET method is allowed")
 			return
 		}
 		handler.testHandler(w, r)
@@ -151,14 +153,14 @@ func TestHandlerMethodNotAllowed(t *testing.T) {
 	}
 
 	// Parse error response
-	var errorResponse APIError
+	var errorResponse api.APIError
 	if err := json.NewDecoder(resp.Body).Decode(&errorResponse); err != nil {
 		t.Fatalf("Failed to decode error response: %v", err)
 	}
 
 	// Check error response content
-	if errorResponse.Error.Code != ErrorCodeMethodNotAllowed {
-		t.Errorf("Expected error code '%s', got '%s'", ErrorCodeMethodNotAllowed, errorResponse.Error.Code)
+	if errorResponse.Error.Code != api.ErrorCodeMethodNotAllowed {
+		t.Errorf("Expected error code '%s', got '%s'", api.ErrorCodeMethodNotAllowed, errorResponse.Error.Code)
 	}
 	if errorResponse.Error.Message != "Only GET method is allowed" {
 		t.Errorf("Expected error message 'Only GET method is allowed', got '%s'", errorResponse.Error.Message)

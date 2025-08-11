@@ -1,4 +1,5 @@
-package api
+// Package handlers contains the handlers for the API service.
+package handlers
 
 import (
 	"net/http"

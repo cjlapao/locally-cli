@@ -21,5 +21,8 @@ type AuthServiceInterface interface {
 	AuthenticateWithPassword(ctx *appctx.AppContext, creds auth_models.AuthCredentials) (*auth_models.TokenResponse, *diagnostics.Diagnostics)
 	AuthenticateWithAPIKey(ctx *appctx.AppContext, creds auth_models.APIKeyCredentials) (*auth_models.TokenResponse, *diagnostics.Diagnostics)
 
+	// ValidateApiKey validates a raw API key and returns the API key with claims if valid
+	ValidateApiKey(ctx *appctx.AppContext, tenantID string, apiKey string) (*pkg_models.ApiKey, *diagnostics.Diagnostics)
 	ValidateToken(tokenString string) (*auth_models.AuthClaims, error)
+	UpdateApiKeyLastUsed(ctx *appctx.AppContext, tenantID string, apiKeyID string) *diagnostics.Diagnostics
 }

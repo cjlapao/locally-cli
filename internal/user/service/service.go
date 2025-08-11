@@ -260,3 +260,82 @@ func (s *UserService) GetUserClaims(ctx *appctx.AppContext, tenantID string, use
 
 	return mappers.MapClaimsToDto(claims), diag
 }
+
+func (s *UserService) AddClaimToUser(ctx *appctx.AppContext, tenantID string, userID string, claimIdOrSlug string) *diagnostics.Diagnostics {
+	diag := diagnostics.New("add_claim_to_user")
+	defer diag.Complete()
+
+	user, err := s.userStore.GetUserByID(ctx, tenantID, userID)
+	if err != nil {
+		diag.AddError("failed_to_get_user", "failed to get user", "user", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return diag
+	}
+	if user == nil {
+		diag.AddError("user_not_found", "user not found", "user", map[string]interface{}{
+			"user_id": userID,
+		})
+		return diag
+	}
+
+	claim, claimDiag := s.claimService.GetClaimByIDOrSlug(ctx, tenantID, claimIdOrSlug)
+	if claimDiag.HasErrors() {
+		diag.Append(claimDiag)
+		return diag
+	}
+	if claim == nil {
+		diag.AddError("claim_not_found", "claim not found", "claim", map[string]interface{}{
+			"claim_id": claimIdOrSlug,
+		})
+		return diag
+	}
+
+	addClaimDiag := s.claimService.AddClaimToUser(ctx, tenantID, userID, claimIdOrSlug)
+	if addClaimDiag.HasErrors() {
+		diag.Append(addClaimDiag)
+		return diag
+	}
+
+	return diag
+}
+
+func (s *UserService) RemoveClaimFromUser(ctx *appctx.AppContext, tenantID string, userID string, claimIdOrSlug string) *diagnostics.Diagnostics {
+	diag := diagnostics.New("remove_claim_from_user")
+	defer diag.Complete()
+
+	user, err := s.userStore.GetUserByID(ctx, tenantID, userID)
+	if err != nil {
+		diag.AddError("failed_to_get_user", "failed to get user", "user", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return diag
+	}
+	if user == nil {
+		diag.AddError("user_not_found", "user not found", "user", map[string]interface{}{
+			"user_id": userID,
+		})
+		return diag
+	}
+
+	claim, claimDiag := s.claimService.GetClaimByIDOrSlug(ctx, tenantID, claimIdOrSlug)
+	if claimDiag.HasErrors() {
+		diag.Append(claimDiag)
+		return diag
+	}
+
+	if claim == nil {
+		diag.AddError("claim_not_found", "claim not found", "claim", map[string]interface{}{
+			"claim_id": claimIdOrSlug,
+		})
+		return diag
+	}
+
+	removeClaimDiag := s.claimService.RemoveClaimFromUser(ctx, tenantID, userID, claimIdOrSlug)
+	if removeClaimDiag.HasErrors() {
+		diag.Append(removeClaimDiag)
+		return diag
+	}
+
+	return diag
+}

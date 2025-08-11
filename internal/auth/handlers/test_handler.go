@@ -41,6 +41,19 @@ func (h *AuthTestHandler) Routes() []api_types.Route {
 		},
 		{
 			Method:      http.MethodGet,
+			Path:        "/v1/auth/test/user",
+			Handler:     h.HandleAuthTest,
+			Description: "Test endpoint with user access",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "auth", Module: "test", Action: pkg_models.AccessLevelRead}},
+				},
+			},
+		},
+		{
+			Method:      http.MethodGet,
 			Path:        "/v1/auth/test/superuser",
 			Handler:     h.HandleAuthTest,
 			Description: "Test endpoint with superuser access",
@@ -105,6 +118,32 @@ func (h *AuthTestHandler) Routes() []api_types.Route {
 				Roles: &api_types.SecurityRequirementRoles{
 					Relation: api_types.SecurityRequirementRelationAnd,
 					Items:    []pkg_models.Role{{Name: "test"}},
+				},
+			},
+		},
+		{
+			Method:      http.MethodGet,
+			Path:        "/v1/auth/test/api-key-only",
+			Handler:     h.HandleAuthTest,
+			Description: "Test endpoint with api key only access",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelApiKey,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "auth", Module: "test", Action: pkg_models.AccessLevelWrite}},
+				},
+			},
+		},
+		{
+			Method:      http.MethodGet,
+			Path:        "/v1/auth/test/bearer-only",
+			Handler:     h.HandleAuthTest,
+			Description: "Test endpoint with user token only access",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelBearer,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "auth", Module: "test", Action: pkg_models.AccessLevelRead}},
 				},
 			},
 		},

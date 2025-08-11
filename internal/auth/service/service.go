@@ -325,7 +325,7 @@ func (s *AuthService) AuthenticateWithAPIKey(ctx *appctx.AppContext, creds auth_
 	keyPrefix := creds.APIKey[:prefixLen]
 
 	// Find the API key in the database by prefix
-	apiKey, err := s.AuthDataStore.GetAPIKeyByPrefix(ctx, keyPrefix)
+	apiKey, err := s.AuthDataStore.GetApiKeyByPrefix(ctx, creds.TenantID, keyPrefix)
 	if err != nil {
 		diag.AddError("authenticate_with_api_key", "failed to get API key", err.Error())
 		return nil, diag
@@ -347,12 +347,16 @@ func (s *AuthService) AuthenticateWithAPIKey(ctx *appctx.AppContext, creds auth_
 		return nil, diag
 	}
 
-	// Verify the provided API key against the stored bcrypt hash
+	// Verify the provided API key against the stored bcrypt hash; update last used timestamp
 	encryptionService := encryption.GetInstance()
 	if err := encryptionService.VerifyPassword(creds.APIKey, apiKey.KeyHash); err != nil {
 		diag.AddError("authenticate_with_api_key", "invalid API key", "")
 		return nil, diag
 	}
+
+	// Update last used timestamp
+	now := time.Now()
+	_ = s.AuthDataStore.GetDB().Model(apiKey).Update("last_used_at", now).Error
 
 	// Get the dbUser associated with this API key
 	dbUser, err := s.UserStore.GetUserByID(ctx, apiKey.TenantID, apiKey.CreatedBy)
@@ -391,6 +395,63 @@ func (s *AuthService) AuthenticateWithAPIKey(ctx *appctx.AppContext, creds auth_
 		return nil, diag
 	}
 	return token, nil
+}
+
+// ValidateApiKey validates a raw API key and returns the API key DTO (with claims) if valid
+func (s *AuthService) ValidateApiKey(ctx *appctx.AppContext, tenantID string, apiKey string) (*pkg_models.ApiKey, *diagnostics.Diagnostics) {
+	diag := diagnostics.New("validate_api_key")
+	if tenantID == "" {
+		diag.AddError("validate_api_key", "tenant ID is required", "")
+		return nil, diag
+	}
+
+	apiKey = strings.TrimSpace(apiKey)
+	if apiKey == "" {
+		diag.AddError("validate_api_key", "api key is required", "")
+		return nil, diag
+	}
+
+	if !strings.HasPrefix(apiKey, config.ApiKeyPrefix) {
+		diag.AddError("validate_api_key", "invalid API key format", "")
+		return nil, diag
+	}
+
+	prefixLen := len(config.ApiKeyPrefix) + 8
+	if len(apiKey) < prefixLen {
+		diag.AddError("validate_api_key", "invalid API key length", "")
+		return nil, diag
+	}
+	keyPrefix := apiKey[:prefixLen]
+
+	// Lookup by prefix then verify hash
+	dbKey, err := s.AuthDataStore.GetApiKeyByPrefix(ctx, tenantID, keyPrefix)
+	if err != nil {
+		diag.AddError("validate_api_key", "failed to get API key", err.Error())
+		return nil, diag
+	}
+	if dbKey == nil {
+		diag.AddError("validate_api_key", "invalid API key", "")
+		return nil, diag
+	}
+
+	if !dbKey.IsActive {
+		diag.AddError("validate_api_key", "API key is revoked", "")
+		return nil, diag
+	}
+	if dbKey.ExpiresAt != nil && dbKey.ExpiresAt.Before(time.Now()) {
+		diag.AddError("validate_api_key", "API key has expired", "")
+		return nil, diag
+	}
+
+	// Verify bcrypt hash
+	if err := encryption.GetInstance().VerifyPassword(apiKey, dbKey.KeyHash); err != nil {
+		diag.AddError("validate_api_key", "invalid API key", "")
+		return nil, diag
+	}
+
+	// Map to DTO including claims
+	dto := mappers.MapApiKeyToDto(dbKey)
+	return dto, diag
 }
 
 // Authenticate is the main authentication method that supports both password and API key
@@ -518,4 +579,43 @@ func isAdminUser(roles []pkg_models.Role) bool {
 		}
 	}
 	return false
+}
+
+func (s *AuthService) UpdateApiKeyLastUsed(ctx *appctx.AppContext, tenantID string, apiKeyID string) *diagnostics.Diagnostics {
+	diag := diagnostics.New("update_api_key_last_used")
+	if apiKeyID == "" {
+		diag.AddError("update_api_key_last_used", "API key ID is required", "")
+		return diag
+	}
+	if tenantID == "" {
+		diag.AddError("update_api_key_last_used", "tenant ID is required", "")
+		return diag
+	}
+
+	// Get the API key
+	prefixLen := len(config.ApiKeyPrefix) + 8
+	if len(apiKeyID) < prefixLen {
+		diag.AddError("update_api_key_last_used", "invalid API key length", "")
+		return diag
+	}
+	keyPrefix := apiKeyID[:prefixLen]
+
+	// Lookup by prefix then verify hash
+	dbKey, err := s.AuthDataStore.GetApiKeyByPrefix(ctx, tenantID, keyPrefix)
+	if err != nil {
+		diag.AddError("update_api_key_last_used", "failed to get API key", err.Error())
+		return diag
+	}
+	if dbKey == nil {
+		diag.AddError("update_api_key_last_used", "invalid API key", "")
+		return diag
+	}
+
+	// Update the API key last used
+	err = s.AuthDataStore.UpdateApiKeyLastUsed(ctx, tenantID, dbKey.ID)
+	if err != nil {
+		diag.AddError("update_api_key_last_used", "failed to update API key last used", err.Error())
+		return diag
+	}
+	return nil
 }

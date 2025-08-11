@@ -15,6 +15,7 @@ func MapApiKeyToDto(apiKey *entities.ApiKey) *models.ApiKey {
 		RevokedAt:        apiKey.RevokedAt,
 		RevokedBy:        apiKey.RevokedBy,
 		RevocationReason: apiKey.RevocationReason,
+		LastUsedAt:       apiKey.LastUsedAt,
 	}
 
 	if apiKey.Claims != nil {

@@ -1,4 +1,4 @@
-package certificates
+package handlers
 
 import (
 	"encoding/json"
@@ -8,6 +8,7 @@ import (
 	api_models "github.com/cjlapao/locally-cli/internal/api/models"
 	api_types "github.com/cjlapao/locally-cli/internal/api/types"
 	"github.com/cjlapao/locally-cli/internal/appctx"
+	"github.com/cjlapao/locally-cli/internal/certificates"
 	"github.com/cjlapao/locally-cli/internal/config"
 	"github.com/cjlapao/locally-cli/internal/database/stores"
 	"github.com/cjlapao/locally-cli/internal/errors"
@@ -16,11 +17,11 @@ import (
 )
 
 type ApiHandlers struct {
-	certificateService *CertificateService
+	certificateService *certificates.CertificateService
 	store              stores.CertificatesDataStoreInterface
 }
 
-func NewApiHandlers(certificateService *CertificateService, store stores.CertificatesDataStoreInterface) *ApiHandlers {
+func NewApiHandlers(certificateService *certificates.CertificateService, store stores.CertificatesDataStoreInterface) *ApiHandlers {
 	return &ApiHandlers{
 		certificateService: certificateService,
 		store:              store,
@@ -83,12 +84,12 @@ func (h *ApiHandlers) HandleGetRootCertificate(w http.ResponseWriter, r *http.Re
 
 	dbCertificates, diag := h.store.GetRootCertificateBySlug(ctx, config.RootCertificateSlug)
 	if diag.HasErrors() {
-		ctx.Log().WithField("component", CertificateComponent).Error("Error getting root certificate", diag.Errors)
+		ctx.Log().WithField("component", certificates.CertificateComponent).Error("Error getting root certificate", diag.Errors)
 		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, errors.ErrorGettingRootCertificate, "Error getting root certificate", diag)
 		return
 	}
 	if dbCertificates == nil {
-		ctx.Log().WithField("component", CertificateComponent).Error("Root certificate not found")
+		ctx.Log().WithField("component", certificates.CertificateComponent).Error("Root certificate not found")
 		api.WriteNotFound(w, r, "Root certificate not found")
 		return
 	}
@@ -99,7 +100,7 @@ func (h *ApiHandlers) HandleGetRootCertificate(w http.ResponseWriter, r *http.Re
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(dtoModel)
 
-	ctx.Log().WithField("component", CertificateComponent).Info("Root certificate retrieved successfully")
+	ctx.Log().WithField("component", certificates.CertificateComponent).Info("Root certificate retrieved successfully")
 }
 
 func (h *ApiHandlers) HandleCreateRootCertificate(w http.ResponseWriter, r *http.Request) {
@@ -110,13 +111,13 @@ func (h *ApiHandlers) HandleCreateRootCertificate(w http.ResponseWriter, r *http
 	// checking if we already have a root certificate with us, we can only get one root certificate per database
 	dbCertificate, dbCertDiag := h.store.GetRootCertificateBySlug(ctx, config.RootCertificateSlug)
 	if dbCertDiag.HasErrors() {
-		ctx.Log().WithField("component", CertificateComponent).Error("Error getting root certificate", dbCertDiag.Errors)
+		ctx.Log().WithField("component", certificates.CertificateComponent).Error("Error getting root certificate", dbCertDiag.Errors)
 		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, errors.ErrorGettingRootCertificate, "Error getting root certificate", dbCertDiag)
 		return
 	}
 
 	if dbCertificate != nil {
-		ctx.Log().WithField("component", CertificateComponent).Info("Root certificate already exists")
+		ctx.Log().WithField("component", certificates.CertificateComponent).Info("Root certificate already exists")
 		api.WriteErrorWithDiagnostics(w, r, http.StatusOK, errors.ErrorGettingRootCertificate, "Root certificate already exists", nil)
 		return
 	}
@@ -124,7 +125,7 @@ func (h *ApiHandlers) HandleCreateRootCertificate(w http.ResponseWriter, r *http
 	ctx.Log().Info("Generating root certificate")
 	rootCA, dbCertDiag := h.certificateService.GenerateRootCertificate(ctx)
 	if dbCertDiag.HasErrors() {
-		ctx.Log().WithField("component", CertificateComponent).Error("Error generating root certificate", dbCertDiag.Errors)
+		ctx.Log().WithField("component", certificates.CertificateComponent).Error("Error generating root certificate", dbCertDiag.Errors)
 		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, errors.ErrorCreatingRootCertificate, "Error generating root certificate", dbCertDiag)
 		return
 	}
@@ -133,7 +134,7 @@ func (h *ApiHandlers) HandleCreateRootCertificate(w http.ResponseWriter, r *http
 	dbEntity := mappers.MapRootCertificateToEntity(*rootCA)
 	createdEntity, dbCertDiag := h.store.CreateRootCertificate(ctx, &dbEntity)
 	if dbCertDiag.HasErrors() {
-		ctx.Log().WithField("component", CertificateComponent).Error("Error creating root certificate", dbCertDiag.Errors)
+		ctx.Log().WithField("component", certificates.CertificateComponent).Error("Error creating root certificate", dbCertDiag.Errors)
 		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, errors.ErrorCreatingRootCertificate, "Error creating root certificate", dbCertDiag)
 		return
 	}
@@ -144,7 +145,7 @@ func (h *ApiHandlers) HandleCreateRootCertificate(w http.ResponseWriter, r *http
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(result)
 
-	ctx.Log().WithField("component", CertificateComponent).Info("Root certificate created successfully")
+	ctx.Log().WithField("component", certificates.CertificateComponent).Info("Root certificate created successfully")
 }
 
 func (h *ApiHandlers) HandleDeleteRootCertificate(w http.ResponseWriter, r *http.Request) {
@@ -153,7 +154,7 @@ func (h *ApiHandlers) HandleDeleteRootCertificate(w http.ResponseWriter, r *http
 
 	diag := h.store.DeleteRootCertificate(ctx, config.RootCertificateSlug)
 	if diag.HasErrors() {
-		ctx.Log().WithField("component", CertificateComponent).Error("Error deleting root certificate", diag.Errors)
+		ctx.Log().WithField("component", certificates.CertificateComponent).Error("Error deleting root certificate", diag.Errors)
 		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, errors.ErrorDeletingRootCertificate, "Error deleting root certificate", diag)
 		return
 	}
@@ -175,12 +176,12 @@ func (h *ApiHandlers) HandleGetIntermediateCertificate(w http.ResponseWriter, r 
 
 	dbCertificates, diag := h.store.GetIntermediateCertificateBySlug(ctx, config.IntermediateCertificateSlug)
 	if diag.HasErrors() {
-		ctx.Log().WithField("component", CertificateComponent).Error("Error getting intermediate certificate", diag.Errors)
+		ctx.Log().WithField("component", certificates.CertificateComponent).Error("Error getting intermediate certificate", diag.Errors)
 		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, errors.ErrorGettingIntermediateCertificate, "Error getting intermediate certificate", diag)
 		return
 	}
 	if dbCertificates == nil {
-		ctx.Log().WithField("component", CertificateComponent).Error("Intermediate certificate not found")
+		ctx.Log().WithField("component", certificates.CertificateComponent).Error("Intermediate certificate not found")
 		api.WriteNotFound(w, r, "Intermediate certificate not found")
 		return
 	}
@@ -191,7 +192,7 @@ func (h *ApiHandlers) HandleGetIntermediateCertificate(w http.ResponseWriter, r 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(dtoModel)
 
-	ctx.Log().WithField("component", CertificateComponent).Info("Intermediate certificate retrieved successfully")
+	ctx.Log().WithField("component", certificates.CertificateComponent).Info("Intermediate certificate retrieved successfully")
 }
 
 func (h *ApiHandlers) HandleCreateIntermediateCertificate(w http.ResponseWriter, r *http.Request) {
@@ -200,14 +201,14 @@ func (h *ApiHandlers) HandleCreateIntermediateCertificate(w http.ResponseWriter,
 
 	dbCertificates, diag := h.store.GetIntermediateCertificateBySlug(ctx, config.IntermediateCertificateSlug)
 	if diag.HasErrors() {
-		ctx.Log().WithField("component", CertificateComponent).Error("Error getting intermediate certificate", diag.Errors)
+		ctx.Log().WithField("component", certificates.CertificateComponent).Error("Error getting intermediate certificate", diag.Errors)
 		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, errors.ErrorGettingIntermediateCertificate, "Error getting intermediate certificate", diag)
 		return
 	}
 
 	ctx.Log().Info("Checking if intermediate certificate already exists")
 	if dbCertificates != nil {
-		ctx.Log().WithField("component", CertificateComponent).Info("Intermediate certificate already exists")
+		ctx.Log().WithField("component", certificates.CertificateComponent).Info("Intermediate certificate already exists")
 		api.WriteErrorWithDiagnostics(w, r, http.StatusOK, errors.ErrorGettingIntermediateCertificate, "Intermediate certificate already exists", nil)
 		return
 	}
@@ -215,7 +216,7 @@ func (h *ApiHandlers) HandleCreateIntermediateCertificate(w http.ResponseWriter,
 	ctx.Log().Info("Generating intermediate certificate")
 	rootCA, dbCertDiag := h.store.GetRootCertificateBySlug(ctx, config.RootCertificateSlug)
 	if dbCertDiag.HasErrors() {
-		ctx.Log().WithField("component", CertificateComponent).Error("Error getting root certificate", dbCertDiag.Errors)
+		ctx.Log().WithField("component", certificates.CertificateComponent).Error("Error getting root certificate", dbCertDiag.Errors)
 		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, errors.ErrorGettingRootCertificate, "Error getting root certificate", dbCertDiag)
 		return
 	}
@@ -223,7 +224,7 @@ func (h *ApiHandlers) HandleCreateIntermediateCertificate(w http.ResponseWriter,
 
 	intermediateCA, intermediateCertDiag := h.certificateService.GenerateIntermediateCertificate(ctx, &dtoRootCA)
 	if intermediateCertDiag.HasErrors() {
-		ctx.Log().WithField("component", CertificateComponent).Error("Error generating intermediate certificate", intermediateCertDiag.Errors)
+		ctx.Log().WithField("component", certificates.CertificateComponent).Error("Error generating intermediate certificate", intermediateCertDiag.Errors)
 		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, errors.ErrorCreatingIntermediateCertificate, "Error generating intermediate certificate", intermediateCertDiag)
 		return
 	}
@@ -232,7 +233,7 @@ func (h *ApiHandlers) HandleCreateIntermediateCertificate(w http.ResponseWriter,
 	dbEntity := mappers.MapIntermediateCertificateToEntity(*intermediateCA)
 	createdEntity, createIntermediateCertDiag := h.store.CreateIntermediateCertificate(ctx, &dbEntity)
 	if createIntermediateCertDiag.HasErrors() {
-		ctx.Log().WithField("component", CertificateComponent).Error("Error creating intermediate certificate", createIntermediateCertDiag.Errors)
+		ctx.Log().WithField("component", certificates.CertificateComponent).Error("Error creating intermediate certificate", createIntermediateCertDiag.Errors)
 		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, errors.ErrorCreatingIntermediateCertificate, "Error creating intermediate certificate", createIntermediateCertDiag)
 		return
 	}
@@ -243,5 +244,5 @@ func (h *ApiHandlers) HandleCreateIntermediateCertificate(w http.ResponseWriter,
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(result)
 
-	ctx.Log().WithField("component", CertificateComponent).Info("Intermediate certificate created successfully")
+	ctx.Log().WithField("component", certificates.CertificateComponent).Info("Intermediate certificate created successfully")
 }

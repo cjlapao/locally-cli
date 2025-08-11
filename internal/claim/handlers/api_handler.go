@@ -128,7 +128,84 @@ func (h *ClaimsApiHandler) Routes() []api_types.Route {
 				},
 			},
 		},
-
+		{
+			Method:      http.MethodGet,
+			Path:        "/v1/claims/{id}/roles",
+			Handler:     h.HandleGetClaimRoles,
+			Description: "Get roles by claim",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "claim", Module: "api", Action: pkg_models.AccessLevelRead}},
+				},
+			},
+		},
+		{
+			Method:      http.MethodPost,
+			Path:        "/v1/claims/{id}/roles/{role_id}",
+			Handler:     h.HandleAddRoleToClaim,
+			Description: "Add roles to a claim",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "claim", Module: "api", Action: pkg_models.AccessLevelWrite}},
+				},
+			},
+		},
+		{
+			Method:      http.MethodDelete,
+			Path:        "/v1/claims/{id}/roles/{role_id}",
+			Handler:     h.HandleRemoveRoleFromClaim,
+			Description: "Remove roles from a claim",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "claim", Module: "api", Action: pkg_models.AccessLevelDelete}},
+				},
+			},
+		},
+		{
+			Method:      http.MethodGet,
+			Path:        "/v1/claims/{id}/api-keys",
+			Handler:     h.HandleGetClaimApiKeys,
+			Description: "Get api keys by claim",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "claim", Module: "api", Action: pkg_models.AccessLevelRead}},
+				},
+			},
+		},
+		{
+			Method:      http.MethodPost,
+			Path:        "/v1/claims/{id}/api-keys/{api_key_id}",
+			Handler:     h.HandleAddApiKeyToClaim,
+			Description: "Add api keys to a claim",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "claim", Module: "api", Action: pkg_models.AccessLevelWrite}},
+				},
+			},
+		},
+		{
+			Method:      http.MethodDelete,
+			Path:        "/v1/claims/{id}/api-keys/{api_key_id}",
+			Handler:     h.HandleRemoveApiKeyFromClaim,
+			Description: "Remove api keys from a claim",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "claim", Module: "api", Action: pkg_models.AccessLevelDelete}},
+				},
+			},
+		},
 		{
 			Method:      http.MethodGet,
 			Path:        "/v1/claims/all/superuser",
@@ -518,4 +595,177 @@ func (h *ClaimsApiHandler) HandleGetAllGuestLevelClaims(w http.ResponseWriter, r
 	}
 
 	api.WriteObjectResponse(w, r, claims)
+}
+
+func (h *ClaimsApiHandler) HandleGetClaimRoles(w http.ResponseWriter, r *http.Request) {
+	ctx := appctx.FromContext(r.Context())
+	id := mux.Vars(r)["id"]
+	if id == "" {
+		api.WriteError(w, r, http.StatusBadRequest, "id is required", "id is required", "")
+		return
+	}
+	tenantID := ctx.GetTenantID()
+	if tenantID == "" {
+		api.WriteError(w, r, http.StatusBadRequest, "tenant_id is required", "tenant_id is required", "")
+		return
+	}
+
+	page, pageSize := utils.GetPaginationFromRequest(r)
+
+	roles, diag := h.claimService.GetClaimRoles(ctx, tenantID, id, &pkg_models.Pagination{
+		Page:     page,
+		PageSize: pageSize,
+	})
+
+	if diag.HasErrors() {
+		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, "failed_to_get_claim_roles", "Failed to get claim roles", diag)
+		return
+	}
+
+	api.WriteObjectResponse(w, r, roles)
+}
+
+func (h *ClaimsApiHandler) HandleAddRoleToClaim(w http.ResponseWriter, r *http.Request) {
+	ctx := appctx.FromContext(r.Context())
+	id := mux.Vars(r)["id"]
+	if id == "" {
+		api.WriteError(w, r, http.StatusBadRequest, "id is required", "id is required", "")
+		return
+	}
+
+	tenantID := ctx.GetTenantID()
+	if tenantID == "" {
+		api.WriteError(w, r, http.StatusBadRequest, "tenant_id is required", "tenant_id is required", "")
+		return
+	}
+
+	roleID := mux.Vars(r)["role_id"]
+	if roleID == "" {
+		api.WriteError(w, r, http.StatusBadRequest, "role_id is required", "role_id is required", "")
+		return
+	}
+
+	diag := h.claimService.AddRoleToClaim(ctx, tenantID, id, roleID)
+	if diag.HasErrors() {
+		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, "failed_to_add_role_to_claim", "Failed to add role to claim", diag)
+		return
+	}
+
+	api.WriteSuccessResponse(w, r, id, "Role added to claim successfully")
+}
+
+func (h *ClaimsApiHandler) HandleRemoveRoleFromClaim(w http.ResponseWriter, r *http.Request) {
+	ctx := appctx.FromContext(r.Context())
+	id := mux.Vars(r)["id"]
+	if id == "" {
+		api.WriteError(w, r, http.StatusBadRequest, "id is required", "id is required", "")
+		return
+	}
+
+	tenantID := ctx.GetTenantID()
+	if tenantID == "" {
+		api.WriteError(w, r, http.StatusBadRequest, "tenant_id is required", "tenant_id is required", "")
+		return
+	}
+
+	roleID := mux.Vars(r)["role_id"]
+	if roleID == "" {
+		api.WriteError(w, r, http.StatusBadRequest, "role_id is required", "role_id is required", "")
+		return
+	}
+
+	diag := h.claimService.RemoveRoleFromClaim(ctx, tenantID, id, roleID)
+	if diag.HasErrors() {
+		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, "failed_to_remove_role_from_claim", "Failed to remove role from claim", diag)
+		return
+	}
+
+	api.WriteSuccessResponse(w, r, id, "Role removed from claim successfully")
+}
+
+func (h *ClaimsApiHandler) HandleGetClaimApiKeys(w http.ResponseWriter, r *http.Request) {
+	ctx := appctx.FromContext(r.Context())
+	id := mux.Vars(r)["id"]
+	if id == "" {
+		api.WriteError(w, r, http.StatusBadRequest, "id is required", "id is required", "")
+		return
+	}
+
+	tenantID := ctx.GetTenantID()
+	if tenantID == "" {
+		api.WriteError(w, r, http.StatusBadRequest, "tenant_id is required", "tenant_id is required", "")
+		return
+	}
+
+	page, pageSize := utils.GetPaginationFromRequest(r)
+
+	apiKeys, diag := h.claimService.GetClaimApiKeys(ctx, tenantID, id, &pkg_models.Pagination{
+		Page:     page,
+		PageSize: pageSize,
+	})
+
+	if diag.HasErrors() {
+		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, "failed_to_get_claim_api_keys", "Failed to get claim api keys", diag)
+		return
+	}
+
+	api.WriteObjectResponse(w, r, apiKeys)
+}
+
+func (h *ClaimsApiHandler) HandleAddApiKeyToClaim(w http.ResponseWriter, r *http.Request) {
+	ctx := appctx.FromContext(r.Context())
+	id := mux.Vars(r)["id"]
+	if id == "" {
+		api.WriteError(w, r, http.StatusBadRequest, "id is required", "id is required", "")
+		return
+	}
+
+	tenantID := ctx.GetTenantID()
+	if tenantID == "" {
+		api.WriteError(w, r, http.StatusBadRequest, "tenant_id is required", "tenant_id is required", "")
+		return
+	}
+
+	apiKeyID := mux.Vars(r)["api_key_id"]
+	if apiKeyID == "" {
+		api.WriteError(w, r, http.StatusBadRequest, "api_key_id is required", "api_key_id is required", "")
+		return
+	}
+
+	diag := h.claimService.AddApiKeyToClaim(ctx, tenantID, id, apiKeyID)
+	if diag.HasErrors() {
+		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, "failed_to_add_api_key_to_claim", "Failed to add api key to claim", diag)
+		return
+	}
+
+	api.WriteSuccessResponse(w, r, id, "Api key added to claim successfully")
+}
+
+func (h *ClaimsApiHandler) HandleRemoveApiKeyFromClaim(w http.ResponseWriter, r *http.Request) {
+	ctx := appctx.FromContext(r.Context())
+	id := mux.Vars(r)["id"]
+	if id == "" {
+		api.WriteError(w, r, http.StatusBadRequest, "id is required", "id is required", "")
+		return
+	}
+
+	tenantID := ctx.GetTenantID()
+	if tenantID == "" {
+		api.WriteError(w, r, http.StatusBadRequest, "tenant_id is required", "tenant_id is required", "")
+		return
+	}
+
+	apiKeyID := mux.Vars(r)["api_key_id"]
+	if apiKeyID == "" {
+		api.WriteError(w, r, http.StatusBadRequest, "api_key_id is required", "api_key_id is required", "")
+		return
+	}
+
+	diag := h.claimService.RemoveApiKeyFromClaim(ctx, tenantID, id, apiKeyID)
+	if diag.HasErrors() {
+		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, "failed_to_remove_api_key_from_claim", "Failed to remove api key from claim", diag)
+		return
+	}
+
+	api.WriteSuccessResponse(w, r, id, "Api key removed from claim successfully")
 }

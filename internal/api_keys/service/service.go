@@ -3,7 +3,9 @@ package service
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"sync"
 	"time"
 
@@ -160,7 +162,7 @@ func (s *ApiKeysService) GetApiKeys(ctx *appctx.AppContext, tenantID string, pag
 		PageSize: pagination.PageSize,
 	}
 
-	apiKeys, err := s.apiKeyStore.GetPaginatedAPIKeys(ctx, &filterPagination)
+	apiKeys, err := s.apiKeyStore.GetPaginatedApiKeys(ctx, tenantID, &filterPagination)
 	if err != nil {
 		diag.AddError("failed_to_get_api_keys", "Failed to get API keys", "api_key", map[string]interface{}{
 			"error": err.Error(),
@@ -193,7 +195,7 @@ func (s *ApiKeysService) GetFilteredApiKeys(ctx *appctx.AppContext, tenantID str
 		return s.GetApiKeys(ctx, tenantID, nil)
 	}
 
-	filteredApiKeys, err := s.apiKeyStore.GetFilteredAPIKeys(ctx, filter)
+	filteredApiKeys, err := s.apiKeyStore.GetFilteredApiKeys(ctx, tenantID, filter)
 	if err != nil {
 		diag.AddError("failed_to_get_api_keys", "Failed to get API keys", "api_key", map[string]interface{}{
 			"error": err.Error(),
@@ -224,12 +226,16 @@ func (s *ApiKeysService) GetApiKeyByID(ctx *appctx.AppContext, tenantID string, 
 	diag := diagnostics.New("get_api_key_by_id")
 	defer diag.Complete()
 
-	// TODO: Implement API key retrieval by ID logic
-	// For now, return nil
-	apiKey, err := s.apiKeyStore.GetAPIKeyByID(ctx, id)
+	apiKey, err := s.apiKeyStore.GetApiKeyByIDOrSlug(ctx, tenantID, id)
 	if err != nil {
 		diag.AddError("failed_to_get_api_key", "Failed to get API key", "api_key", map[string]interface{}{
 			"error": err.Error(),
+		})
+		return nil, diag
+	}
+	if apiKey == nil {
+		diag.AddError("api_key_not_found", "API key not found", "api_key", map[string]interface{}{
+			"id": id,
 		})
 		return nil, diag
 	}
@@ -242,6 +248,21 @@ func (s *ApiKeysService) GetApiKeyByID(ctx *appctx.AppContext, tenantID string, 
 func (s *ApiKeysService) CreateApiKey(ctx *appctx.AppContext, tenantID string, request *models.CreateApiKeyRequest) (*pkg_models.ApiKey, *diagnostics.Diagnostics) {
 	diag := diagnostics.New("create_api_key")
 	defer diag.Complete()
+
+	// checking if we already have an api key with the same name
+	existingApiKey, err := s.apiKeyStore.GetApiKeyByName(ctx, tenantID, request.Name)
+	if err != nil {
+		diag.AddError("failed_to_get_api_key", "Failed to get API key", "api_key", map[string]interface{}{
+			"error": err.Error(),
+		})
+	}
+
+	if existingApiKey != nil {
+		diag.AddError("api_key_already_exists", "API key already exists", "api_key", map[string]interface{}{
+			"name": request.Name,
+		})
+		return nil, diag
+	}
 
 	// Validate that either claims or security level is provided, but not both
 	if len(request.Claims) > 0 && request.SecurityLevel != "" {
@@ -269,17 +290,18 @@ func (s *ApiKeysService) CreateApiKey(ctx *appctx.AppContext, tenantID string, r
 		return nil, diag
 	}
 
-	// check if the api key already exists
-	existingApiKey, err := s.apiKeyStore.GetAPIKeyByHash(ctx, apiKeyString)
+	// compute deterministic digest and check duplicates (extremely unlikely)
+	sha := sha256.Sum256([]byte(apiKeyString))
+	digest := hex.EncodeToString(sha[:])
+	existingApiKey, err = s.apiKeyStore.GetApiKeyByDigest(ctx, tenantID, digest)
 	if err != nil {
 		diag.AddError("failed_to_get_api_key", "Failed to get API key", "api_key", map[string]interface{}{
 			"error": err.Error(),
 		})
 	}
-
 	if existingApiKey != nil {
 		diag.AddError("api_key_already_exists", "API key already exists", "api_key", map[string]interface{}{
-			"hash": apiKeyString,
+			"digest": digest,
 		})
 		return nil, diag
 	}
@@ -296,18 +318,30 @@ func (s *ApiKeysService) CreateApiKey(ctx *appctx.AppContext, tenantID string, r
 		// Use the provided claims
 		claimsToAssign = request.Claims
 	}
+	apiKeyClaims := make([]entities.Claim, len(claimsToAssign))
+	for i, claim := range claimsToAssign {
+		dbClaim, err := s.claimStore.GetClaimBySlugOrID(ctx, tenantID, claim)
+		if err != nil {
+			diag.AddError("failed_to_get_claim", "Failed to get claim", "api_key", map[string]interface{}{
+				"error": err.Error(),
+			})
+		}
+		apiKeyClaims[i] = *dbClaim
+	}
 
 	// Create the API key entity
 	apiKey := &entities.ApiKey{
 		Name:      request.Name,
 		KeyHash:   apiKeyString,                              // Will be hashed in CreateAPIKey
+		KeyDigest: digest,                                    // Will be encoded and stored as deterministic digest
 		KeyPrefix: apiKeyString[:8+len(config.ApiKeyPrefix)], // First 8 chars after prefix
 		ExpiresAt: &expiresAt,
 		IsActive:  true,
+		Claims:    apiKeyClaims,
 	}
 
 	// Save to database
-	dbAPIKey, err := s.apiKeyStore.CreateAPIKey(ctx, apiKey)
+	dbAPIKey, err := s.apiKeyStore.CreateApiKey(ctx, tenantID, apiKey)
 	if err != nil {
 		diag.AddError("failed_to_create_api_key", "Failed to create API key in database", "api_key", map[string]interface{}{
 			"error": err.Error(),
@@ -338,6 +372,9 @@ func (s *ApiKeysService) CreateApiKey(ctx *appctx.AppContext, tenantID string, r
 
 	apiKeyDto := mappers.MapApiKeyToDto(dbAPIKey)
 
+	plaintextKey := apiKeyString
+	apiKeyDto.KeyHash = "" // never return hash
+	apiKeyDto.PlaintextKey = plaintextKey
 	return apiKeyDto, diag
 }
 
@@ -346,7 +383,7 @@ func (s *ApiKeysService) DeleteApiKey(ctx *appctx.AppContext, tenantID string, i
 	defer diag.Complete()
 
 	// check if the api key exists
-	apiKey, err := s.apiKeyStore.GetAPIKeyByID(ctx, id)
+	apiKey, err := s.apiKeyStore.GetApiKeyByIDOrSlug(ctx, tenantID, id)
 	if err != nil {
 		diag.AddError("failed_to_get_api_key", "Failed to get API key", "api_key", map[string]interface{}{
 			"error": err.Error(),
@@ -360,7 +397,7 @@ func (s *ApiKeysService) DeleteApiKey(ctx *appctx.AppContext, tenantID string, i
 		return diag
 	}
 
-	err = s.apiKeyStore.DeleteAPIKey(ctx, id)
+	err = s.apiKeyStore.DeleteApiKey(ctx, tenantID, id)
 	if err != nil {
 		diag.AddError("failed_to_delete_api_key", "Failed to delete API key", "api_key", map[string]interface{}{
 			"error": err.Error(),
@@ -375,7 +412,7 @@ func (s *ApiKeysService) RevokeApiKey(ctx *appctx.AppContext, tenantID string, r
 	defer diag.Complete()
 
 	// check if the api key exists
-	apiKey, err := s.apiKeyStore.GetAPIKeyByID(ctx, id)
+	apiKey, err := s.apiKeyStore.GetApiKeyByIDOrSlug(ctx, tenantID, id)
 	if err != nil {
 		diag.AddError("failed_to_get_api_key", "Failed to get API key", "api_key", map[string]interface{}{
 			"error": err.Error(),
@@ -389,9 +426,99 @@ func (s *ApiKeysService) RevokeApiKey(ctx *appctx.AppContext, tenantID string, r
 		return diag
 	}
 
-	err = s.apiKeyStore.RevokeAPIKey(ctx, id, revokedBy, request.RevocationReason)
+	err = s.apiKeyStore.RevokeApiKey(ctx, tenantID, id, revokedBy, request.RevocationReason)
 	if err != nil {
 		diag.AddError("failed_to_revoke_api_key", "Failed to revoke API key", "api_key", map[string]interface{}{
+			"error": err.Error(),
+		})
+	}
+
+	return diag
+}
+
+func (s *ApiKeysService) AddClaimToApiKey(ctx *appctx.AppContext, tenantID string, id string, claimID string) *diagnostics.Diagnostics {
+	diag := diagnostics.New("add_claim_to_api_key")
+	defer diag.Complete()
+
+	// check if the api key exists
+	apiKey, err := s.apiKeyStore.GetApiKeyByIDOrSlug(ctx, tenantID, id)
+	if err != nil {
+		diag.AddError("failed_to_get_api_key", "Failed to get API key", "api_key", map[string]interface{}{
+			"error": err.Error(),
+		})
+	}
+
+	if apiKey == nil {
+		diag.AddError("api_key_not_found", "API key not found", "api_key", map[string]interface{}{
+			"id": id,
+		})
+		return diag
+	}
+
+	// check if the claim exists
+	claim, err := s.claimStore.GetClaimBySlugOrID(ctx, tenantID, claimID)
+	if err != nil {
+		diag.AddError("failed_to_get_claim", "Failed to get claim", "api_key", map[string]interface{}{
+			"error": err.Error(),
+		})
+	}
+
+	if claim == nil {
+		diag.AddError("claim_not_found", "Claim not found", "api_key", map[string]interface{}{
+			"id": claimID,
+		})
+		return diag
+	}
+
+	// add the claim to the api key
+	err = s.apiKeyStore.AddClaimToApiKey(ctx, tenantID, id, claimID)
+	if err != nil {
+		diag.AddError("failed_to_add_claim_to_api_key", "Failed to add claim to API key", "api_key", map[string]interface{}{
+			"error": err.Error(),
+		})
+	}
+
+	return diag
+}
+
+func (s *ApiKeysService) RemoveClaimFromApiKey(ctx *appctx.AppContext, tenantID string, id string, claimID string) *diagnostics.Diagnostics {
+	diag := diagnostics.New("remove_claim_from_api_key")
+	defer diag.Complete()
+
+	// check if the api key exists
+	apiKey, err := s.apiKeyStore.GetApiKeyByIDOrSlug(ctx, tenantID, id)
+	if err != nil {
+		diag.AddError("failed_to_get_api_key", "Failed to get API key", "api_key", map[string]interface{}{
+			"error": err.Error(),
+		})
+	}
+
+	if apiKey == nil {
+		diag.AddError("api_key_not_found", "API key not found", "api_key", map[string]interface{}{
+			"id": id,
+		})
+		return diag
+	}
+
+	// check if the claim exists
+	claim, err := s.claimStore.GetClaimBySlugOrID(ctx, tenantID, claimID)
+	if err != nil {
+		diag.AddError("failed_to_get_claim", "Failed to get claim", "api_key", map[string]interface{}{
+			"error": err.Error(),
+		})
+	}
+
+	if claim == nil {
+		diag.AddError("claim_not_found", "Claim not found", "api_key", map[string]interface{}{
+			"id": claimID,
+		})
+		return diag
+	}
+
+	// remove the claim from the api key
+	err = s.apiKeyStore.RemoveClaimFromApiKey(ctx, tenantID, id, claimID)
+	if err != nil {
+		diag.AddError("failed_to_remove_claim_from_api_key", "Failed to remove claim from API key", "api_key", map[string]interface{}{
 			"error": err.Error(),
 		})
 	}

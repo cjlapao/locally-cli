@@ -8,8 +8,8 @@ type User struct {
 	Username              string    `json:"username" gorm:"not null;unique;type:text"`
 	Password              string    `json:"password" gorm:"not null;type:text"`
 	Email                 string    `json:"email" gorm:"not null;unique;type:text"`
-	Roles                 []Role    `json:"roles" gorm:"many2many:user_roles;"`
-	Claims                []Claim   `json:"claims" gorm:"many2many:user_claims;"`
+	Roles                 []Role    `json:"roles" gorm:"many2many:user_roles;constraint:OnDelete:CASCADE;"`
+	Claims                []Claim   `json:"claims" gorm:"many2many:user_claims;constraint:OnDelete:CASCADE;"`
 	Status                string    `json:"status" gorm:"not null;type:text;default:'active'"`
 	TenantID              string    `json:"tenant_id" gorm:"type:text"`
 	TwoFactorEnabled      bool      `json:"two_factor_enabled" gorm:"type:boolean;not null;default:false"`

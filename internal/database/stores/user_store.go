@@ -390,23 +390,86 @@ func (s *UserDataStore) RemoveUserFromRole(ctx *appctx.AppContext, tenantID stri
 }
 
 func (s *UserDataStore) AddClaimToUser(ctx *appctx.AppContext, tenantID string, userID string, claimIdOrSlug string) error {
-	_, err := s.GetUserByID(ctx, tenantID, userID)
-	if err != nil {
-		return fmt.Errorf("failed to get user: %w", err)
+	var user entities.User
+	result := s.GetDB().Where("tenant_id = ? AND id = ?", tenantID, userID).First(&user)
+	if result.Error != nil {
+		return fmt.Errorf("failed to get user: %w", result.Error)
+	}
+	if user.ID == "" {
+		return fmt.Errorf("user not found")
 	}
 
-	// This method will need to be updated to use the claim store
-	// For now, we'll keep it simple and just return an error
-	return fmt.Errorf("add claim to user functionality moved to claim service")
+	var claim entities.Claim
+	result = s.GetDB().Where("tenant_id = ? AND id = ?", tenantID, claimIdOrSlug).First(&claim)
+	if result.Error != nil {
+		return fmt.Errorf("failed to get claim: %w", result.Error)
+	}
+	if claim.ID == "" {
+		return fmt.Errorf("claim not found")
+	}
+
+	// Check if the claim is already associated with the user
+	var userClaims entities.UserClaims
+	result = s.GetDB().Where("user_id = ? AND claim_id = ?", user.ID, claim.ID).First(&userClaims)
+	if result.Error != nil {
+		if !errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("failed to get user claim: %w", result.Error)
+		}
+	}
+	if userClaims.ClaimID != "" {
+		return fmt.Errorf("claim already associated with user")
+	}
+
+	// Create the user claim association
+	userClaim := entities.UserClaims{
+		UserID:  user.ID,
+		ClaimID: claim.ID,
+	}
+
+	result = s.GetDB().Create(&userClaim)
+	if result.Error != nil {
+		return fmt.Errorf("failed to create user claim: %w", result.Error)
+	}
+
+	return nil
 }
 
 func (s *UserDataStore) RemoveClaimFromUser(ctx *appctx.AppContext, tenantID string, userID string, claimIdOrSlug string) error {
-	_, err := s.GetUserByID(ctx, tenantID, userID)
-	if err != nil {
-		return fmt.Errorf("failed to get user: %w", err)
+	var user entities.User
+	result := s.GetDB().Where("tenant_id = ? AND id = ?", tenantID, userID).First(&user)
+	if result.Error != nil {
+		return fmt.Errorf("failed to get user: %w", result.Error)
+	}
+	if user.ID == "" {
+		return fmt.Errorf("user not found")
 	}
 
-	// This method will need to be updated to use the claim store
-	// For now, we'll keep it simple and just return an error
-	return fmt.Errorf("remove claim from user functionality moved to claim service")
+	var claim entities.Claim
+	result = s.GetDB().Where("tenant_id = ? AND id = ?", tenantID, claimIdOrSlug).First(&claim)
+	if result.Error != nil {
+		return fmt.Errorf("failed to get claim: %w", result.Error)
+	}
+	if claim.ID == "" {
+		return fmt.Errorf("claim not found")
+	}
+
+	// Check if the claim is associated with the user
+	var userClaims entities.UserClaims
+	result = s.GetDB().Where("user_id = ? AND claim_id = ?", user.ID, claim.ID).First(&userClaims)
+	if result.Error != nil {
+		if !errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("failed to get user claim: %w", result.Error)
+		}
+	}
+	if userClaims.ClaimID == "" {
+		return fmt.Errorf("claim not associated with user")
+	}
+
+	// Delete the user claim association
+	result = s.GetDB().Delete(&userClaims)
+	if result.Error != nil {
+		return fmt.Errorf("failed to delete user claim: %w", result.Error)
+	}
+
+	return nil
 }

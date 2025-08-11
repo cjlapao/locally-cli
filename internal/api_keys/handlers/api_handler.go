@@ -10,6 +10,7 @@ import (
 	"github.com/cjlapao/locally-cli/internal/api_keys/interfaces"
 	api_keys_models "github.com/cjlapao/locally-cli/internal/api_keys/models"
 	"github.com/cjlapao/locally-cli/internal/appctx"
+	"github.com/cjlapao/locally-cli/internal/mappers"
 	pkg_models "github.com/cjlapao/locally-cli/pkg/models"
 	"github.com/cjlapao/locally-cli/pkg/utils"
 	"github.com/gorilla/mux"
@@ -78,10 +79,36 @@ func (h *ApiKeysApiHandler) Routes() []api_types.Route {
 			},
 		},
 		{
-			Method:      http.MethodPost,
+			Method:      http.MethodPut,
 			Path:        "/v1/api-keys/{id}/revoke",
 			Handler:     h.HandleRevokeApiKey,
 			Description: "Revoke an API key",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelSuperUser,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "auth", Module: "api_keys", Action: pkg_models.AccessLevelDelete}},
+				},
+			},
+		},
+		{
+			Method:      http.MethodPut,
+			Path:        "/v1/api-keys/{id}/claim/{claim_id}",
+			Handler:     h.HandleAddClaimToApiKey,
+			Description: "Add a claim to an API key",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelSuperUser,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "auth", Module: "api_keys", Action: pkg_models.AccessLevelWrite}},
+				},
+			},
+		},
+		{
+			Method:      http.MethodDelete,
+			Path:        "/v1/api-keys/{id}/claim/{claim_id}",
+			Handler:     h.HandleRemoveClaimFromApiKey,
+			Description: "Remove a claim from an API key",
 			SecurityRequirement: &api_types.SecurityRequirement{
 				SecurityLevel: pkg_models.ApiKeySecurityLevelSuperUser,
 				Claims: &api_types.SecurityRequirementClaims{
@@ -180,7 +207,8 @@ func (h *ApiKeysApiHandler) HandleCreateApiKey(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	api.WriteObjectResponse(w, r, resultApiKey)
+	response := mappers.MapApiKeyDtoToCreateResponse(resultApiKey, resultApiKey.PlaintextKey)
+	api.WriteObjectResponse(w, r, response)
 }
 
 func (h *ApiKeysApiHandler) HandleDeleteApiKey(w http.ResponseWriter, r *http.Request) {
@@ -238,4 +266,60 @@ func (h *ApiKeysApiHandler) HandleRevokeApiKey(w http.ResponseWriter, r *http.Re
 	}
 
 	api.WriteObjectResponse(w, r, api_models.SuccessResponse{Message: "API key revoked successfully"})
+}
+
+func (h *ApiKeysApiHandler) HandleAddClaimToApiKey(w http.ResponseWriter, r *http.Request) {
+	ctx := appctx.FromContext(r.Context())
+	id := mux.Vars(r)["id"]
+	if id == "" {
+		api.WriteError(w, r, http.StatusBadRequest, "id is required", "id is required", "")
+		return
+	}
+	claimID := mux.Vars(r)["claim_id"]
+	if claimID == "" {
+		api.WriteError(w, r, http.StatusBadRequest, "claim_id is required", "claim_id is required", "")
+		return
+	}
+
+	tenantID := ctx.GetTenantID()
+	if tenantID == "" {
+		api.WriteError(w, r, http.StatusBadRequest, "tenant_id is required", "tenant_id is required", "")
+		return
+	}
+
+	diag := h.apiKeysService.AddClaimToApiKey(ctx, tenantID, id, claimID)
+	if diag.HasErrors() {
+		api.WriteErrorWithDiagnostics(w, r, http.StatusBadRequest, "failed_to_add_claim_to_api_key", "Failed to add claim to API key", diag)
+		return
+	}
+
+	api.WriteObjectResponse(w, r, api_models.SuccessResponse{Message: "Claim added to API key successfully"})
+}
+
+func (h *ApiKeysApiHandler) HandleRemoveClaimFromApiKey(w http.ResponseWriter, r *http.Request) {
+	ctx := appctx.FromContext(r.Context())
+	id := mux.Vars(r)["id"]
+	if id == "" {
+		api.WriteError(w, r, http.StatusBadRequest, "id is required", "id is required", "")
+		return
+	}
+	claimID := mux.Vars(r)["claim_id"]
+	if claimID == "" {
+		api.WriteError(w, r, http.StatusBadRequest, "claim_id is required", "claim_id is required", "")
+		return
+	}
+
+	tenantID := ctx.GetTenantID()
+	if tenantID == "" {
+		api.WriteError(w, r, http.StatusBadRequest, "tenant_id is required", "tenant_id is required", "")
+		return
+	}
+
+	diag := h.apiKeysService.RemoveClaimFromApiKey(ctx, tenantID, id, claimID)
+	if diag.HasErrors() {
+		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, "failed_to_remove_claim_from_api_key", "Failed to remove claim from API key", diag)
+		return
+	}
+
+	api.WriteObjectResponse(w, r, api_models.SuccessResponse{Message: "Claim removed from API key successfully"})
 }

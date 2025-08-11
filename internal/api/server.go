@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/cjlapao/locally-cli/internal/api/middleware"
 	"github.com/cjlapao/locally-cli/internal/api/types"
 	auth_interfaces "github.com/cjlapao/locally-cli/internal/auth/interfaces"
 	"github.com/cjlapao/locally-cli/internal/config"
@@ -17,59 +18,44 @@ import (
 
 // Server represents the HTTP server
 type Server struct {
-	server              *http.Server
-	port                int
-	hostname            string
-	prefix              string
-	handler             *Handler
-	router              *mux.Router
-	middlewareChain     *MiddlewareChain
-	routeGroups         []types.RouteGroup
-	authService         auth_interfaces.AuthServiceInterface
-	authMiddleware      PreMiddleware
-	superUserMiddleware PreMiddleware
-	roleMiddleware      PreMiddleware
-	claimMiddleware     PreMiddleware
+	server          *http.Server
+	port            int
+	hostname        string
+	prefix          string
+	router          *mux.Router
+	middlewareChain *middleware.MiddlewareChain
+	routeGroups     []types.RouteGroup
+	authService     auth_interfaces.AuthServiceInterface
 }
 
 // Config represents the server configuration
 type Config struct {
-	Port                int
-	Hostname            string
-	Prefix              string
-	AuthService         auth_interfaces.AuthServiceInterface
-	NewAuthMiddleware   PreMiddleware
-	AuthMiddleware      PreMiddleware
-	SuperUserMiddleware PreMiddleware
-	RoleMiddleware      PreMiddleware
-	ClaimMiddleware     PreMiddleware
-	CORSConfig          *CORSConfig // Optional CORS configuration
+	Port        int
+	Hostname    string
+	Prefix      string
+	AuthService auth_interfaces.AuthServiceInterface
+	CORSConfig  *middleware.CORSConfig // Optional CORS configuration
 }
 
 // NewServer creates a new HTTP server
-func NewServer(cfg Config, handler *Handler) *Server {
+func NewServer(cfg Config) *Server {
 	appCfg := config.GetInstance().Get()
 
 	// Create middleware chain with default middlewares
-	middlewareChain := NewMiddlewareChain()
-	middlewareChain.AddPreMiddleware(CORSMiddleware(readCorsConfigFromConfiguration(appCfg)))
-	middlewareChain.AddPreMiddleware(RequestInformationMiddleware())
-	middlewareChain.AddPreMiddleware(RequestLoggingMiddleware())
-	middlewareChain.AddPostMiddleware(ResponseLoggingMiddleware())
+	middlewareChain := middleware.NewMiddlewareChain()
+	middlewareChain.AddPreMiddleware(middleware.CORSMiddleware(readCorsConfigFromConfiguration(appCfg)))
+	middlewareChain.AddPreMiddleware(middleware.RequestInformationMiddleware())
+	middlewareChain.AddPreMiddleware(middleware.RequestLoggingMiddleware())
+	middlewareChain.AddPostMiddleware(middleware.ResponseLoggingMiddleware())
 
 	return &Server{
-		handler:             handler,
-		port:                cfg.Port,
-		hostname:            cfg.Hostname,
-		prefix:              cfg.Prefix,
-		router:              mux.NewRouter(),
-		middlewareChain:     middlewareChain,
-		routeGroups:         make([]types.RouteGroup, 0),
-		authService:         cfg.AuthService,
-		authMiddleware:      cfg.AuthMiddleware,
-		superUserMiddleware: cfg.SuperUserMiddleware,
-		roleMiddleware:      cfg.RoleMiddleware,
-		claimMiddleware:     cfg.ClaimMiddleware,
+		port:            cfg.Port,
+		hostname:        cfg.Hostname,
+		prefix:          cfg.Prefix,
+		router:          mux.NewRouter(),
+		middlewareChain: middlewareChain,
+		routeGroups:     make([]types.RouteGroup, 0),
+		authService:     cfg.AuthService,
 	}
 }
 
@@ -87,12 +73,12 @@ func (s *Server) RegisterRouteGroup(group types.RouteGroup) {
 }
 
 // AddPreMiddleware adds a pre-middleware to the global chain
-func (s *Server) AddPreMiddleware(middleware PreMiddleware) {
+func (s *Server) AddPreMiddleware(middleware middleware.PreMiddleware) {
 	s.middlewareChain.AddPreMiddleware(middleware)
 }
 
 // AddPostMiddleware adds a post-middleware to the global chain
-func (s *Server) AddPostMiddleware(middleware PostMiddleware) {
+func (s *Server) AddPostMiddleware(middleware middleware.PostMiddleware) {
 	s.middlewareChain.AddPostMiddleware(middleware)
 }
 
@@ -106,38 +92,18 @@ func (s *Server) registerRoute(route types.Route) {
 	}
 
 	// Create a custom middleware chain for this route
-	routeChain := NewMiddlewareChain()
+	routeChain := middleware.NewMiddlewareChain()
 
 	// Add global pre-middlewares
-	for _, middleware := range s.middlewareChain.preMiddlewares {
+	for _, middleware := range s.middlewareChain.PreMiddlewares {
 		routeChain.AddPreMiddleware(middleware)
 	}
 
 	// Add new auth middleware if required
-	routeChain.AddPreMiddleware(NewAuthorizationPreMiddleware(s.authService, &route))
-
-	// // Add auth middleware if required
-	// if route.SecurityLevel.RequiresAuthentication() && s.authMiddleware != nil {
-	// 	routeChain.AddPreMiddleware(s.authMiddleware)
-	// }
-
-	// // Add super user middleware if required
-	// if route.SecurityLevel == models.ApiKeySecurityLevelSuperUser && s.superUserMiddleware != nil {
-	// 	routeChain.AddPreMiddleware(s.superUserMiddleware)
-	// }
-
-	// // Add role middleware if required
-	// if len(route.Roles) > 0 {
-	// 	routeChain.AddPreMiddleware(NewRequireRolePreMiddleware(s.authService, route.Roles))
-	// }
-
-	// // Add claim middleware if required
-	// if len(route.Claims) > 0 {
-	// 	routeChain.AddPreMiddleware(NewRequireClaimPreMiddleware(s.authService, route.Claims))
-	// }
+	routeChain.AddPreMiddleware(middleware.NewAuthorizationPreMiddleware(s.authService, &route))
 
 	// Add global post-middlewares
-	for _, middleware := range s.middlewareChain.postMiddlewares {
+	for _, middleware := range s.middlewareChain.PostMiddlewares {
 		routeChain.AddPostMiddleware(middleware)
 	}
 
@@ -181,8 +147,8 @@ func (s *Server) createOptionsHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		appCfg := config.GetInstance().Get()
 		// Create a minimal middleware chain for OPTIONS (just CORS)
-		optionsChain := NewMiddlewareChain()
-		optionsChain.AddPreMiddleware(CORSMiddleware(readCorsConfigFromConfiguration(appCfg)))
+		optionsChain := middleware.NewMiddlewareChain()
+		optionsChain.AddPreMiddleware(middleware.CORSMiddleware(readCorsConfigFromConfiguration(appCfg)))
 
 		// Create a simple handler that returns 204 No Content
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -213,37 +179,17 @@ func (s *Server) Start() error {
 			}
 
 			// Create a custom middleware chain for this route
-			routeChain := NewMiddlewareChain()
+			routeChain := middleware.NewMiddlewareChain()
 
 			// Add global pre-middlewares
-			for _, middleware := range s.middlewareChain.preMiddlewares {
+			for _, middleware := range s.middlewareChain.PreMiddlewares {
 				routeChain.AddPreMiddleware(middleware)
 			}
 
-			routeChain.AddPreMiddleware(NewAuthorizationPreMiddleware(s.authService, &route))
-
-			// // Add auth middleware if required
-			// if route.SecurityLevel.RequiresAuthentication() && s.authMiddleware != nil {
-			// 	routeChain.AddPreMiddleware(s.authMiddleware)
-			// }
-
-			// // Add super user middleware if required
-			// if route.SecurityLevel == models.ApiKeySecurityLevelSuperUser && s.superUserMiddleware != nil {
-			// 	routeChain.AddPreMiddleware(s.superUserMiddleware)
-			// }
-
-			// // Add role middleware if required
-			// if len(route.Roles) > 0 {
-			// 	routeChain.AddPreMiddleware(s.roleMiddleware)
-			// }
-
-			// // Add claim middleware if required
-			// if len(route.Claims) > 0 {
-			// 	routeChain.AddPreMiddleware(s.claimMiddleware)
-			// }
+			routeChain.AddPreMiddleware(middleware.NewAuthorizationPreMiddleware(s.authService, &route))
 
 			// Add global post-middlewares
-			for _, middleware := range s.middlewareChain.postMiddlewares {
+			for _, middleware := range s.middlewareChain.PostMiddlewares {
 				routeChain.AddPostMiddleware(middleware)
 			}
 
@@ -288,8 +234,8 @@ func (s *Server) Stop(ctx context.Context) error {
 	return nil
 }
 
-func readCorsConfigFromConfiguration(cfg *config.Config) CORSConfig {
-	corsConfig := DefaultCORSConfig()
+func readCorsConfigFromConfiguration(cfg *config.Config) middleware.CORSConfig {
+	corsConfig := middleware.DefaultCORSConfig()
 	systemHeadersToAllow := []string{
 		"X-Tenant-ID",
 		"Content-Type",

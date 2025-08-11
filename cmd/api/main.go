@@ -12,13 +12,16 @@ import (
 	"github.com/cjlapao/locally-cli/internal/activity"
 	activity_interfaces "github.com/cjlapao/locally-cli/internal/activity/interfaces"
 	"github.com/cjlapao/locally-cli/internal/api"
+	api_handlers "github.com/cjlapao/locally-cli/internal/api/handlers"
 	"github.com/cjlapao/locally-cli/internal/api_keys"
 	api_keys_interfaces "github.com/cjlapao/locally-cli/internal/api_keys/interfaces"
 	"github.com/cjlapao/locally-cli/internal/appctx"
 	"github.com/cjlapao/locally-cli/internal/auth"
 	"github.com/cjlapao/locally-cli/internal/auth/handlers"
+	auth_handlers "github.com/cjlapao/locally-cli/internal/auth/handlers"
 	auth_interfaces "github.com/cjlapao/locally-cli/internal/auth/interfaces"
 	"github.com/cjlapao/locally-cli/internal/certificates"
+	certificates_handlers "github.com/cjlapao/locally-cli/internal/certificates/handlers"
 	"github.com/cjlapao/locally-cli/internal/claim"
 	claim_interfaces "github.com/cjlapao/locally-cli/internal/claim/interfaces"
 	"github.com/cjlapao/locally-cli/internal/config"
@@ -443,13 +446,11 @@ func initializeActivityService(activityStore stores.ActivityDataStoreInterface) 
 func initializeAPIServer(cfg *config.Config, authService auth_interfaces.AuthServiceInterface) (*api.Server, error) {
 	logging.Info("Initializing API server...")
 	server := api.NewServer(api.Config{
-		AuthService:         authService,
-		Port:                cfg.Get(config.ServerAPIPortKey).GetInt(),
-		Hostname:            cfg.Get(config.ServerBindAddressKey).GetString(),
-		Prefix:              cfg.Get(config.ServerAPIPrefixKey).GetString(),
-		AuthMiddleware:      api.NewRequireAuthPreMiddleware(authService),
-		SuperUserMiddleware: api.NewRequireSuperUserPreMiddleware(authService),
-	}, nil)
+		AuthService: authService,
+		Port:        cfg.Get(config.ServerAPIPortKey).GetInt(),
+		Hostname:    cfg.Get(config.ServerBindAddressKey).GetString(),
+		Prefix:      cfg.Get(config.ServerAPIPrefixKey).GetString(),
+	})
 	logging.Info("API server initialized successfully")
 	return server, nil
 }
@@ -677,10 +678,10 @@ func run() error {
 
 	// services initialized, lets start the services default handlers
 	logging.Info("Registering routes...")
-	// Register health check routes
-	apiServer.RegisterRoutes(api.NewHandler())
+	// Register Api Default Handlers
+	apiServer.RegisterRoutes(api_handlers.NewHandler())
 	// Register auth routes
-	apiServer.RegisterRoutes(handlers.NewApiHandler(authService, apiKeyStore, activityService))
+	apiServer.RegisterRoutes(auth_handlers.NewApiHandler(authService, apiKeyStore, activityService))
 	// Register event routes using the global singleton
 	apiServer.RegisterRoutes(events.NewApiHandler(events.GetInstance(), authService))
 	// Register message routes
@@ -688,7 +689,7 @@ func run() error {
 	// Register environment routes
 	apiServer.RegisterRoutes(environment.NewApiHandler(environmentService))
 	// Register certificate routes
-	apiServer.RegisterRoutes(certificates.NewApiHandlers(certificateService, certificatesStore))
+	apiServer.RegisterRoutes(certificates_handlers.NewApiHandlers(certificateService, certificatesStore))
 	// Register tenant routes
 	apiServer.RegisterRoutes(tenant.NewApiHandler(tenantService))
 	// Register user routes
