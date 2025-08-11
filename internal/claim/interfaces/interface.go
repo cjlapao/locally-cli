@@ -21,6 +21,12 @@ type ClaimServiceInterface interface {
 	GetClaimUsers(ctx *appctx.AppContext, tenantID string, claimID string, pagination *pkg_models.Pagination) (*api_models.PaginatedResponse[pkg_models.User], *diagnostics.Diagnostics)
 	AddClaimToUser(ctx *appctx.AppContext, tenantID string, userID string, claimSlug string) *diagnostics.Diagnostics
 	RemoveClaimFromUser(ctx *appctx.AppContext, tenantID string, userID string, claimSlug string) *diagnostics.Diagnostics
+	GetClaimRoles(ctx *appctx.AppContext, tenantID string, claimID string, pagination *pkg_models.Pagination) (*api_models.PaginatedResponse[pkg_models.Role], *diagnostics.Diagnostics)
+	AddRoleToClaim(ctx *appctx.AppContext, tenantID string, claimID string, roleSlug string) *diagnostics.Diagnostics
+	RemoveRoleFromClaim(ctx *appctx.AppContext, tenantID string, claimID string, roleSlug string) *diagnostics.Diagnostics
+	GetClaimApiKeys(ctx *appctx.AppContext, tenantID string, claimID string, pagination *pkg_models.Pagination) (*api_models.PaginatedResponse[pkg_models.ApiKey], *diagnostics.Diagnostics)
+	AddApiKeyToClaim(ctx *appctx.AppContext, tenantID string, claimID string, apiKeySlug string) *diagnostics.Diagnostics
+	RemoveApiKeyFromClaim(ctx *appctx.AppContext, tenantID string, claimID string, apiKeySlug string) *diagnostics.Diagnostics
 	GetAllSuperUserLevelClaims(ctx *appctx.AppContext, tenantID string) ([]pkg_models.Claim, *diagnostics.Diagnostics)
 	GetAllAdminLevelClaims(ctx *appctx.AppContext, tenantID string) ([]pkg_models.Claim, *diagnostics.Diagnostics)
 	GetAllManagerLevelClaims(ctx *appctx.AppContext, tenantID string) ([]pkg_models.Claim, *diagnostics.Diagnostics)

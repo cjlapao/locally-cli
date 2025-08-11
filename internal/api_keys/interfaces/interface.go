@@ -18,4 +18,6 @@ type ApiKeysServiceInterface interface {
 	CreateApiKey(ctx *appctx.AppContext, tenantID string, request *models.CreateApiKeyRequest) (*pkg_models.ApiKey, *diagnostics.Diagnostics)
 	DeleteApiKey(ctx *appctx.AppContext, tenantID string, id string) *diagnostics.Diagnostics
 	RevokeApiKey(ctx *appctx.AppContext, tenantID string, revokedBy string, id string, request *models.RevokeApiKeyRequest) *diagnostics.Diagnostics
+	AddClaimToApiKey(ctx *appctx.AppContext, tenantID string, id string, claimID string) *diagnostics.Diagnostics
+	RemoveClaimFromApiKey(ctx *appctx.AppContext, tenantID string, id string, claimID string) *diagnostics.Diagnostics
 }

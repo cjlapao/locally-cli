@@ -1,6 +1,10 @@
 // Package models contains the models for the API service.
 package models
 
+// Handler represents the main API handler
+// This can be used for general API functionality that doesn't belong to specific domains
+type Handler struct{}
+
 type PaginatedResponse[T any] struct {
 	TotalCount int64      `json:"total_count"`
 	Pagination Pagination `json:"pagination"`
@@ -14,8 +18,11 @@ type Pagination struct {
 }
 
 type PaginationRequest struct {
-	Page     int `json:"page"`
-	PageSize int `json:"page_size"`
+	Page     int    `json:"page,omitempty"`
+	PageSize int    `json:"page_size,omitempty"`
+	Filter   string `json:"filter,omitempty"`
+	Sort     string `json:"sort,omitempty"`
+	Order    string `json:"order,omitempty"` // asc or desc
 }
 
 type StatusResponse struct {

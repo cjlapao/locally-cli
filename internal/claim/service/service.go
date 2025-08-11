@@ -364,3 +364,189 @@ func (s *ClaimService) GetAllGuestLevelClaims(ctx *appctx.AppContext, tenantID s
 
 	return claims, diag
 }
+
+func (s *ClaimService) GetClaimRoles(ctx *appctx.AppContext, tenantID string, claimID string, pagination *pkg_models.Pagination) (*api_models.PaginatedResponse[pkg_models.Role], *diagnostics.Diagnostics) {
+	diag := diagnostics.New("get_claim_roles")
+	defer diag.Complete()
+
+	cfg := config.GetInstance().Get()
+
+	if pagination == nil {
+		pagination = &pkg_models.Pagination{
+			Page:     1,
+			PageSize: cfg.GetInt(config.PaginationDefaultPageSizeKey, config.DefaultPageSizeInt),
+		}
+	}
+	dbPagination := mappers.MapPaginationToEntity(pagination)
+
+	dbRoles, err := s.claimStore.GetPaginatedClaimRoles(ctx, tenantID, claimID, dbPagination)
+	if err != nil {
+		diag.AddError("failed_to_get_claim_roles", "failed to get claim roles", "claim", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return nil, diag
+	}
+
+	response := api_models.PaginatedResponse[pkg_models.Role]{
+		Data:       mappers.MapRolesToDto(dbRoles.Items),
+		TotalCount: dbRoles.Total,
+		Pagination: api_models.Pagination{
+			Page:       dbRoles.Page,
+			PageSize:   dbRoles.PageSize,
+			TotalPages: dbRoles.TotalPages,
+		},
+	}
+
+	return &response, diag
+}
+
+func (s *ClaimService) AddRoleToClaim(ctx *appctx.AppContext, tenantID string, claimID string, roleID string) *diagnostics.Diagnostics {
+	diag := diagnostics.New("add_role_to_claim")
+	defer diag.Complete()
+
+	// check if the claim exists
+	existingClaim, existingClaimDiag := s.GetClaimByIDOrSlug(ctx, tenantID, claimID)
+	if existingClaimDiag.HasErrors() {
+		diag.Append(existingClaimDiag)
+		return diag
+	}
+
+	if existingClaim == nil {
+		diag.AddError("claim_not_found", "claim not found", "claim", map[string]interface{}{
+			"claim_id": claimID,
+		})
+		return diag
+	}
+
+	err := s.claimStore.AddClaimToRole(ctx, tenantID, claimID, roleID)
+	if err != nil {
+		diag.AddError("failed_to_add_role_to_claim", "failed to add role to claim", "claim", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return diag
+	}
+
+	return diag
+}
+
+func (s *ClaimService) RemoveRoleFromClaim(ctx *appctx.AppContext, tenantID string, claimID string, roleID string) *diagnostics.Diagnostics {
+	diag := diagnostics.New("remove_role_from_claim")
+	defer diag.Complete()
+
+	// check if the claim exists
+	existingClaim, existingClaimDiag := s.GetClaimByIDOrSlug(ctx, tenantID, claimID)
+	if existingClaimDiag.HasErrors() {
+		diag.Append(existingClaimDiag)
+		return diag
+	}
+
+	if existingClaim == nil {
+		diag.AddError("claim_not_found", "claim not found", "claim", map[string]interface{}{
+			"claim_id": claimID,
+		})
+		return diag
+	}
+
+	err := s.claimStore.RemoveClaimFromRole(ctx, tenantID, claimID, roleID)
+	if err != nil {
+		diag.AddError("failed_to_remove_role_from_claim", "failed to remove role from claim", "claim", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return diag
+	}
+
+	return diag
+}
+
+func (s *ClaimService) GetClaimApiKeys(ctx *appctx.AppContext, tenantID string, claimID string, pagination *pkg_models.Pagination) (*api_models.PaginatedResponse[pkg_models.ApiKey], *diagnostics.Diagnostics) {
+	diag := diagnostics.New("get_claim_api_keys")
+	defer diag.Complete()
+
+	cfg := config.GetInstance().Get()
+
+	if pagination == nil {
+		pagination = &pkg_models.Pagination{
+			Page:     1,
+			PageSize: cfg.GetInt(config.PaginationDefaultPageSizeKey, config.DefaultPageSizeInt),
+		}
+	}
+	dbPagination := mappers.MapPaginationToEntity(pagination)
+
+	dbApiKeys, err := s.claimStore.GetPaginatedClaimApiKeys(ctx, tenantID, claimID, dbPagination)
+	if err != nil {
+		diag.AddError("failed_to_get_claim_api_keys", "failed to get claim api keys", "claim", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return nil, diag
+	}
+
+	response := api_models.PaginatedResponse[pkg_models.ApiKey]{
+		Data:       mappers.MapApiKeysToDto(dbApiKeys.Items),
+		TotalCount: dbApiKeys.Total,
+		Pagination: api_models.Pagination{
+			Page:       dbApiKeys.Page,
+			PageSize:   dbApiKeys.PageSize,
+			TotalPages: dbApiKeys.TotalPages,
+		},
+	}
+
+	return &response, diag
+}
+
+func (s *ClaimService) AddApiKeyToClaim(ctx *appctx.AppContext, tenantID string, claimID string, apiKeySlug string) *diagnostics.Diagnostics {
+	diag := diagnostics.New("add_api_key_to_claim")
+	defer diag.Complete()
+
+	// check if the claim exists
+	existingClaim, existingClaimDiag := s.GetClaimByIDOrSlug(ctx, tenantID, claimID)
+	if existingClaimDiag.HasErrors() {
+		diag.Append(existingClaimDiag)
+		return diag
+	}
+
+	if existingClaim == nil {
+		diag.AddError("claim_not_found", "claim not found", "claim", map[string]interface{}{
+			"claim_id": claimID,
+		})
+		return diag
+	}
+
+	err := s.claimStore.AddClaimToApiKey(ctx, tenantID, claimID, apiKeySlug)
+	if err != nil {
+		diag.AddError("failed_to_add_api_key_to_claim", "failed to add api key to claim", "claim", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return diag
+	}
+
+	return diag
+}
+
+func (s *ClaimService) RemoveApiKeyFromClaim(ctx *appctx.AppContext, tenantID string, claimID string, apiKeySlug string) *diagnostics.Diagnostics {
+	diag := diagnostics.New("remove_api_key_from_claim")
+	defer diag.Complete()
+
+	// check if the claim exists
+	existingClaim, existingClaimDiag := s.GetClaimByIDOrSlug(ctx, tenantID, claimID)
+	if existingClaimDiag.HasErrors() {
+		diag.Append(existingClaimDiag)
+		return diag
+	}
+
+	if existingClaim == nil {
+		diag.AddError("claim_not_found", "claim not found", "claim", map[string]interface{}{
+			"claim_id": claimID,
+		})
+		return diag
+	}
+
+	err := s.claimStore.RemoveClaimFromApiKey(ctx, tenantID, claimID, apiKeySlug)
+	if err != nil {
+		diag.AddError("failed_to_remove_api_key_from_claim", "failed to remove api key from claim", "claim", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return diag
+	}
+
+	return diag
+}

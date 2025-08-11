@@ -3,14 +3,14 @@ package types
 type AppContextKey string
 
 const (
-	RequestIDKey     AppContextKey = "x-request-id"
-	CorrelationIDKey AppContextKey = "x-correlation-id"
-	UserIDKey        AppContextKey = "x-user-id"
-	UsernameKey      AppContextKey = "x-username"
-	TenantIDKey      AppContextKey = "x-tenant-id"
-	UserIPKey        AppContextKey = "x-user-ip"
-	UserAgentKey     AppContextKey = "x-user-agent"
-	StartTimeKey     AppContextKey = "x-start-time"
-	MetadataKey      AppContextKey = "x-metadata"
-	SecurityLevelKey AppContextKey = "x-security-level"
+	RequestIDKey     AppContextKey = "X-Request-ID"
+	CorrelationIDKey AppContextKey = "X-Correlation-ID"
+	UserIDKey        AppContextKey = "X-User-ID"
+	UsernameKey      AppContextKey = "X-Username"
+	TenantIDKey      AppContextKey = "X-Tenant-ID"
+	UserIPKey        AppContextKey = "X-User-IP"
+	UserAgentKey     AppContextKey = "X-User-Agent"
+	StartTimeKey     AppContextKey = "X-Start-Time"
+	MetadataKey      AppContextKey = "X-Metadata"
+	SecurityLevelKey AppContextKey = "X-Security-Level"
 )

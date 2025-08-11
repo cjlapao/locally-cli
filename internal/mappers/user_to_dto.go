@@ -2,6 +2,7 @@ package mappers
 
 import (
 	"github.com/cjlapao/locally-cli/internal/database/entities"
+	user_models "github.com/cjlapao/locally-cli/internal/user/models"
 	"github.com/cjlapao/locally-cli/pkg/models"
 	"github.com/cjlapao/locally-cli/pkg/utils"
 )
@@ -53,5 +54,61 @@ func MapUsersToDto(users []entities.User) []models.User {
 	for i, user := range users {
 		result[i] = *MapUserToDto(&user)
 	}
+	return result
+}
+
+func MapSelfEntityUserToDto(user *entities.User) *user_models.SelfUserResponse {
+	result := &user_models.SelfUserResponse{
+		ID:               user.ID,
+		Slug:             user.Slug,
+		Name:             user.Name,
+		Username:         user.Username,
+		Email:            user.Email,
+		Status:           user.Status,
+		TwoFactorEnabled: user.TwoFactorEnabled,
+	}
+
+	// Map the roles
+	roles := []string{}
+	for _, role := range user.Roles {
+		roles = append(roles, role.Slug)
+	}
+	result.Roles = roles
+
+	// Map the claims
+	claims := []string{}
+	for _, claim := range user.Claims {
+		claims = append(claims, claim.Slug)
+	}
+	result.Claims = claims
+
+	return result
+}
+
+func MapSelfUserToDto(user *models.User) *user_models.SelfUserResponse {
+	result := &user_models.SelfUserResponse{
+		ID:               user.ID,
+		Slug:             user.Slug,
+		Name:             user.Name,
+		Username:         user.Username,
+		Email:            user.Email,
+		Status:           user.Status,
+		TwoFactorEnabled: user.TwoFactorEnabled,
+	}
+
+	// Map the roles
+	roles := []string{}
+	for _, role := range user.Roles {
+		roles = append(roles, role.Slug)
+	}
+	result.Roles = roles
+
+	// Map the claims
+	claims := []string{}
+	for _, claim := range user.Claims {
+		claims = append(claims, claim.Slug)
+	}
+	result.Claims = claims
+
 	return result
 }

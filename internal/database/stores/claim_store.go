@@ -38,6 +38,14 @@ type ClaimDataStoreInterface interface {
 	GetClaimsByLevel(ctx *appctx.AppContext, tenantID string, level models.SecurityLevel) ([]entities.Claim, error)
 	AddClaimToUser(ctx *appctx.AppContext, tenantID string, userID string, claimIdOrSlug string) error
 	RemoveClaimFromUser(ctx *appctx.AppContext, tenantID string, userID string, claimIdOrSlug string) error
+	GetClaimApiKeys(ctx *appctx.AppContext, tenantID string, claimID string) ([]entities.ApiKey, error)
+	GetPaginatedClaimApiKeys(ctx *appctx.AppContext, tenantID string, claimID string, pagination *filters.Pagination) (*filters.PaginationResponse[entities.ApiKey], error)
+	AddClaimToApiKey(ctx *appctx.AppContext, tenantID string, claimID string, apiKeyID string) error
+	RemoveClaimFromApiKey(ctx *appctx.AppContext, tenantID string, claimID string, apiKeyID string) error
+	GetClaimRoles(ctx *appctx.AppContext, tenantID string, claimID string) ([]entities.Role, error)
+	GetPaginatedClaimRoles(ctx *appctx.AppContext, tenantID string, claimID string, pagination *filters.Pagination) (*filters.PaginationResponse[entities.Role], error)
+	AddClaimToRole(ctx *appctx.AppContext, tenantID string, claimID string, roleID string) error
+	RemoveClaimFromRole(ctx *appctx.AppContext, tenantID string, claimID string, roleID string) error
 }
 
 type ClaimDataStore struct {
@@ -292,6 +300,269 @@ func (s *ClaimDataStore) RemoveClaimFromUser(ctx *appctx.AppContext, tenantID st
 	result = s.GetDB().Where("user_id = ? AND claim_id = ?", user.ID, existingClaim.ID).Delete(&userClaims)
 	if result.Error != nil {
 		return fmt.Errorf("failed to delete user claim: %w", result.Error)
+	}
+
+	return nil
+}
+
+func (s *ClaimDataStore) GetClaimApiKeys(ctx *appctx.AppContext, tenantID string, claimID string) ([]entities.ApiKey, error) {
+	var apiKeys []entities.ApiKey
+	claim, err := s.GetClaimBySlugOrID(ctx, tenantID, claimID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get claim: %w", err)
+	}
+	if claim == nil {
+		return nil, fmt.Errorf("claim not found")
+	}
+
+	query := s.GetDB().
+		Preload("Claims").
+		Joins("JOIN api_key_claims ON api_keys.id = api_key_claims.api_key_id").
+		Where("api_key_claims.claim_id = ?", claim.ID)
+	if tenantID != "" {
+		query = query.Where("api_keys.tenant_id = ?", tenantID)
+	}
+
+	result := query.Find(&apiKeys)
+	if result.Error != nil {
+		return nil, fmt.Errorf("failed to get API keys: %w", result.Error)
+	}
+
+	return apiKeys, nil
+}
+
+func (s *ClaimDataStore) GetPaginatedClaimApiKeys(ctx *appctx.AppContext, tenantID string, claimID string, pagination *filters.Pagination) (*filters.PaginationResponse[entities.ApiKey], error) {
+	claim, err := s.GetClaimBySlugOrID(ctx, tenantID, claimID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get claim: %w", err)
+	}
+	if claim == nil {
+		return nil, fmt.Errorf("claim not found")
+	}
+
+	query := s.GetDB().
+		Preload("Claims").
+		Joins("JOIN api_key_claims ON api_keys.id = api_key_claims.api_key_id").
+		Where("api_key_claims.claim_id = ?", claim.ID)
+	if tenantID != "" {
+		query = query.Where("api_keys.tenant_id = ?", tenantID)
+	}
+
+	result, err := utils.PaginatedQuery(query, tenantID, pagination, entities.ApiKey{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get paginated API keys: %w", err)
+	}
+
+	return result, nil
+}
+
+func (s *ClaimDataStore) AddClaimToApiKey(ctx *appctx.AppContext, tenantID string, claimID string, apiKeyID string) error {
+	var apiKey entities.ApiKey
+	result := s.GetDB().Where("tenant_id = ? AND id = ?", tenantID, apiKeyID).First(&apiKey)
+	if result.Error != nil {
+		return fmt.Errorf("failed to get API key: %w", result.Error)
+	}
+	if apiKey.ID == "" {
+		return fmt.Errorf("API key not found")
+	}
+
+	// check if the claim exists
+	existingClaim, err := s.GetClaimBySlugOrID(ctx, tenantID, claimID)
+	if err != nil {
+		return fmt.Errorf("failed to get claim: %w", err)
+	}
+	if existingClaim == nil {
+		return fmt.Errorf("claim not found")
+	}
+
+	// check if the claim is already assigned to the api key
+	var apiKeyClaims entities.ApiKeyClaims
+	result = s.GetDB().Where("api_key_id = ? AND claim_id = ?", apiKey.ID, existingClaim.ID).First(&apiKeyClaims)
+	if result.Error != nil {
+		if !errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("failed to get API key claim: %w", result.Error)
+		}
+	}
+	if apiKeyClaims.ClaimID != "" {
+		return fmt.Errorf("claim already assigned to API key")
+	}
+
+	// create the api key claim
+	apiKeyClaims.ApiKeyID = apiKey.ID
+	apiKeyClaims.ClaimID = existingClaim.ID
+	result = s.GetDB().Create(&apiKeyClaims)
+	if result.Error != nil {
+		return fmt.Errorf("failed to create API key claim: %w", result.Error)
+	}
+
+	return nil
+}
+
+func (s *ClaimDataStore) RemoveClaimFromApiKey(ctx *appctx.AppContext, tenantID string, claimID string, apiKeyID string) error {
+	var apiKey entities.ApiKey
+	result := s.GetDB().Where("tenant_id = ? AND id = ?", tenantID, apiKeyID).First(&apiKey)
+	if result.Error != nil {
+		return fmt.Errorf("failed to get API key: %w", result.Error)
+	}
+	if apiKey.ID == "" {
+		return fmt.Errorf("API key not found")
+	}
+
+	// check if the claim exists
+	existingClaim, err := s.GetClaimBySlugOrID(ctx, tenantID, claimID)
+	if err != nil {
+		return fmt.Errorf("failed to get claim: %w", err)
+	}
+	if existingClaim == nil {
+		return fmt.Errorf("claim not found")
+	}
+
+	// check if the claim is assigned to the api key
+	var apiKeyClaims entities.ApiKeyClaims
+	result = s.GetDB().Where("api_key_id = ? AND claim_id = ?", apiKey.ID, existingClaim.ID).First(&apiKeyClaims)
+	if result.Error != nil {
+		return fmt.Errorf("failed to get API key claim: %w", result.Error)
+	}
+	if apiKeyClaims.ClaimID == "" {
+		return fmt.Errorf("claim not assigned to API key")
+	}
+
+	// delete the api key claim
+	result = s.GetDB().Where("api_key_id = ? AND claim_id = ?", apiKey.ID, existingClaim.ID).Delete(&apiKeyClaims)
+	if result.Error != nil {
+		return fmt.Errorf("failed to delete API key claim: %w", result.Error)
+	}
+
+	return nil
+}
+
+func (s *ClaimDataStore) GetPaginatedClaimRoles(ctx *appctx.AppContext, tenantID string, claimID string, pagination *filters.Pagination) (*filters.PaginationResponse[entities.Role], error) {
+	claim, err := s.GetClaimBySlugOrID(ctx, tenantID, claimID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get claim: %w", err)
+	}
+	if claim == nil {
+		return nil, fmt.Errorf("claim not found")
+	}
+
+	query := s.GetDB().
+		Preload("Claims").
+		Joins("JOIN role_claims ON roles.id = role_claims.role_id").
+		Where("role_claims.claim_id = ?", claim.ID)
+	if tenantID != "" {
+		query = query.Where("roles.tenant_id = ?", tenantID)
+	}
+
+	result, err := utils.PaginatedQuery(query, tenantID, pagination, entities.Role{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get paginated roles: %w", err)
+	}
+
+	return result, nil
+}
+
+func (s *ClaimDataStore) GetClaimRoles(ctx *appctx.AppContext, tenantID string, claimID string) ([]entities.Role, error) {
+	var roles []entities.Role
+	claim, err := s.GetClaimBySlugOrID(ctx, tenantID, claimID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get claim: %w", err)
+	}
+	if claim == nil {
+		return nil, fmt.Errorf("claim not found")
+	}
+
+	query := s.GetDB().
+		Preload("Claims").
+		Joins("JOIN role_claims ON roles.id = role_claims.role_id").
+		Where("role_claims.claim_id = ?", claim.ID)
+	if tenantID != "" {
+		query = query.Where("roles.tenant_id = ?", tenantID)
+	}
+
+	result := query.Find(&roles)
+	if result.Error != nil {
+		return nil, fmt.Errorf("failed to get roles: %w", result.Error)
+	}
+
+	return roles, nil
+}
+
+func (s *ClaimDataStore) AddClaimToRole(ctx *appctx.AppContext, tenantID string, claimID string, roleID string) error {
+	var role entities.Role
+	result := s.GetDB().Where("tenant_id = ? AND id = ?", tenantID, roleID).First(&role)
+	if result.Error != nil {
+		return fmt.Errorf("failed to get role: %w", result.Error)
+	}
+	if role.ID == "" {
+		return fmt.Errorf("role not found")
+	}
+
+	// check if the claim exists
+	existingClaim, err := s.GetClaimBySlugOrID(ctx, tenantID, claimID)
+	if err != nil {
+		return fmt.Errorf("failed to get claim: %w", err)
+	}
+	if existingClaim == nil {
+		return fmt.Errorf("claim not found")
+	}
+
+	// check if the claim is assigned to the role
+	var roleClaims entities.RoleClaims
+	result = s.GetDB().Where("role_id = ? AND claim_id = ?", role.ID, existingClaim.ID).First(&roleClaims)
+	if result.Error != nil {
+		if !errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("failed to get role claim: %w", result.Error)
+		}
+	}
+	if roleClaims.ClaimID != "" {
+		return fmt.Errorf("claim already assigned to role")
+	}
+
+	// create the role claim
+
+	roleClaims.RoleID = role.ID
+	roleClaims.ClaimID = existingClaim.ID
+	result = s.GetDB().Create(&roleClaims)
+	if result.Error != nil {
+		return fmt.Errorf("failed to create role claim: %w", result.Error)
+	}
+
+	return nil
+}
+
+func (s *ClaimDataStore) RemoveClaimFromRole(ctx *appctx.AppContext, tenantID string, claimID string, roleID string) error {
+	var role entities.Role
+	result := s.GetDB().Where("tenant_id = ? AND id = ?", tenantID, roleID).First(&role)
+	if result.Error != nil {
+		return fmt.Errorf("failed to get role: %w", result.Error)
+	}
+	if role.ID == "" {
+		return fmt.Errorf("role not found")
+	}
+
+	// check if the claim exists
+	existingClaim, err := s.GetClaimBySlugOrID(ctx, tenantID, claimID)
+	if err != nil {
+		return fmt.Errorf("failed to get claim: %w", err)
+	}
+	if existingClaim == nil {
+		return fmt.Errorf("claim not found")
+	}
+
+	// check if the claim is assigned to the role
+	var roleClaims entities.RoleClaims
+	result = s.GetDB().Where("role_id = ? AND claim_id = ?", role.ID, existingClaim.ID).First(&roleClaims)
+	if result.Error != nil {
+		return fmt.Errorf("failed to get role claim: %w", result.Error)
+	}
+	if roleClaims.ClaimID == "" {
+		return fmt.Errorf("claim not assigned to role")
+	}
+
+	// delete the role claim
+	result = s.GetDB().Where("role_id = ? AND claim_id = ?", role.ID, existingClaim.ID).Delete(&roleClaims)
+	if result.Error != nil {
+		return fmt.Errorf("failed to delete role claim: %w", result.Error)
 	}
 
 	return nil

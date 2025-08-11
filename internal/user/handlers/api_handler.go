@@ -7,6 +7,7 @@ import (
 	"github.com/cjlapao/locally-cli/internal/api"
 	api_types "github.com/cjlapao/locally-cli/internal/api/types"
 	"github.com/cjlapao/locally-cli/internal/appctx"
+	"github.com/cjlapao/locally-cli/internal/mappers"
 	"github.com/cjlapao/locally-cli/internal/user/interfaces"
 	"github.com/cjlapao/locally-cli/internal/user/models"
 	pkg_models "github.com/cjlapao/locally-cli/pkg/models"
@@ -193,7 +194,9 @@ func (h *ApiHandler) HandleGetSelfUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	api.WriteObjectResponse(w, r, user)
+	response := mappers.MapSelfUserToDto(user)
+
+	api.WriteObjectResponse(w, r, response)
 }
 
 // @Summary      Get all users

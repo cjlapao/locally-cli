@@ -1,4 +1,5 @@
-package api
+// Package middleware contains the middleware for the API service.
+package middleware
 
 import (
 	"bytes"
@@ -61,26 +62,26 @@ type ResponseData struct {
 
 // MiddlewareChain represents a chain of middlewares
 type MiddlewareChain struct {
-	preMiddlewares  []PreMiddleware
-	postMiddlewares []PostMiddleware
+	PreMiddlewares  []PreMiddleware
+	PostMiddlewares []PostMiddleware
 }
 
 // NewMiddlewareChain creates a new middleware chain
 func NewMiddlewareChain() *MiddlewareChain {
 	return &MiddlewareChain{
-		preMiddlewares:  make([]PreMiddleware, 0),
-		postMiddlewares: make([]PostMiddleware, 0),
+		PreMiddlewares:  make([]PreMiddleware, 0),
+		PostMiddlewares: make([]PostMiddleware, 0),
 	}
 }
 
 // AddPreMiddleware adds a pre-middleware to the chain
 func (mc *MiddlewareChain) AddPreMiddleware(middleware PreMiddleware) {
-	mc.preMiddlewares = append(mc.preMiddlewares, middleware)
+	mc.PreMiddlewares = append(mc.PreMiddlewares, middleware)
 }
 
 // AddPostMiddleware adds a post-middleware to the chain
 func (mc *MiddlewareChain) AddPostMiddleware(middleware PostMiddleware) {
-	mc.postMiddlewares = append(mc.postMiddlewares, middleware)
+	mc.PostMiddlewares = append(mc.PostMiddlewares, middleware)
 }
 
 // AddPreMiddlewareFunc adds a function-based pre-middleware
@@ -101,7 +102,7 @@ func (mc *MiddlewareChain) Execute(handler http.HandlerFunc) http.HandlerFunc {
 		defer diag.Complete()
 
 		// Execute pre-middlewares
-		for _, middleware := range mc.preMiddlewares {
+		for _, middleware := range mc.PreMiddlewares {
 			result := middleware.Execute(w, r)
 			if !result.Continue {
 				// Middleware decided to short-circuit
@@ -143,7 +144,7 @@ func (mc *MiddlewareChain) Execute(handler http.HandlerFunc) http.HandlerFunc {
 		responseData.Duration = time.Since(start)
 
 		// Execute post-middlewares
-		for _, middleware := range mc.postMiddlewares {
+		for _, middleware := range mc.PostMiddlewares {
 			if err := middleware.Execute(w, r, responseData); err != nil {
 				// Only log if logging is initialized
 				if logging.Logger != nil {

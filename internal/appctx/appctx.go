@@ -32,6 +32,7 @@ type AppContext struct {
 	metadata      map[string]interface{}
 	diagnostics   *diagnostics.Diagnostics
 	mu            sync.RWMutex
+	parent        context.Context
 }
 
 // NewContext creates a new AppContext with the given parent context
@@ -45,6 +46,7 @@ func NewContext(parent context.Context) *AppContext {
 		startTime:   time.Now(),
 		metadata:    make(map[string]interface{}),
 		diagnostics: diagnostics.New("app_context"),
+		parent:      parent,
 	}
 }
 
@@ -248,6 +250,16 @@ func (c *AppContext) GetUsername() string {
 func (c *AppContext) GetTenantID() string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+	if c.tenantID == "" {
+		if c.parent != nil {
+			if parentCtx, ok := c.parent.(*AppContext); ok {
+				return parentCtx.GetTenantID()
+			}
+			if parentCtx, ok := c.parent.Value(types.TenantIDKey).(string); ok {
+				return parentCtx
+			}
+		}
+	}
 	return c.tenantID
 }
 

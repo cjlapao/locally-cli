@@ -16,6 +16,14 @@ const (
 	DefaultPageSize             = "20"
 	DefaultRetentionDays        = 90
 	ApiKeyAuthorizationHeader   = "X-API-KEY"
+	TenantIDHeader              = "X-Tenant-ID"
+	CorrelationIDHeader         = "X-Correlation-ID"
+	RequestIDHeader             = "X-Request-ID"
+	SecurityLevelHeader         = "X-Security-Level"
+	UserAgentHeader             = "X-User-Agent"
+	UserIPHeader                = "X-User-IP"
+	UsernameHeader              = "X-Username"
+	StartTimeHeader             = "X-Start-Time"
 	// UUIDs
 	RoleSuperUserID   = "11111111-1111-1111-1111-111111111111"
 	RoleAdminUserID   = "22222222-2222-2222-2222-222222222222"

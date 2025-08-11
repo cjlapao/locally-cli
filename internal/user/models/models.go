@@ -77,3 +77,15 @@ type UpdateClaimRequest struct {
 	ID            string               `json:"-" yaml:"-"`
 	SecurityLevel models.SecurityLevel `json:"security_level" yaml:"security_level" validate:"required"`
 }
+
+type SelfUserResponse struct {
+	ID               string   `json:"id" yaml:"id"`
+	Slug             string   `json:"slug" yaml:"slug"`
+	Name             string   `json:"name" yaml:"name"`
+	Username         string   `json:"username" yaml:"username"`
+	Email            string   `json:"email" yaml:"email"`
+	Status           string   `json:"status" yaml:"status"`
+	Roles            []string `json:"roles" yaml:"roles"`
+	Claims           []string `json:"claims" yaml:"claims"`
+	TwoFactorEnabled bool     `json:"two_factor_enabled" yaml:"two_factor_enabled"`
+}
