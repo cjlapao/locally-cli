@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -78,4 +80,13 @@ func (c *Config) Set(key string, value string) {
 	}
 
 	c.Items = append(c.Items, ConfigItem{Key: key, Value: value})
+}
+
+func (c *Config) StoragePath() string {
+	userHome, err := os.UserHomeDir()
+	if err != nil {
+		userHome = "."
+	}
+
+	return filepath.Join(userHome, DefaultStoragePath)
 }

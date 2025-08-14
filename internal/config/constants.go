@@ -1,29 +1,39 @@
 package config
 
 const (
-	UnknownTenantID             = "00000000-0000-0000-0000-000000000000"
-	UnknownUserID               = "00000000-0000-0000-0000-000000000000"
-	DefaultSuperUserUserID      = "11111111-1111-1111-1111-111111111111"
-	GlobalTenantID              = "11111111-1111-1111-1111-111111111111"
-	GlobalTenantName            = "Global Tenant"
-	SuperUserRole               = "su"
-	RootCertificateSlug         = "locally-root"
-	IntermediateCertificateSlug = "locally-ca"
-	ApiKeyPrefix                = "sk-locally-"
-	PasswordAllowedSpecialChars = "!@#$%.?"
-	SystemStoragePath           = ".locally"
-	DefaultPageSizeInt          = 20
-	DefaultPageSize             = "20"
-	DefaultRetentionDays        = 90
-	ApiKeyAuthorizationHeader   = "X-API-KEY"
-	TenantIDHeader              = "X-Tenant-ID"
-	CorrelationIDHeader         = "X-Correlation-ID"
-	RequestIDHeader             = "X-Request-ID"
-	SecurityLevelHeader         = "X-Security-Level"
-	UserAgentHeader             = "X-User-Agent"
-	UserIPHeader                = "X-User-IP"
-	UsernameHeader              = "X-Username"
-	StartTimeHeader             = "X-Start-Time"
+	UnknownTenantID                      = "00000000-0000-0000-0000-000000000000"
+	UnknownUserID                        = "00000000-0000-0000-0000-000000000000"
+	DefaultSuperUserUserID               = "11111111-1111-1111-1111-111111111111"
+	GlobalTenantID                       = "11111111-1111-1111-1111-111111111111"
+	GlobalRootCertificateID              = "11111111-1111-1111-1111-111111111111"
+	GlobalTenantName                     = "Global Tenant"
+	SuperUserRole                        = "su"
+	RootCertificateSlug                  = "locally-root"
+	IntermediateCertificateSlug          = "locally-ca"
+	ApiKeyPrefix                         = "sk-locally-"
+	PasswordAllowedSpecialChars          = "!@#$%.?"
+	SystemStoragePath                    = ".locally"
+	DefaultPageSizeInt                   = 20
+	DefaultPageSize                      = "20"
+	DefaultRetentionDays                 = 90
+	ApiKeyAuthorizationHeader            = "X-API-KEY"
+	TenantIDHeader                       = "X-Tenant-ID"
+	CorrelationIDHeader                  = "X-Correlation-ID"
+	RequestIDHeader                      = "X-Request-ID"
+	SecurityLevelHeader                  = "X-Security-Level"
+	UserAgentHeader                      = "X-User-Agent"
+	UserIPHeader                         = "X-User-IP"
+	UsernameHeader                       = "X-Username"
+	StartTimeHeader                      = "X-Start-Time"
+	DefaultCertificateExpiresInYears     = 2
+	DefaultCertificateKeySize            = 4096
+	DefaultCertificateSignatureAlgorithm = "SHA512"
+	DefaultCertificateCountry            = "UK"
+	DefaultCertificateState              = "London"
+	DefaultCertificateCity               = "London"
+	DefaultCertificateOrganization       = "Locally"
+	DefaultCertificateOrganizationalUnit = "Locally"
+	DefaultCertificateAdminEmailAddress  = "admin@locally.com"
 	// UUIDs
 	RoleSuperUserID   = "11111111-1111-1111-1111-111111111111"
 	RoleAdminUserID   = "22222222-2222-2222-2222-222222222222"
@@ -68,6 +78,17 @@ const (
 	SecurityPasswordRequireNumberKey    = "security.password.require_number"
 	SecurityPasswordRequireSpecialKey   = "security.password.require_special"
 	SecurityPasswordRequireUppercaseKey = "security.password.require_uppercase"
+
+	// Certificate configuration keys
+	CertificateExpiresInYearsKey     = "certificate.expires_in_years"
+	CertificateKeySizeKey            = "certificate.key_size"
+	CertificateSignatureAlgorithmKey = "certificate.signature_algorithm"
+	CertificateCountryKey            = "certificate.country"
+	CertificateStateKey              = "certificate.state"
+	CertificateCityKey               = "certificate.city"
+	CertificateOrganizationKey       = "certificate.organization"
+	CertificateOrganizationalUnitKey = "certificate.organizational_unit"
+	CertificateAdminEmailAddressKey  = "certificate.admin_email_address"
 
 	// Seeding configuration keys
 	SeedDemoDataKey = "seeding.demo_data"
@@ -145,6 +166,17 @@ const (
 	SecurityPasswordRequireNumberEnvKey    = EnvPrefix + "SECURITY_PASSWORD_REQUIRE_NUMBER"
 	SecurityPasswordRequireSpecialEnvKey   = EnvPrefix + "SECURITY_PASSWORD_REQUIRE_SPECIAL"
 	SecurityPasswordRequireUppercaseEnvKey = EnvPrefix + "SECURITY_PASSWORD_REQUIRE_UPPERCASE"
+
+	// Certificate configuration keys
+	CertificateExpiresInYearsEnvKey     = EnvPrefix + "CERTIFICATE_EXPIRES_IN_YEARS"
+	CertificateKeySizeEnvKey            = EnvPrefix + "CERTIFICATE_KEY_SIZE"
+	CertificateSignatureAlgorithmEnvKey = EnvPrefix + "CERTIFICATE_SIGNATURE_ALGORITHM"
+	CertificateCountryEnvKey            = EnvPrefix + "CERTIFICATE_COUNTRY"
+	CertificateStateEnvKey              = EnvPrefix + "CERTIFICATE_STATE"
+	CertificateCityEnvKey               = EnvPrefix + "CERTIFICATE_CITY"
+	CertificateOrganizationEnvKey       = EnvPrefix + "CERTIFICATE_ORGANIZATION"
+	CertificateOrganizationalUnitEnvKey = EnvPrefix + "CERTIFICATE_ORGANIZATIONAL_UNIT"
+	CertificateAdminEmailAddressEnvKey  = EnvPrefix + "CERTIFICATE_ADMIN_EMAIL_ADDRESS"
 
 	// Cors configuration keys
 	CorsAllowOriginsEnvKey  = EnvPrefix + "CORS_ALLOW_ORIGINS"

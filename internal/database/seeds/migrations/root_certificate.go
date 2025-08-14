@@ -6,23 +6,22 @@ import (
 	"time"
 
 	"github.com/cjlapao/locally-cli/internal/appctx"
-	"github.com/cjlapao/locally-cli/internal/certificates"
+	"github.com/cjlapao/locally-cli/internal/certificates/interfaces"
 	"github.com/cjlapao/locally-cli/internal/config"
 	"github.com/cjlapao/locally-cli/internal/database/entities"
 	"github.com/cjlapao/locally-cli/internal/mappers"
 	"github.com/cjlapao/locally-cli/pkg/diagnostics"
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 // RootCertificateMigrationWorker demonstrates how to create a seed worker
 type RootCertificateMigrationWorker struct {
 	db                 *gorm.DB
-	certificateService *certificates.CertificateService
+	certificateService interfaces.CertificateServiceInterface
 }
 
 // NewRootCertificateMigrationWorker creates a new example seed worker
-func NewRootCertificateMigrationWorker(db *gorm.DB, certificateService *certificates.CertificateService) *RootCertificateMigrationWorker {
+func NewRootCertificateMigrationWorker(db *gorm.DB, certificateService interfaces.CertificateServiceInterface) *RootCertificateMigrationWorker {
 	return &RootCertificateMigrationWorker{
 		db:                 db,
 		certificateService: certificateService,
@@ -70,9 +69,8 @@ func (e *RootCertificateMigrationWorker) Up(ctx *appctx.AppContext) *diagnostics
 			diag.Append(certDiag)
 			return diag
 		}
-		dbRootCertificate := mappers.MapRootCertificateToEntity(*rootCertificate)
-		dbRootCertificate.Slug = config.RootCertificateSlug
-		dbRootCertificate.ID = uuid.New().String()
+		dbRootCertificate := mappers.MapX509CertificateToEntity(rootCertificate)
+		dbRootCertificate.ID = config.GlobalRootCertificateID
 		dbRootCertificate.CreatedAt = time.Now()
 		dbRootCertificate.UpdatedAt = time.Now()
 

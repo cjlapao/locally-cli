@@ -1,10 +1,33 @@
 package mappers
 
 import (
+	"time"
+
+	"github.com/cjlapao/locally-cli/internal/certificates/interfaces"
 	"github.com/cjlapao/locally-cli/internal/database/entities"
 	db_types "github.com/cjlapao/locally-cli/internal/database/types"
 	"github.com/cjlapao/locally-cli/pkg/models"
+	"github.com/google/uuid"
 )
+
+func MapX509CertificateToEntity(certificate interfaces.X509Certificate) entities.Certificate {
+	result := entities.Certificate{
+		Name:           certificate.GetName(),
+		PemCertificate: string(certificate.GetPemCertificate()),
+		PemPrivateKey:  string(certificate.GetPemPrivateKey()),
+		PemCsr:         string(certificate.GetPemCsr()),
+	}
+
+	result.Slug = certificate.GetSlug()
+	result.ID = uuid.New().String()
+	result.CreatedAt = time.Now()
+	result.UpdatedAt = time.Now()
+
+	config := certificate.GetConfiguration()
+	result.Config = MapCertificateConfigToEntity(*config)
+
+	return result
+}
 
 func MapRootCertificateToEntity(rootCA models.RootCertificate) entities.RootCertificate {
 	result := entities.RootCertificate{
@@ -57,12 +80,10 @@ func MapIntermediateCertificateToEntity(intermediateCertificate models.Intermedi
 
 func MapCertificateToEntity(certificate models.Certificate) entities.Certificate {
 	result := entities.Certificate{
-		RootCertificateID:         certificate.RootCertificateID,
-		IntermediateCertificateID: certificate.IntermediateCertificateID,
-		CertificateSigningRequest: certificate.Csr,
-		Name:                      certificate.Name,
-		PemCertificate:            certificate.PemCertificate,
-		PemPrivateKey:             certificate.PemPrivateKey,
+		PemCsr:         certificate.Csr,
+		Name:           certificate.Name,
+		PemCertificate: certificate.PemCertificate,
+		PemPrivateKey:  certificate.PemPrivateKey,
 	}
 
 	result.Slug = certificate.Slug
@@ -70,29 +91,30 @@ func MapCertificateToEntity(certificate models.Certificate) entities.Certificate
 	result.CreatedAt = certificate.CreatedAt
 	result.UpdatedAt = certificate.UpdatedAt
 
-	config := MapCertificateConfigToEntity(*certificate.Config)
-	jsonObj := db_types.JSONObject[entities.CertificateConfig]{}
-	jsonObj.Set(config)
-
-	result.Config = jsonObj
+	if certificate.Config != nil {
+		config := MapCertificateConfigToEntity(*certificate.Config)
+		result.Config = config
+	}
 
 	return result
 }
 
 func MapCertificateConfigToEntity(config models.CertificateConfig) entities.CertificateConfig {
 	return entities.CertificateConfig{
-		Country:            config.Country,
-		State:              config.State,
-		Organization:       config.Organization,
-		CommonName:         config.CommonName,
-		City:               config.City,
-		OrganizationalUnit: config.OrganizationalUnit,
-		AdminEmailAddress:  config.AdminEmailAddress,
-		FQDNs:              config.FQDNs,
-		IpAddresses:        config.IpAddresses,
-		ExpiresInYears:     config.ExpiresInYears,
-		KeySize:            config.KeySize,
-		SignatureAlgorithm: config.SignatureAlgorithm,
-		Password:           config.Password,
+		Country:                   config.Country,
+		State:                     config.State,
+		Organization:              config.Organization,
+		CommonName:                config.CommonName,
+		City:                      config.City,
+		OrganizationalUnit:        config.OrganizationalUnit,
+		AdminEmailAddress:         config.AdminEmailAddress,
+		FQDNs:                     config.FQDNs,
+		IpAddresses:               config.IpAddresses,
+		ExpiresInYears:            config.ExpiresInYears,
+		KeySize:                   config.KeySize,
+		SignatureAlgorithm:        config.SignatureAlgorithm,
+		Password:                  config.Password,
+		RootCertificateID:         config.RootCertificateID,
+		IntermediateCertificateID: config.IntermediateCertificateID,
 	}
 }

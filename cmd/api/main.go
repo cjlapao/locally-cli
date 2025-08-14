@@ -21,7 +21,7 @@ import (
 	auth_handlers "github.com/cjlapao/locally-cli/internal/auth/handlers"
 	auth_interfaces "github.com/cjlapao/locally-cli/internal/auth/interfaces"
 	"github.com/cjlapao/locally-cli/internal/certificates"
-	certificates_handlers "github.com/cjlapao/locally-cli/internal/certificates/handlers"
+	certificates_interfaces "github.com/cjlapao/locally-cli/internal/certificates/interfaces"
 	"github.com/cjlapao/locally-cli/internal/claim"
 	claim_interfaces "github.com/cjlapao/locally-cli/internal/claim/interfaces"
 	"github.com/cjlapao/locally-cli/internal/config"
@@ -383,7 +383,7 @@ func initializeAuthService(cfg *config.Config, authDataStore stores.ApiKeyStoreI
 }
 
 // initializeCertificateService initializes the certificate service
-func initializeCertificateService(store stores.CertificatesDataStoreInterface) *certificates.CertificateService {
+func initializeCertificateService(store stores.CertificatesDataStoreInterface) certificates_interfaces.CertificateServiceInterface {
 	logging.Info("Initializing certificate service...")
 	certificateService := certificates.Initialize(store)
 	if certificateService == nil {
@@ -527,14 +527,14 @@ func seedDatabaseMigrations(ctx *appctx.AppContext, configSvc *config.ConfigServ
 	defaultTenantMigrationWorker := migrations.NewDefaultTenantMigrationWorker(db.GetDB(), tenantService)
 	defaultUsersMigrationWorker := migrations.NewDefaultUsersMigrationWorker(db.GetDB(), configSvc.Get(), systemService, userService)
 	rootCertificateMigrationWorker := migrations.NewRootCertificateMigrationWorker(db.GetDB(), certificateService)
-	intermediateCertificateMigrationWorker := migrations.NewIntermediateCertificateMigrationWorker(db.GetDB(), certificateService)
+	// intermediateCertificateMigrationWorker := migrations.NewIntermediateCertificateMigrationWorker(db.GetDB(), certificateService)
 
 	// service.Register(defaultClaimsMigrationWorker)
 	// service.Register(defaultRolesMigrationWorker)
 	service.Register(defaultTenantMigrationWorker)
 	service.Register(defaultUsersMigrationWorker)
 	service.Register(rootCertificateMigrationWorker)
-	service.Register(intermediateCertificateMigrationWorker)
+	// service.Register(intermediateCertificateMigrationWorker)
 
 	// Running the migrations
 	migrationsDiag := service.RunAll(ctx)
@@ -689,7 +689,7 @@ func run() error {
 	// Register environment routes
 	apiServer.RegisterRoutes(environment.NewApiHandler(environmentService))
 	// Register certificate routes
-	apiServer.RegisterRoutes(certificates_handlers.NewApiHandlers(certificateService, certificatesStore))
+	apiServer.RegisterRoutes(certificates.NewApiHandler(certificateService))
 	// Register tenant routes
 	apiServer.RegisterRoutes(tenant.NewApiHandler(tenantService))
 	// Register user routes

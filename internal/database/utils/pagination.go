@@ -212,3 +212,42 @@ func PaginatedQuery[T any](
 
 	return &response, nil
 }
+
+func QueryDatabase[T any](
+	db *gorm.DB,
+	tenantID string,
+	query_builder *filters.QueryBuilder,
+) (*filters.QueryBuilderResponse[T], error) {
+	var items []T
+	var item T
+	total := int64(0)
+
+	if query_builder == nil {
+		query_builder = filters.NewQueryBuilder("")
+	}
+
+	// Get total count
+	countQuery := db.Model(&item)
+	if tenantID != "" {
+		countQuery = countQuery.Where("tenant_id = ?", tenantID)
+	}
+	if err := countQuery.Count(&total).Error; err != nil {
+		return nil, err
+	}
+
+	query := query_builder.Apply(db, tenantID)
+
+	if err := query.Find(&items).Error; err != nil {
+		return nil, err
+	}
+
+	response := filters.QueryBuilderResponse[T]{
+		Items:      items,
+		Total:      total,
+		Page:       query_builder.GetPage(),
+		PageSize:   query_builder.GetPageSize(),
+		TotalPages: query_builder.GetTotalPages(),
+	}
+
+	return &response, nil
+}

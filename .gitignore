@@ -17,3 +17,5 @@ coverage.*
 test-api
 out/
 **/__debug*
+
+*.txt

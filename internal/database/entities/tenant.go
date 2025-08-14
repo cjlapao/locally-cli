@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/cjlapao/locally-cli/internal/database/types"
+	pkg_types "github.com/cjlapao/locally-cli/pkg/types"
 )
 
 type Tenant struct {
@@ -13,7 +14,10 @@ type Tenant struct {
 	Domain        string                                   `json:"domain" gorm:"column:domain;type:varchar(255);not null;unique"`
 	OwnerID       string                                   `json:"owner_id" gorm:"column:owner_id;type:varchar(255);"`
 	ContactEmail  string                                   `json:"contact_email" gorm:"column:contact_email;type:varchar(255);"`
-	Status        string                                   `json:"status" gorm:"column:status;type:varchar(50);default:'active'"`
+	Status        pkg_types.RecordStatus                   `json:"status" gorm:"column:status;type:varchar(50);default:'active'"`
+	Country       string                                   `json:"country" gorm:"column:country;type:varchar(255);"`
+	State         string                                   `json:"state" gorm:"column:state;type:varchar(255);"`
+	City          string                                   `json:"city" gorm:"column:city;type:varchar(255);"`
 	ActivatedAt   *time.Time                               `json:"activated_at" gorm:"column:activated_at;type:timestamp;"`
 	DeactivatedAt *time.Time                               `json:"deactivated_at" gorm:"column:deactivated_at;type:timestamp;"`
 	Metadata      types.JSONObject[map[string]interface{}] `json:"metadata" gorm:"column:metadata;type:text"`

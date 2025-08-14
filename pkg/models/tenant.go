@@ -1,6 +1,10 @@
 package models
 
-import "time"
+import (
+	"time"
+
+	"github.com/cjlapao/locally-cli/pkg/types"
+)
 
 type Tenant struct {
 	ID            string                 `json:"id" yaml:"id"`
@@ -10,7 +14,10 @@ type Tenant struct {
 	Domain        string                 `json:"domain" yaml:"domain" validate:"required"`
 	OwnerID       string                 `json:"owner_id" yaml:"owner_id"`
 	ContactEmail  string                 `json:"contact_email" yaml:"contact_email" validate:"required,email"`
-	Status        string                 `json:"status" yaml:"status"`
+	Status        types.RecordStatus     `json:"status" yaml:"status"`
+	Country       string                 `json:"country" yaml:"country"`
+	State         string                 `json:"state" yaml:"state"`
+	City          string                 `json:"city" yaml:"city"`
 	ActivatedAt   *time.Time             `json:"activated_at" yaml:"activated_at"`
 	DeactivatedAt *time.Time             `json:"deactivated_at" yaml:"deactivated_at"`
 	Metadata      map[string]interface{} `json:"metadata" yaml:"metadata"`

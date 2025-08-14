@@ -1,5 +1,7 @@
 package config
 
+import "strconv"
+
 func DefaultConfig() *Config {
 	return &Config{
 		Items: []ConfigItem{
@@ -31,6 +33,17 @@ func DefaultConfig() *Config {
 			{Key: SecurityPasswordRequireNumberKey, Value: "true", EnvName: SecurityPasswordRequireNumberEnvKey, FlagName: FlagSecurityPasswordRequireNumber},
 			{Key: SecurityPasswordRequireSpecialKey, Value: "true", EnvName: SecurityPasswordRequireSpecialEnvKey, FlagName: FlagSecurityPasswordRequireSpecial},
 			{Key: SecurityPasswordRequireUppercaseKey, Value: "true", EnvName: SecurityPasswordRequireUppercaseEnvKey, FlagName: FlagSecurityPasswordRequireUppercase},
+
+			// Certificate Default Values
+			{Key: CertificateExpiresInYearsKey, Value: strconv.Itoa(DefaultCertificateExpiresInYears), EnvName: CertificateExpiresInYearsEnvKey},
+			{Key: CertificateKeySizeKey, Value: strconv.Itoa(DefaultCertificateKeySize), EnvName: CertificateKeySizeEnvKey},
+			{Key: CertificateSignatureAlgorithmKey, Value: DefaultCertificateSignatureAlgorithm, EnvName: CertificateSignatureAlgorithmEnvKey},
+			{Key: CertificateCountryKey, Value: DefaultCertificateCountry, EnvName: CertificateCountryEnvKey},
+			{Key: CertificateStateKey, Value: DefaultCertificateState, EnvName: CertificateStateEnvKey},
+			{Key: CertificateCityKey, Value: DefaultCertificateCity, EnvName: CertificateCityEnvKey},
+			{Key: CertificateOrganizationKey, Value: DefaultCertificateOrganization, EnvName: CertificateOrganizationEnvKey},
+			{Key: CertificateOrganizationalUnitKey, Value: DefaultCertificateOrganizationalUnit, EnvName: CertificateOrganizationalUnitEnvKey},
+			{Key: CertificateAdminEmailAddressKey, Value: DefaultCertificateAdminEmailAddress, EnvName: CertificateAdminEmailAddressEnvKey},
 
 			// API Key
 			{Key: APIKey, Value: "sk-locally-"},

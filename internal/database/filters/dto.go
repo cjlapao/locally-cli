@@ -2,7 +2,37 @@ package filters
 
 import "math"
 
+type OrderDirection string
+
+const (
+	OrderDirectionAsc  OrderDirection = "asc"
+	OrderDirectionDesc OrderDirection = "desc"
+)
+
+type OrderBy struct {
+	Field     string
+	Direction OrderDirection
+}
+
+type QueryOrder struct {
+	OrderBy []OrderBy
+}
+
+type QueryOptions struct {
+	OrderBy    *QueryOrder
+	FilterBy   *Filter
+	Pagination *PaginationFilter
+}
+
 type FilterResponse[T any] struct {
+	Items      []T   `json:"items" yaml:"items"`
+	Page       int   `json:"page" yaml:"page"`
+	PageSize   int   `json:"page_size" yaml:"page_size"`
+	TotalPages int   `json:"total_pages" yaml:"total_pages"`
+	Total      int64 `json:"total" yaml:"total"`
+}
+
+type PaginationResponse[T any] struct {
 	Items      []T   `json:"items" yaml:"items"`
 	Page       int   `json:"page" yaml:"page"`
 	PageSize   int   `json:"page_size" yaml:"page_size"`
@@ -40,10 +70,10 @@ func (p *Pagination) GetPageIndex() int {
 	return p.Page - 1
 }
 
-type PaginationResponse[T any] struct {
+type QueryBuilderResponse[T any] struct {
+	Total      int64 `json:"total" yaml:"total"`
 	Items      []T   `json:"items" yaml:"items"`
 	Page       int   `json:"page" yaml:"page"`
 	PageSize   int   `json:"page_size" yaml:"page_size"`
 	TotalPages int   `json:"total_pages" yaml:"total_pages"`
-	Total      int64 `json:"total" yaml:"total"`
 }

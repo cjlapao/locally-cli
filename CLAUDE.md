@@ -1,17 +1,59 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with
+code in this repository.
 
 ## Overview
 
-Locally is a CLI tool designed to help spin up local development environments including infrastructure. It provides configuration files that can be shared and reproduced across machines. The codebase is written in Go and consists of two main entry points:
+Locally is a CLI tool designed to help spin up local development environments
+including infrastructure. It provides configuration files that can be shared
+and reproduced across machines. The codebase is written in Go and consists of
+two main entry points:
 
 1. **CLI Tool** (`cmd/cli/main.go`) - Main command-line interface
-2. **API Server** (`cmd/api/main.go`) - REST API server with authentication, real-time events, and database support
+2. **API Server** (`cmd/api/main.go`) - REST API server with authentication,
+  real-time events, and database support
+
+## Code Conventions
+
+- We use Prettier for formatting
+- ESLint for linting
+- Functional components with hooks for React
+- 2-space indentation
+- camelCase for variables and functions
+- PascalCase for components and classes
+
+## Tech Stack
+
+- Go (Golang) for backend development
+- React for frontend development
+- PostgreSQL for database
+- Docker for containerization
+- Kubernetes for orchestration
+  
+## Important Notes
+
+- Follow code conventions and best practices
+- Write tests for new features and bug fixes
+- Unit tests need to have at least 80% code coverage
+- Keep dependencies up to date
+- Document API changes and new endpoints
+- Use meaningful commit messages
+
+## Instructions for Claude
+
+- Follow the project structure and conventions
+- Write clear and concise code
+- Include comments and documentation where necessary
+- Keep security in mind when handling user data
+- Communicate effectively with the team
+- Follow existing code patterns and practices
+- Always add swagger documentation for new API endpoints
 
 ## Build and Development Commands
 
 ### Building the Project
+
 ```bash
 # Build all packages (verify compilation)
 go build -v ./...
@@ -24,6 +66,7 @@ go build -o locally-api ./cmd/api
 ```
 
 ### Testing
+
 ```bash
 # Run all tests
 go test ./...
@@ -35,9 +78,11 @@ go test -cover ./...
 go test ./internal/environment
 ```
 
-**Note**: The codebase is currently in a refactoring state with compilation errors. Some tests may fail due to missing AppContext parameters in environment service calls.
+**Note**: The codebase is currently in a refactoring state with compilation errors.
+Some tests may fail due to missing AppContext parameters in environment service calls.
 
 ### Development
+
 ```bash
 # Run CLI in debug mode
 go run cmd/cli/main.go --debug [command]
@@ -57,27 +102,33 @@ golangci-lint run
 ### Core Components
 
 #### Application Context (`internal/appctx/`)
-- **AppContext**: Enhanced context.Context with request ID, user ID, tenant ID, metadata, and diagnostics
+
+- **AppContext**: Enhanced context.Context with request ID, user ID, tenant ID,
+  metadata, and diagnostics
 - Thread-safe with structured logging support
 - Used throughout the application for tracing and metadata propagation
 
 #### Environment Service (`internal/environment/`)
+
 - Variable interpolation and replacement using `${VAR}` syntax
 - Vault integration for secure secret management
 - Functions for random value generation
 - **Important**: Service methods require `*appctx.AppContext` as first parameter
 
 #### Authentication (`internal/auth/`)
+
 - JWT-based authentication with API key support
 - User management with database persistence
 - Middleware for API endpoint protection
 
 #### Database (`internal/database/`)
+
 - GORM-based ORM with PostgreSQL and SQLite support
 - Data stores for auth, messages, and other entities
 - Database migrations and seeding
 
 #### Workers and Lanes (`internal/lanes/`)
+
 - Pipeline execution system with multiple worker types:
   - BashWorker: Execute shell commands
   - CurlWorker: HTTP requests
@@ -88,11 +139,13 @@ golangci-lint run
 - **Important**: Worker parameters use environment service for variable replacement
 
 #### Events (`internal/events/`)
+
 - Real-time event system with WebSocket support
 - Event hub for system-wide notifications
 - API endpoints for event streaming
 
 #### Configuration (`internal/config/`)
+
 - Multi-provider configuration system (file, environment, flags)
 - Context-based configuration management
 - Support for YAML configuration files
@@ -109,6 +162,7 @@ golangci-lint run
 ### Configuration Structure
 
 The application uses a hierarchical configuration system:
+
 - `configuration/` - Template configurations
 - `contexts/` - Environment-specific contexts
 - `services/` - Service definitions (backends, infrastructure, etc.)
@@ -116,6 +170,7 @@ The application uses a hierarchical configuration system:
 ## Common Operations
 
 ### CLI Commands
+
 ```bash
 # Environment operations
 ./locally env [subcommand]
@@ -137,6 +192,7 @@ The application uses a hierarchical configuration system:
 ```
 
 ### API Endpoints
+
 - `/api/auth/*` - Authentication endpoints
 - `/api/events/*` - Event streaming
 - `/api/environment/*` - Environment variable management
@@ -145,28 +201,33 @@ The application uses a hierarchical configuration system:
 ## Development Notes
 
 ### Current State
+
 - The codebase is in active refactoring (branch: `refactor-wip-021024`)
 - Some compilation errors exist due to AppContext parameter changes
 - Tests are partially working
 
 ### Testing Strategy
+
 - Uses `testify` for assertions
 - Test files follow `*_test.go` convention
 - Integration tests for API endpoints
 - Unit tests for core services
 
 ### Database Support
+
 - PostgreSQL for production
 - SQLite for development/testing
 - Database configuration via environment variables
 
 ### Security
+
 - JWT tokens for API authentication
 - API key authentication support
 - Encryption service for sensitive data
 - Azure Key Vault integration
 
 ## Dependencies
+
 - **Web Framework**: Gorilla Mux for HTTP routing
 - **Database**: GORM with PostgreSQL/SQLite drivers
 - **Authentication**: JWT tokens, bcrypt for passwords
@@ -177,6 +238,7 @@ The application uses a hierarchical configuration system:
 - **Testing**: testify for test assertions
 
 ## File Structure
+
 - `cmd/` - Main entry points (CLI and API)
 - `internal/` - Internal application packages
 - `pkg/` - Public packages (interfaces, utilities)
