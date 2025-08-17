@@ -15,8 +15,13 @@ import (
 func GetPaginationFromRequest(r *http.Request) (int, int) {
 	page := r.URL.Query().Get("page")
 	pageSize := r.URL.Query().Get("page_size")
-	cfg := config.GetInstance().Get()
-	defaultPageSize := cfg.GetInt(config.PaginationDefaultPageSizeKey, config.DefaultPageSizeInt)
+	
+	defaultPageSize := config.DefaultPageSizeInt
+	if configInstance := config.GetInstance(); configInstance != nil {
+		if cfg := configInstance.Get(); cfg != nil {
+			defaultPageSize = cfg.GetInt(config.PaginationDefaultPageSizeKey, config.DefaultPageSizeInt)
+		}
+	}
 
 	if page == "" {
 		page = "1"
@@ -28,12 +33,12 @@ func GetPaginationFromRequest(r *http.Request) (int, int) {
 
 	pageInt, err := strconv.Atoi(page)
 	if err != nil {
-		return 1, defaultPageSize
+		return 0, 0
 	}
 
 	pageSizeInt, err := strconv.Atoi(pageSize)
 	if err != nil {
-		return 1, defaultPageSize
+		return 0, 0
 	}
 
 	return pageInt, pageSizeInt
@@ -45,7 +50,13 @@ func HasPaginationRequest(r *http.Request) bool {
 }
 
 func GetFilterFromRequest(r *http.Request) (*filters.Filter, error) {
-	cfg := config.GetInstance().Get()
+	defaultPageSize := config.DefaultPageSizeInt
+	if configInstance := config.GetInstance(); configInstance != nil {
+		if cfg := configInstance.Get(); cfg != nil {
+			defaultPageSize = cfg.GetInt(config.PaginationDefaultPageSizeKey, config.DefaultPageSizeInt)
+		}
+	}
+	
 	urlFilter := r.URL.Query().Get("filter")
 	urlFilter = strings.Trim(urlFilter, "\"")
 	urlPage := r.URL.Query().Get("page")
@@ -57,7 +68,7 @@ func GetFilterFromRequest(r *http.Request) (*filters.Filter, error) {
 	urlPageSize := r.URL.Query().Get("page_size")
 	pageSizeInt, err := strconv.Atoi(urlPageSize)
 	if err != nil {
-		pageSizeInt = cfg.GetInt(config.PaginationDefaultPageSizeKey, config.DefaultPageSizeInt)
+		pageSizeInt = defaultPageSize
 	}
 	var dbFilter *filters.Filter
 	if urlFilter != "" {
@@ -113,6 +124,92 @@ func GetRequestContextFromRequest(r *http.Request) *models.RequestContext {
 	result.Username = username
 	result.RequestID = ctx.GetRequestID()
 	return result
+}
+
+// ParseQueryRequest parses HTTP request query parameters and returns a PaginationRequest
+// Supports query parameters like: ?page=1&page_size=20&filter=name=john&order_by=created_at desc
+func ParseQueryRequest(r *http.Request) *api_models.PaginationRequest {
+	if r == nil {
+		return &api_models.PaginationRequest{}
+	}
+
+	cfg := config.GetInstance()
+	defaultPageSize := config.DefaultPageSizeInt
+	if cfg != nil && cfg.Get() != nil {
+		defaultPageSize = cfg.Get().GetInt(config.PaginationDefaultPageSizeKey, config.DefaultPageSizeInt)
+	}
+
+	query := r.URL.Query()
+	
+	// Parse page
+	page := 1
+	if pageStr := query.Get("page"); pageStr != "" {
+		if pageInt, err := strconv.Atoi(pageStr); err == nil && pageInt > 0 {
+			page = pageInt
+		}
+	}
+
+	// Parse page_size
+	pageSize := defaultPageSize
+	pageSizeKeys := []string{"page_size", "pageSize", "per_page", "perPage", "limit"}
+	for _, key := range pageSizeKeys {
+		if pageSizeStr := query.Get(key); pageSizeStr != "" {
+			if pageSizeInt, err := strconv.Atoi(pageSizeStr); err == nil && pageSizeInt > 0 {
+				pageSize = pageSizeInt
+				break
+			}
+		}
+	}
+
+	// Parse filter
+	filter := ""
+	filterKeys := []string{"filter", "filters", "where"}
+	for _, key := range filterKeys {
+		if filterStr := query.Get(key); filterStr != "" {
+			filter = strings.Trim(filterStr, "\"'")
+			break
+		}
+	}
+
+	// Parse ordering - support multiple formats
+	orderBy := ""
+	
+	// First check for combined ordering parameters
+	combinedOrderKeys := []string{"order_by", "orderBy"}
+	for _, key := range combinedOrderKeys {
+		if orderStr := query.Get(key); orderStr != "" {
+			orderBy = orderStr
+			break
+		}
+	}
+
+	// If no combined ordering found, check for separate sort and order parameters
+	if orderBy == "" {
+		sort := query.Get("sort")
+		order := query.Get("order")
+		if sort != "" {
+			if order != "" {
+				orderBy = sort + " " + order
+			} else {
+				orderBy = sort
+			}
+		}
+	}
+
+	return &api_models.PaginationRequest{
+		Page:     page,
+		PageSize: pageSize,
+		Filter:   filter,
+		Sort:     orderBy, // Using Sort field for order_by data
+		Order:    "",      // Keep Order empty as we combine it into Sort
+	}
+}
+
+// ParseQueryToQueryBuilder directly parses HTTP request query parameters and returns a QueryBuilder
+// This is a convenience function that combines ParseQueryRequest with ToQueryBuilder
+func ParseQueryToQueryBuilder(r *http.Request) *filters.QueryBuilder {
+	req := ParseQueryRequest(r)
+	return req.ToQueryBuilder()
 }
 
 func NewActivityFromContext(ctx *appctx.AppContext) *models.Activity {

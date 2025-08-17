@@ -24,7 +24,7 @@ type MockTenantDataStore struct {
 // Helper function to setup service with mock
 func setupTenantServiceWithMock(mockStore *MockTenantDataStore) interfaces.TenantServiceInterface {
 	Reset() // Reset singleton for test isolation
-	Initialize(mockStore, nil, nil, nil, nil)
+	Initialize(mockStore, nil, nil, nil, nil, nil)
 	return GetInstance()
 }
 

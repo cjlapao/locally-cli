@@ -15,7 +15,7 @@ type JSONSlice[T any] []T
 // Value implements driver.Valuer interface for JSON marshaling
 func (j JSONSlice[T]) Value() (driver.Value, error) {
 	if j == nil {
-		return nil, nil
+		j = make(JSONSlice[T], 0)
 	}
 	return json.Marshal(j)
 }
@@ -23,7 +23,7 @@ func (j JSONSlice[T]) Value() (driver.Value, error) {
 // Scan implements sql.Scanner interface for JSON unmarshaling
 func (j *JSONSlice[T]) Scan(value interface{}) error {
 	if value == nil {
-		*j = nil
+		*j = make(JSONSlice[T], 0)
 		return nil
 	}
 

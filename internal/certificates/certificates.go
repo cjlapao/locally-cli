@@ -9,8 +9,10 @@ import (
 )
 
 // Initialize initializes the claim service
-func Initialize(certificatesStore stores.CertificatesDataStoreInterface) interfaces.CertificateServiceInterface {
-	return service.Initialize(certificatesStore)
+func Initialize(certificatesStore stores.CertificatesDataStoreInterface,
+	tenantStore stores.TenantDataStoreInterface,
+) interfaces.CertificateServiceInterface {
+	return service.Initialize(certificatesStore, tenantStore)
 }
 
 // GetInstance returns the claim service instance

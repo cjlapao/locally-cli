@@ -37,7 +37,7 @@ func (i *IntermediateCertificate) TableName() string {
 type Certificate struct {
 	BaseModelWithTenant
 	Type                    pkg_types.CertificateType `json:"type" yaml:"type" gorm:"column:type;type:varchar(255);not null"`
-	Name                    string                    `json:"name" yaml:"name" gorm:"column:name;type:varchar(255);not null"`
+	Name                    string                    `json:"name" yaml:"name" gorm:"column:name;type:varchar(255);not null;unique"`
 	Config                  CertificateConfig         `json:"config" yaml:"config" gorm:"foreignKey:CertificateID;references:ID;constraint:OnDelete:CASCADE"`
 	PemCertificate          string                    `json:"pem_certificate" yaml:"pem_certificate" gorm:"column:pem_certificate;type:text;not null;unique"`
 	PemPrivateKey           string                    `json:"pem_private_key" yaml:"pem_private_key" gorm:"column:pem_private_key;type:text;not null;unique"`
@@ -52,14 +52,15 @@ func (c *Certificate) TableName() string {
 
 type CertificateConfig struct {
 	BaseModelWithTenant
+	CertificateType           pkg_types.CertificateType    `json:"certificate_type" yaml:"certificate_type" gorm:"column:certificate_type;type:varchar(255);not null"`
 	CertificateID             string                       `json:"certificate_id" yaml:"certificate_id" gorm:"column:certificate_id;type:uuid;not null;unique"`
 	Country                   string                       `json:"country" yaml:"country" gorm:"column:country;type:varchar(255);not null"`
 	State                     string                       `json:"state" yaml:"state" gorm:"column:state;type:varchar(255);not null"`
 	Organization              string                       `json:"organization" yaml:"organization" gorm:"column:organization;type:varchar(255);not null"`
 	CommonName                string                       `json:"commonName" yaml:"commonName" gorm:"column:common_name;type:varchar(255);not null"`
 	City                      string                       `json:"city" yaml:"city" gorm:"column:city;type:varchar(255);not null"`
-	FQDNs                     types.StringSlice            `json:"fqdns" yaml:"fqdns" gorm:"column:fqdns;type:json;not null;default:[]"`
-	IpAddresses               types.StringSlice            `json:"ipAddresses" yaml:"ipAddresses" gorm:"column:ip_addresses;type:json;not null;default:[]"`
+	FQDNs                     types.StringSlice            `json:"fqdns" yaml:"fqdns" gorm:"column:fqdns;type:text;not null;default:[]"`
+	IpAddresses               types.StringSlice            `json:"ipAddresses" yaml:"ipAddresses" gorm:"column:ip_addresses;type:text;not null;default:[]"`
 	OrganizationalUnit        string                       `json:"organizationalUnit" yaml:"organizationalUnit" gorm:"column:organizational_unit;type:varchar(255);not null"`
 	AdminEmailAddress         string                       `json:"adminEmailAddress" yaml:"adminEmailAddress" gorm:"column:admin_email_address;type:varchar(255);not null"`
 	ExpiresInYears            int                          `json:"expiresInYears" yaml:"expiresInYears" gorm:"column:expires_in_years;type:int;not null"`

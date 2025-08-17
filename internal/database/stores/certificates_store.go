@@ -10,6 +10,7 @@ import (
 	"github.com/cjlapao/locally-cli/internal/database"
 	"github.com/cjlapao/locally-cli/internal/database/entities"
 	"github.com/cjlapao/locally-cli/internal/database/filters"
+	db_utils "github.com/cjlapao/locally-cli/internal/database/utils"
 	"github.com/cjlapao/locally-cli/internal/logging"
 	"github.com/cjlapao/locally-cli/pkg/diagnostics"
 	pkg_types "github.com/cjlapao/locally-cli/pkg/types"
@@ -24,13 +25,14 @@ var (
 )
 
 type CertificatesDataStoreInterface interface {
-	GetRootCertificate(ctx *appctx.AppContext, id string) (*entities.Certificate, *diagnostics.Diagnostics)
+	GetRootCertificate(ctx *appctx.AppContext) (*entities.Certificate, *diagnostics.Diagnostics)
 	GetTenantIntermediateCertificate(ctx *appctx.AppContext, tenantID string) (*entities.Certificate, *diagnostics.Diagnostics)
 	GetCertificates(ctx *appctx.AppContext, tenantID string, query_builder *filters.QueryBuilder) (*filters.QueryBuilderResponse[entities.Certificate], *diagnostics.Diagnostics)
 	CreateCertificate(ctx *appctx.AppContext, tenantID string, certificate *entities.Certificate) (*entities.Certificate, *diagnostics.Diagnostics)
 	DeleteCertificate(ctx *appctx.AppContext, tenantID string, id string) *diagnostics.Diagnostics
 	// new ones
-	GetCertificateBy(ctx *appctx.AppContext, tenantId string, certType pkg_types.CertificateType, slugOrId string) (*entities.Certificate, *diagnostics.Diagnostics)
+	GetCertificateBy(ctx *appctx.AppContext, tenantId string, slugOrId string) (*entities.Certificate, *diagnostics.Diagnostics)
+	GetCertificateByType(ctx *appctx.AppContext, tenantId string, certType pkg_types.CertificateType, slugOrId string) (*entities.Certificate, *diagnostics.Diagnostics)
 	GetCertificatesByType(ctx *appctx.AppContext, tenantId string, certType pkg_types.CertificateType) ([]entities.Certificate, *diagnostics.Diagnostics)
 }
 
@@ -76,24 +78,40 @@ func InitializeCertificatesDataStore() (CertificatesDataStoreInterface, *diagnos
 
 func (s *CertificatesDataStore) Migrate() *diagnostics.Diagnostics {
 	diag := diagnostics.New("migrate_certificates_data_store")
-	if err := s.GetDB().AutoMigrate(&entities.CertificateConfig{}); err != nil {
-		diag.AddError("failed_to_migrate_certificate_configs_table", "failed to migrate certificate configs table", "certificates_data_store", nil)
-		return diag
-	}
 	if err := s.GetDB().AutoMigrate(&entities.Certificate{}); err != nil {
 		diag.AddError("failed_to_migrate_certificates_table", "failed to migrate certificates table", "certificates_data_store", nil)
 		return diag
 	}
-
+	if err := s.GetDB().AutoMigrate(&entities.CertificateConfig{}); err != nil {
+		diag.AddError("failed_to_migrate_certificate_configs_table", "failed to migrate certificate configs table", "certificates_data_store", nil)
+		return diag
+	}
 	return diag
 }
 
-func (s *CertificatesDataStore) GetCertificateBy(ctx *appctx.AppContext, tenantId string, certType pkg_types.CertificateType, slugOrId string) (*entities.Certificate, *diagnostics.Diagnostics) {
+func (s *CertificatesDataStore) GetCertificateBy(ctx *appctx.AppContext, tenantId string, slugOrId string) (*entities.Certificate, *diagnostics.Diagnostics) {
 	diag := diagnostics.New("store_get_certificate_by")
 	var certificate entities.Certificate
 	db := s.GetDB()
 	if err := db.Preload("Config").
-		Where("tenant_id = ? AND type = ? AND (slug = ? OR id = ? or name = ?)", tenantId, certType, slugOrId, slugOrId, slugOrId).
+		Where("tenant_id = ? AND (slug = ? OR id = ? or name = ?)", tenantId, slugOrId, slugOrId, slugOrId).
+		Order("created_at desc").
+		First(&certificate).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, diag
+		}
+		diag.AddError("failed_to_get_certificate_by", "failed to get certificate by", "certificates_data_store", nil)
+		return nil, diag
+	}
+	return &certificate, diag
+}
+
+func (s *CertificatesDataStore) GetCertificateByType(ctx *appctx.AppContext, tenantId string, certType pkg_types.CertificateType, slugOrId string) (*entities.Certificate, *diagnostics.Diagnostics) {
+	diag := diagnostics.New("store_get_certificate_by_type")
+	var certificate entities.Certificate
+	db := s.GetDB()
+	if err := db.Preload("Config").
+		Where("tenant_id = ? AND type = ? AND (slug = ? OR id = ? OR name = ?)", tenantId, certType, slugOrId, slugOrId, slugOrId).
 		Order("created_at desc").
 		First(&certificate).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -123,7 +141,7 @@ func (s *CertificatesDataStore) GetRootCertificate(ctx *appctx.AppContext) (*ent
 	diag := diagnostics.New("store_get_root_certificate")
 	tenantID := config.GlobalTenantID
 	rootCertificateID := config.GlobalRootCertificateID
-	certificate, certificateDiag := s.GetCertificateBy(ctx, tenantID, pkg_types.CertificateTypeRoot, rootCertificateID)
+	certificate, certificateDiag := s.GetCertificateBy(ctx, tenantID, rootCertificateID)
 	if certificateDiag.HasErrors() {
 		diag.Append(certificateDiag)
 		return nil, certificateDiag
@@ -138,7 +156,7 @@ func (s *CertificatesDataStore) GetRootCertificate(ctx *appctx.AppContext) (*ent
 
 func (s *CertificatesDataStore) GetTenantIntermediateCertificate(ctx *appctx.AppContext, tenantID string) (*entities.Certificate, *diagnostics.Diagnostics) {
 	diag := diagnostics.New("store_get_tenant_intermediate_certificate")
-	certificate, certificateDiag := s.GetCertificateBy(ctx, tenantID, pkg_types.CertificateTypeIntermediate, tenantID)
+	certificate, certificateDiag := s.GetCertificateByType(ctx, tenantID, pkg_types.CertificateTypeIntermediate, tenantID)
 	if certificateDiag.HasErrors() {
 		diag.Append(certificateDiag)
 		return nil, certificateDiag
@@ -152,20 +170,20 @@ func (s *CertificatesDataStore) GetTenantIntermediateCertificate(ctx *appctx.App
 
 func (s *CertificatesDataStore) GetCertificates(ctx *appctx.AppContext, tenantID string, queryBuilder *filters.QueryBuilder) (*filters.QueryBuilderResponse[entities.Certificate], *diagnostics.Diagnostics) {
 	diag := diagnostics.New("store_get_certificates")
-	var certificates []entities.Certificate
 	db := s.GetDB()
-	db.Preload("Config")
+	db = db.Preload("Config")
 
-	if queryBuilder != nil {
-		db = queryBuilder.Apply(db)
+	if queryBuilder == nil {
+		queryBuilder = filters.NewQueryBuilder("")
 	}
 
-	if err := db.Find(&certificates).Error; err != nil {
+	result, err := db_utils.QueryDatabase[entities.Certificate](db, tenantID, queryBuilder)
+	if err != nil {
 		diag.AddError("failed_to_get_certificates", "failed to get certificates", "certificates_data_store", nil)
 		return nil, diag
 	}
 
-	return certificates, diag
+	return result, diag
 }
 
 func (s *CertificatesDataStore) CreateCertificate(ctx *appctx.AppContext, tenantID string, certificate *entities.Certificate) (*entities.Certificate, *diagnostics.Diagnostics) {
@@ -179,21 +197,41 @@ func (s *CertificatesDataStore) CreateCertificate(ctx *appctx.AppContext, tenant
 	certificate.Slug = utils.Slugify(certificate.Name)
 	certificate.CreatedAt = time.Now()
 	certificate.UpdatedAt = time.Now()
+	if certificate.Config.ID == "" {
+		certificate.Config.ID = uuid.New().String()
+	}
+	certificate.Config.TenantID = tenantID
+	certificate.Config.CreatedAt = time.Now()
+	certificate.Config.UpdatedAt = time.Now()
+	certificate.Config.CertificateID = certificate.ID
+	certificate.Config.Slug = utils.Slugify(certificate.Name + "-config")
+	certificate.Config.CreatedBy = certificate.CreatedBy
+	if certificate.Config.FQDNs == nil {
+		certificate.Config.FQDNs = []string{}
+	}
+	if certificate.Config.IpAddresses == nil {
+		certificate.Config.IpAddresses = []string{}
+	}
 
 	// checking if the certificate is already in the database
-	existingCertificate, err := s.GetCertificateBy(ctx, tenantID, certificate.Type, certificate.Slug)
-	if err != nil {
-		diag.AddError("failed_to_get_certificate_by_slug", "failed to get certificate by slug", "certificates_data_store", nil)
+	existingCertificate, existCertificateDiag := s.GetCertificateByType(ctx, tenantID, certificate.Type, certificate.ID)
+	if existCertificateDiag.HasErrors() {
+		diag.Append(existCertificateDiag)
 		return nil, diag
 	}
 	if existingCertificate != nil {
-		diag.AddError("certificate_already_exists", "certificate already exists", "certificates_data_store", nil)
+		diag.AddError("certificate_already_exists", "certificate already exists", "certificates_data_store", map[string]interface{}{
+			"certificate_id": certificate.ID,
+		})
 		return nil, diag
 	}
 
 	db := s.GetDB()
-	if err := db.Create(certificate).Error; err != nil {
-		diag.AddError("failed_to_create_certificate", "failed to create certificate", "certificates_data_store", nil)
+	if err := db.Save(certificate).Error; err != nil {
+		diag.AddError("failed_to_create_certificate", "failed to create certificate", "certificates_data_store", map[string]interface{}{
+			"error":          err.Error(),
+			"certificate_id": certificate.ID,
+		})
 		return nil, diag
 	}
 

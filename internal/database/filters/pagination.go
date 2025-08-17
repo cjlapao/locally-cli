@@ -126,11 +126,10 @@ func (pf *PaginationFilter) GetTotalPages() int {
 
 // GetOffset returns the offset for database queries
 func (pf *PaginationFilter) GetOffset() int {
-	if pf.Total == 0 {
-		return 0
-	}
 	offset := pf.GetPageIndex() * pf.PageSize
-	if offset > int(pf.Total) {
+	
+	// Only adjust for total if we have a total count and we're beyond it
+	if pf.Total > 0 && offset > int(pf.Total) {
 		pf.Page = 1
 		offset = int(pf.Total) - pf.PageSize
 		if offset < 0 {

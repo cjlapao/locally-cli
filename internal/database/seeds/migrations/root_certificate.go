@@ -2,15 +2,17 @@ package migrations
 
 import (
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/cjlapao/locally-cli/internal/appctx"
 	"github.com/cjlapao/locally-cli/internal/certificates/interfaces"
 	"github.com/cjlapao/locally-cli/internal/config"
 	"github.com/cjlapao/locally-cli/internal/database/entities"
+	"github.com/cjlapao/locally-cli/internal/database/stores"
 	"github.com/cjlapao/locally-cli/internal/mappers"
 	"github.com/cjlapao/locally-cli/pkg/diagnostics"
+	pkg_types "github.com/cjlapao/locally-cli/pkg/types"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -18,13 +20,15 @@ import (
 type RootCertificateMigrationWorker struct {
 	db                 *gorm.DB
 	certificateService interfaces.CertificateServiceInterface
+	certificateStore   stores.CertificatesDataStoreInterface
 }
 
 // NewRootCertificateMigrationWorker creates a new example seed worker
-func NewRootCertificateMigrationWorker(db *gorm.DB, certificateService interfaces.CertificateServiceInterface) *RootCertificateMigrationWorker {
+func NewRootCertificateMigrationWorker(db *gorm.DB, certificateService interfaces.CertificateServiceInterface, certificateStore stores.CertificatesDataStoreInterface) *RootCertificateMigrationWorker {
 	return &RootCertificateMigrationWorker{
 		db:                 db,
 		certificateService: certificateService,
+		certificateStore:   certificateStore,
 	}
 }
 
@@ -47,9 +51,9 @@ func (e *RootCertificateMigrationWorker) GetVersion() int {
 func (e *RootCertificateMigrationWorker) Up(ctx *appctx.AppContext) *diagnostics.Diagnostics {
 	diag := diagnostics.New("root_certificate_migration_up")
 
-	var existingRootCertificate entities.RootCertificate
+	var existingRootCertificate entities.Certificate
 	needToCreate := false
-	if dbErr := e.db.Where("slug = ?", config.RootCertificateSlug).First(&existingRootCertificate).Error; dbErr != nil {
+	if dbErr := e.db.Where("id = ?", config.GlobalRootCertificateID).First(&existingRootCertificate).Error; dbErr != nil {
 		if errors.Is(dbErr, gorm.ErrRecordNotFound) {
 			needToCreate = true
 		} else {
@@ -64,23 +68,32 @@ func (e *RootCertificateMigrationWorker) Up(ctx *appctx.AppContext) *diagnostics
 	}
 
 	if needToCreate {
-		rootCertificate, certDiag := e.certificateService.GenerateRootCertificate(ctx)
+		rootCertificate, certDiag := e.certificateService.GenerateX509RootCertificate(ctx)
 		if certDiag.HasErrors() {
 			diag.Append(certDiag)
 			return diag
 		}
+
 		dbRootCertificate := mappers.MapX509CertificateToEntity(rootCertificate)
 		dbRootCertificate.ID = config.GlobalRootCertificateID
+		dbRootCertificate.TenantID = config.GlobalTenantID
+		dbRootCertificate.CreatedBy = config.DefaultSuperUserUserID
+		dbRootCertificate.Type = pkg_types.CertificateTypeRoot
+		dbRootCertificate.Config.ID = uuid.New().String()
+		dbRootCertificate.Config.TenantID = config.GlobalTenantID
+		dbRootCertificate.Config.CreatedBy = config.DefaultSuperUserUserID
+
 		dbRootCertificate.CreatedAt = time.Now()
 		dbRootCertificate.UpdatedAt = time.Now()
 
-		if dbErr := e.db.Create(&dbRootCertificate).Error; dbErr != nil {
-			diag.AddError("failed_to_create_root_certificate", fmt.Sprintf("failed to create root certificate: %v", dbErr), "root_certificate_migration", nil)
+		createdCertificate, createIntermediateCertDiag := e.certificateStore.CreateCertificate(ctx, config.GlobalTenantID, &dbRootCertificate)
+		if createIntermediateCertDiag.HasErrors() {
+			diag.Append(createIntermediateCertDiag)
 			return diag
 		}
 
 		diag.AddPathEntry("root_certificate_created", "root_certificate_migration", map[string]interface{}{
-			"root_certificate_id": dbRootCertificate.ID,
+			"root_certificate_id": createdCertificate.ID,
 		})
 	}
 

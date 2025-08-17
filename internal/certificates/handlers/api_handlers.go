@@ -2,12 +2,17 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
 
+	"github.com/cjlapao/locally-cli/internal/api"
 	api_types "github.com/cjlapao/locally-cli/internal/api/types"
 	"github.com/cjlapao/locally-cli/internal/appctx"
+	"github.com/cjlapao/locally-cli/internal/certificates/errors"
 	"github.com/cjlapao/locally-cli/internal/certificates/interfaces"
+	"github.com/cjlapao/locally-cli/internal/config"
 	"github.com/cjlapao/locally-cli/pkg/models"
+	"github.com/cjlapao/locally-cli/pkg/utils"
 )
 
 type CertificatesApiHandlers struct {
@@ -22,6 +27,15 @@ func NewCertificatesApiHandler(certificateService interfaces.CertificateServiceI
 
 func (h *CertificatesApiHandlers) Routes() []api_types.Route {
 	return []api_types.Route{
+		{
+			Method:      http.MethodGet,
+			Path:        "/v1/certificates",
+			Handler:     h.HandleGetCertificates,
+			Description: "Get all certificates",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: models.ApiKeySecurityLevelAny,
+			},
+		},
 		{
 			Method:      http.MethodGet,
 			Path:        "/v1/certificates/root",
@@ -70,27 +84,50 @@ func (h *CertificatesApiHandlers) Routes() []api_types.Route {
 	}
 }
 
+func (h *CertificatesApiHandlers) HandleGetCertificates(w http.ResponseWriter, r *http.Request) {
+	ctx := appctx.FromContext(r.Context())
+	ctx.LogInfo("Getting all certificates")
+	pagination := utils.ParseQueryRequest(r)
+	tenantID := ctx.GetTenantID()
+	if tenantID == "" {
+		ctx.Log().Error("Tenant ID is missing")
+		api.WriteError(w, r, http.StatusBadRequest, errors.ErrorMissingTenantID, "Tenant ID is missing")
+		return
+	}
+
+	certificates, diag := h.certificateService.GetCertificates(ctx, tenantID, pagination)
+	if diag.HasErrors() {
+		ctx.Log().Error("Error getting certificates", diag.Errors)
+		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, errors.ErrorGettingCertificates, "Error getting certificates", diag)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(certificates)
+
+	ctx.Log().Info("Certificates retrieved successfully")
+}
+
 func (h *CertificatesApiHandlers) HandleGetRootCertificate(w http.ResponseWriter, r *http.Request) {
 	ctx := appctx.FromContext(r.Context())
 	ctx.LogInfo("Getting the root certificate")
 
-	// dbCertificates, diag := h.certificateService.GetCertificate(ctx, config.RootCertificateSlug)
-	// if diag.HasErrors() {
-	// 	ctx.Log().Error("Error getting root certificate", diag.Errors)
-	// 	api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, errors.ErrorGettingRootCertificate, "Error getting root certificate", diag)
-	// 	return
-	// }
-	// if dbCertificates == nil {
-	// 	ctx.Log().Error("Root certificate not found")
-	// 	api.WriteNotFound(w, r, "Root certificate not found")
-	// 	return
-	// }
+	certificate, diag := h.certificateService.GetCertificateBy(ctx, config.GlobalTenantID, config.GlobalRootCertificateID)
+	if diag.HasErrors() {
+		ctx.Log().Error("Error getting root certificate", diag.Errors)
+		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, errors.ErrorGettingRootCertificate, "Error getting root certificate", diag)
+		return
+	}
+	if certificate == nil {
+		ctx.Log().Error("Root certificate not found")
+		api.WriteNotFound(w, r, "Root certificate not found")
+		return
+	}
 
-	// dtoModel := mappers.MapRootCertificateToDto(dbCertificates.GetCertificate())
-
-	// w.Header().Set("Content-Type", "application/json")
-	// w.WriteHeader(http.StatusOK)
-	// json.NewEncoder(w).Encode(dtoModel)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(certificate)
 
 	ctx.Log().Info("Root certificate retrieved successfully")
 }

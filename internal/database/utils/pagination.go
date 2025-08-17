@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"errors"
 	"math"
 
 	"github.com/cjlapao/locally-cli/internal/config"
@@ -221,12 +222,20 @@ func QueryDatabase[T any](
 	var items []T
 	var item T
 	total := int64(0)
+	if db == nil {
+		return nil, errors.New("database is query is nil")
+	}
+
+	// applying the tenant_id filter
+	if tenantID != "" {
+		db = db.Where("tenant_id = ?", tenantID)
+	}
 
 	if query_builder == nil {
 		query_builder = filters.NewQueryBuilder("")
 	}
 
-	// Get total count
+	// Get total count for the database and query builder
 	countQuery := db.Model(&item)
 	if tenantID != "" {
 		countQuery = countQuery.Where("tenant_id = ?", tenantID)
@@ -235,7 +244,7 @@ func QueryDatabase[T any](
 		return nil, err
 	}
 
-	query := query_builder.Apply(db, tenantID)
+	query := query_builder.Apply(db)
 
 	if err := query.Find(&items).Error; err != nil {
 		return nil, err

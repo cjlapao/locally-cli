@@ -2,6 +2,7 @@
 package tenant
 
 import (
+	certificates_interfaces "github.com/cjlapao/locally-cli/internal/certificates/interfaces"
 	claimsvc "github.com/cjlapao/locally-cli/internal/claim/interfaces"
 	"github.com/cjlapao/locally-cli/internal/database/stores"
 	rolesvc "github.com/cjlapao/locally-cli/internal/role/interfaces"
@@ -13,8 +14,14 @@ import (
 )
 
 // Initialize initializes the tenant service
-func Initialize(tenantStore stores.TenantDataStoreInterface, userService usersvc.UserServiceInterface, roleService rolesvc.RoleServiceInterface, systemService system_interfaces.SystemServiceInterface, claimService claimsvc.ClaimServiceInterface) interfaces.TenantServiceInterface {
-	return service.Initialize(tenantStore, userService, roleService, systemService, claimService)
+func Initialize(tenantStore stores.TenantDataStoreInterface,
+	userService usersvc.UserServiceInterface,
+	roleService rolesvc.RoleServiceInterface,
+	systemService system_interfaces.SystemServiceInterface,
+	claimService claimsvc.ClaimServiceInterface,
+	certificateService certificates_interfaces.CertificateServiceInterface,
+) interfaces.TenantServiceInterface {
+	return service.Initialize(tenantStore, userService, roleService, systemService, claimService, certificateService)
 }
 
 // GetInstance returns the tenant service instance

@@ -31,8 +31,6 @@ import (
 
 type X509RootCertificate struct {
 	prefix        string
-	cfg           *config.Config
-	ctx           *appctx.AppContext
 	name          string
 	slug          string
 	privateKey    *rsa.PrivateKey
@@ -43,17 +41,27 @@ type X509RootCertificate struct {
 	privateKeyPem []byte
 }
 
-func NewX509RootCertificate(ctx *appctx.AppContext, name string, certConfig models.CertificateConfig) interfaces.X509Certificate {
-	cfg := config.GetInstance().Get()
+func NewX509RootCertificate(name string, certConfig models.CertificateConfig) interfaces.X509Certificate {
 	cert := &X509RootCertificate{
 		prefix:        "root_ca",
-		cfg:           cfg,
-		ctx:           ctx,
 		name:          name,
 		configuration: certConfig,
 	}
 	cert.slug = utils.Slugify(name)
 
+	return cert
+}
+
+func NewEmptyX509RootCertificate() interfaces.X509Certificate {
+	cert := &X509RootCertificate{
+		prefix: "root_ca",
+		name:   "unknown",
+		configuration: models.CertificateConfig{
+			FQDNs:       []string{},
+			IpAddresses: []string{},
+		},
+	}
+	cert.slug = utils.Slugify("unknown")
 	return cert
 }
 
@@ -170,13 +178,15 @@ func (c *X509RootCertificate) Generate(ctx *appctx.AppContext) (interfaces.X509C
 	c.pem = rootPemCertificate
 	c.csr = csr
 	c.privateKeyPem = generatePemPrivateKey(c.privateKey)
+	c.configuration.CertificateType = pkg_types.CertificateTypeRoot
 
 	return c, diag
 }
 
 func (c *X509RootCertificate) LoadFromFile(ctx *appctx.AppContext) *diagnostics.Diagnostics {
 	diag := diagnostics.New("load_certificate")
-	rootFolder := c.cfg.StoragePath()
+	cfg := config.GetInstance().Get()
+	rootFolder := cfg.StoragePath()
 	certificateFolder := helper.JoinPath(rootFolder, constants.CertificateStorageFolder)
 	// create the folder if it doesn't exist
 	if !helper.FileExists(certificateFolder) {
@@ -229,7 +239,8 @@ func (c *X509RootCertificate) LoadFromFile(ctx *appctx.AppContext) *diagnostics.
 
 func (c *X509RootCertificate) SaveToFile(ctx *appctx.AppContext) *diagnostics.Diagnostics {
 	diag := diagnostics.New("save_certificate")
-	rootFolder := c.cfg.StoragePath()
+	cfg := config.GetInstance().Get()
+	rootFolder := cfg.StoragePath()
 	certificateFolder := helper.JoinPath(rootFolder, constants.CertificateStorageFolder)
 	// create the folder if it doesn't exist
 	if !helper.FileExists(certificateFolder) {
@@ -307,7 +318,8 @@ func (c *X509RootCertificate) Parse(ctx *appctx.AppContext, certificate string, 
 
 func (c *X509RootCertificate) Install(ctx *appctx.AppContext) *diagnostics.Diagnostics {
 	diag := diagnostics.New("install_certificate")
-	rootFolder := c.cfg.StoragePath()
+	cfg := config.GetInstance().Get()
+	rootFolder := cfg.StoragePath()
 	certificateFolder := helper.JoinPath(rootFolder, constants.CertificateStorageFolder)
 	// create the folder if it doesn't exist
 	if !helper.FileExists(certificateFolder) {
@@ -316,7 +328,7 @@ func (c *X509RootCertificate) Install(ctx *appctx.AppContext) *diagnostics.Diagn
 
 	certificateFileName := helper.JoinPath(certificateFolder, c.GetCertificateFileName())
 	instalSvc := NewCertificateInstaller()
-	instalSvc.InstallCertificate(c.ctx, certificateFileName, RootStore)
+	instalSvc.InstallCertificate(ctx, certificateFileName, RootStore)
 	return diag
 }
 
@@ -346,7 +358,6 @@ func (c *X509RootCertificate) GetPemPrivateKey() []byte {
 
 func (c *X509RootCertificate) FromDatabase(ctx *appctx.AppContext, certificate *entities.Certificate) *diagnostics.Diagnostics {
 	diag := diagnostics.New("from_database")
-	cfg := config.GetInstance().Get()
 	if parseDiag := c.Parse(ctx, certificate.PemCertificate, certificate.PemPrivateKey); parseDiag.HasErrors() {
 		diag.Append(parseDiag)
 		return diag
@@ -354,8 +365,6 @@ func (c *X509RootCertificate) FromDatabase(ctx *appctx.AppContext, certificate *
 	config := mappers.MapCertificateConfigToDto(certificate.Config)
 	c.name = certificate.Name
 	c.slug = certificate.Slug
-	c.ctx = ctx
-	c.cfg = cfg
 	c.configuration = config
 	return diag
 }

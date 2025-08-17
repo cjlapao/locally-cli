@@ -12,4 +12,10 @@ const (
 	ErrorCreatingServerCertificate       = "CRT008"
 	ErrorGettingClientCertificate        = "CRT009"
 	ErrorCreatingClientCertificate       = "CRT010"
+
+	// Pagination errors
+	ErrorParsingPaginationRequest = "CRT011"
+
+	// Tenant errors
+	ErrorMissingTenantID = "CRT012"
 )

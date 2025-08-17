@@ -34,17 +34,20 @@ type IntermediateCertificate struct {
 
 type Certificate struct {
 	BaseModelWithTenant
-	RootCertificateID         string             `json:"root_certificate_id,omitempty" yaml:"root_certificate_id,omitempty"`
-	IntermediateCertificateID string             `json:"intermediate_certificate_id,omitempty" yaml:"intermediate_certificate_id,omitempty"`
-	Name                      string             `json:"name" yaml:"name"`
-	Slug                      string             `json:"slug" yaml:"slug"`
-	Config                    *CertificateConfig `json:"config" yaml:"config"`
-	PemCertificate            string             `json:"PemCertificate" yaml:"PemCertificate"`
-	PemPrivateKey             string             `json:"PemPrivateKey" yaml:"PemPrivateKey"`
-	Csr                       string             `json:"Csr" yaml:"Csr"`
+	Type                    types.CertificateType    `json:"type" yaml:"type"`
+	Name                    string                   `json:"name" yaml:"name"`
+	Config                  CertificateConfig        `json:"config" yaml:"config"`
+	PemCertificate          string                   `json:"PemCertificate" yaml:"PemCertificate"`
+	PemPrivateKey           string                   `json:"PemPrivateKey" yaml:"PemPrivateKey"`
+	Csr                     string                   `json:"Csr" yaml:"Csr"`
+	RootCertificate         *Certificate             `json:"root_certificate,omitempty" yaml:"root_certificate,omitempty"`
+	IntermediateCertificate *IntermediateCertificate `json:"intermediate_certificate,omitempty" yaml:"intermediate_certificate,omitempty"`
 }
 
 type CertificateConfig struct {
+	BaseModelWithTenant
+	CertificateType           types.CertificateType    `json:"certificate_type" yaml:"certificate_type"`
+	CertificateID             string                   `json:"certificate_id" yaml:"certificate_id"`
 	Country                   string                   `json:"country" yaml:"country"`
 	State                     string                   `json:"state" yaml:"state"`
 	Organization              string                   `json:"organization" yaml:"organization"`
@@ -86,13 +89,12 @@ func (c *CertificateConfig) Validate() *diagnostics.Diagnostics {
 	if c.ExpiresInYears == 0 {
 		diag.AddError("expires_in_years_required", "expires in years is required", moduleName, nil)
 	}
-	if c.Password == "" {
-		diag.AddError("password_required", "password is required", moduleName, nil)
+	if c.CertificateType == types.CertificateTypeIntermediate || c.CertificateType == types.CertificateTypeCertificate {
+		if c.RootCertificateID == "" {
+			diag.AddError("root_certificate_id_required", "root certificate id is required", moduleName, nil)
+		}
 	}
-	if c.RootCertificateID == "" {
-		diag.AddError("root_certificate_id_required", "root certificate id is required", moduleName, nil)
-	}
-	if c.IntermediateCertificateID == "" {
+	if c.CertificateType == types.CertificateTypeCertificate && c.IntermediateCertificateID == "" {
 		diag.AddError("intermediate_certificate_id_required", "intermediate certificate id is required", moduleName, nil)
 	}
 	return diag

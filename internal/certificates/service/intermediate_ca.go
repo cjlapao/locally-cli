@@ -31,8 +31,6 @@ import (
 
 type X509IntermediateCertificate struct {
 	prefix        string
-	cfg           *config.Config
-	ctx           *appctx.AppContext
 	name          string
 	slug          string
 	privateKey    *rsa.PrivateKey
@@ -44,18 +42,29 @@ type X509IntermediateCertificate struct {
 	privateKeyPem []byte
 }
 
-func NewX509IntermediateCertificate(ctx *appctx.AppContext, name string, rootCA interfaces.X509Certificate, certConfig models.CertificateConfig) interfaces.X509Certificate {
-	cfg := config.GetInstance().Get()
+func NewX509IntermediateCertificate(name string, rootCA interfaces.X509Certificate, certConfig models.CertificateConfig) interfaces.X509Certificate {
 	cert := &X509IntermediateCertificate{
 		prefix:        "intermediate_ca",
-		cfg:           cfg,
-		ctx:           ctx,
 		name:          name,
 		rootCA:        rootCA,
 		configuration: certConfig,
 	}
 	cert.slug = utils.Slugify(name)
 
+	return cert
+}
+
+func NewEmptyX509IntermediateCertificate() interfaces.X509Certificate {
+	cert := &X509IntermediateCertificate{
+		prefix: "intermediate_ca",
+		name:   "unknown",
+		rootCA: nil,
+		configuration: models.CertificateConfig{
+			FQDNs:       []string{},
+			IpAddresses: []string{},
+		},
+	}
+	cert.slug = utils.Slugify("unknown")
 	return cert
 }
 
@@ -165,13 +174,15 @@ func (c *X509IntermediateCertificate) Generate(ctx *appctx.AppContext) (interfac
 	c.pem = append(c.pem, c.rootCA.GetPemCertificate()...)
 	c.csr = csr
 	c.privateKeyPem = generatePemPrivateKey(priv)
+	c.configuration.CertificateType = pkg_types.CertificateTypeIntermediate
 
 	return c, diag
 }
 
 func (c *X509IntermediateCertificate) LoadFromFile(ctx *appctx.AppContext) *diagnostics.Diagnostics {
 	diag := diagnostics.New("load_certificate")
-	rootFolder := c.cfg.StoragePath()
+	cfg := config.GetInstance().Get()
+	rootFolder := cfg.StoragePath()
 	certificateFolder := helper.JoinPath(rootFolder, constants.CertificateStorageFolder)
 	// create the folder if it doesn't exist
 	if !helper.FileExists(certificateFolder) {
@@ -228,7 +239,8 @@ func (c *X509IntermediateCertificate) LoadFromFile(ctx *appctx.AppContext) *diag
 
 func (c *X509IntermediateCertificate) SaveToFile(ctx *appctx.AppContext) *diagnostics.Diagnostics {
 	diag := diagnostics.New("save_certificate")
-	rootFolder := c.cfg.StoragePath()
+	cfg := config.GetInstance().Get()
+	rootFolder := cfg.StoragePath()
 	certificateFolder := helper.JoinPath(rootFolder, constants.CertificateStorageFolder)
 	// create the folder if it doesn't exist
 	if !helper.FileExists(certificateFolder) {
@@ -307,7 +319,8 @@ func (c *X509IntermediateCertificate) Parse(ctx *appctx.AppContext, certificate 
 
 func (c *X509IntermediateCertificate) Install(ctx *appctx.AppContext) *diagnostics.Diagnostics {
 	diag := diagnostics.New("install_certificate")
-	rootFolder := c.cfg.StoragePath()
+	cfg := config.GetInstance().Get()
+	rootFolder := cfg.StoragePath()
 	certificateFolder := helper.JoinPath(rootFolder, constants.CertificateStorageFolder)
 	// create the folder if it doesn't exist
 	if !helper.FileExists(certificateFolder) {
@@ -316,7 +329,7 @@ func (c *X509IntermediateCertificate) Install(ctx *appctx.AppContext) *diagnosti
 
 	certificateFileName := helper.JoinPath(certificateFolder, c.GetCertificateFileName())
 	instalSvc := NewCertificateInstaller()
-	instalSvc.InstallCertificate(c.ctx, certificateFileName, RootStore)
+	instalSvc.InstallCertificate(ctx, certificateFileName, RootStore)
 	return diag
 }
 
@@ -346,7 +359,6 @@ func (c *X509IntermediateCertificate) GetPemCsr() []byte {
 
 func (c *X509IntermediateCertificate) FromDatabase(ctx *appctx.AppContext, certificate *entities.Certificate) *diagnostics.Diagnostics {
 	diag := diagnostics.New("from_database")
-	cfg := config.GetInstance().Get()
 	if parseDiag := c.Parse(ctx, certificate.PemCertificate, certificate.PemPrivateKey); parseDiag.HasErrors() {
 		diag.Append(parseDiag)
 		return diag
@@ -354,8 +366,6 @@ func (c *X509IntermediateCertificate) FromDatabase(ctx *appctx.AppContext, certi
 	config := mappers.MapCertificateConfigToDto(certificate.Config)
 	c.name = certificate.Name
 	c.slug = certificate.Slug
-	c.ctx = ctx
-	c.cfg = cfg
 	c.configuration = config
 	return diag
 }

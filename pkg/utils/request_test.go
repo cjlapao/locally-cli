@@ -4,6 +4,9 @@ import (
 	"net/http"
 	"net/url"
 	"testing"
+
+	"github.com/cjlapao/locally-cli/internal/api/models"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestGetPaginationFromRequest(t *testing.T) {
@@ -515,4 +518,243 @@ func BenchmarkGetFilterFromRequest(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		GetFilterFromRequest(req)
 	}
+}
+
+// Tests for new ParseQueryRequest function
+func TestParseQueryRequest(t *testing.T) {
+	tests := []struct {
+		name     string
+		query    string
+		expected *models.PaginationRequest
+	}{
+		{
+			name:  "empty query",
+			query: "",
+			expected: &models.PaginationRequest{
+				Page:     1,
+				PageSize: 20, // default from config
+				Filter:   "",
+				Sort:     "",
+				Order:    "",
+			},
+		},
+		{
+			name:  "basic pagination",
+			query: "?page=2&page_size=10",
+			expected: &models.PaginationRequest{
+				Page:     2,
+				PageSize: 10,
+				Filter:   "",
+				Sort:     "",
+				Order:    "",
+			},
+		},
+		{
+			name:  "with filter",
+			query: "?page=1&page_size=20&filter=name=john",
+			expected: &models.PaginationRequest{
+				Page:     1,
+				PageSize: 20,
+				Filter:   "name=john",
+				Sort:     "",
+				Order:    "",
+			},
+		},
+		{
+			name:  "with ordering",
+			query: "?page=1&page_size=15&order_by=created_at desc",
+			expected: &models.PaginationRequest{
+				Page:     1,
+				PageSize: 15,
+				Filter:   "",
+				Sort:     "created_at desc",
+				Order:    "",
+			},
+		},
+		{
+			name:  "complete query",
+			query: "?page=3&page_size=25&filter=status=active,age>18&order_by=name asc",
+			expected: &models.PaginationRequest{
+				Page:     3,
+				PageSize: 25,
+				Filter:   "status=active,age>18",
+				Sort:     "name asc",
+				Order:    "",
+			},
+		},
+		{
+			name:  "alternative parameter names",
+			query: "?page=2&pageSize=30&filters=category=tech&orderBy=updated_at desc",
+			expected: &models.PaginationRequest{
+				Page:     2,
+				PageSize: 30,
+				Filter:   "category=tech",
+				Sort:     "updated_at desc",
+				Order:    "",
+			},
+		},
+		{
+			name:  "per_page parameter",
+			query: "?page=1&per_page=50&where=type=premium",
+			expected: &models.PaginationRequest{
+				Page:     1,
+				PageSize: 50,
+				Filter:   "type=premium",
+				Sort:     "",
+				Order:    "",
+			},
+		},
+		{
+			name:  "separate sort and order",
+			query: "?page=1&limit=15&sort=name&order=desc",
+			expected: &models.PaginationRequest{
+				Page:     1,
+				PageSize: 15,
+				Filter:   "",
+				Sort:     "name desc",
+				Order:    "",
+			},
+		},
+		{
+			name:  "quoted filter values",
+			query: "?filter=\"name=john doe\"&page=1",
+			expected: &models.PaginationRequest{
+				Page:     1,
+				PageSize: 20,
+				Filter:   "name=john doe", // quotes should be stripped
+				Sort:     "",
+				Order:    "",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := createTestRequest(tt.query)
+			result := ParseQueryRequest(req)
+
+			assert.Equal(t, tt.expected.Page, result.Page)
+			assert.Equal(t, tt.expected.PageSize, result.PageSize)
+			assert.Equal(t, tt.expected.Filter, result.Filter)
+			assert.Equal(t, tt.expected.Sort, result.Sort)
+			assert.Equal(t, tt.expected.Order, result.Order)
+		})
+	}
+}
+
+func TestParseQueryRequestNil(t *testing.T) {
+	result := ParseQueryRequest(nil)
+	expected := &models.PaginationRequest{}
+	assert.Equal(t, expected, result)
+}
+
+func TestParseQueryToQueryBuilder(t *testing.T) {
+	req := createTestRequest("?page=2&page_size=15&filter=name=john&order_by=created_at desc")
+
+	qb := ParseQueryToQueryBuilder(req)
+
+	assert.True(t, qb.HasFilters())
+	assert.True(t, qb.HasOrdering())
+	assert.True(t, qb.HasPagination())
+
+	assert.Equal(t, 2, qb.GetPage())
+	assert.Equal(t, 15, qb.GetPageSize())
+}
+
+func TestParseQueryToQueryBuilderNil(t *testing.T) {
+	qb := ParseQueryToQueryBuilder(nil)
+
+	// Should return a valid QueryBuilder with defaults
+	assert.NotNil(t, qb)
+	assert.True(t, qb.HasOrdering()) // default ordering
+	assert.True(t, qb.HasPagination()) // default pagination
+}
+
+func TestParseQueryRequest_ParameterPriority(t *testing.T) {
+	// Test that the first matching parameter name takes priority
+	req := createTestRequest("?page_size=10&pageSize=20&per_page=30&limit=40")
+	result := ParseQueryRequest(req)
+
+	// Should use page_size (first in the priority list)
+	assert.Equal(t, 10, result.PageSize)
+}
+
+func TestParseQueryRequest_FilterParameterPriority(t *testing.T) {
+	// Test filter parameter priority
+	req := createTestRequest("?filter=first&filters=second&where=third")
+	result := ParseQueryRequest(req)
+
+	// Should use filter (first in the priority list)
+	assert.Equal(t, "first", result.Filter)
+}
+
+func TestParseQueryRequest_OrderParameterPriority(t *testing.T) {
+	// Test ordering parameter priority
+	req := createTestRequest("?order_by=first&orderBy=second&sort=third&order=fourth")
+	result := ParseQueryRequest(req)
+
+	// Should use order_by (first in the priority list)
+	assert.Equal(t, "first", result.Sort)
+}
+
+func TestParseQueryRequest_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name  string
+		query string
+	}{
+		{
+			name:  "zero page number",
+			query: "?page=0&page_size=10",
+		},
+		{
+			name:  "negative page number",
+			query: "?page=-5&page_size=10",
+		},
+		{
+			name:  "zero page size",
+			query: "?page=1&page_size=0",
+		},
+		{
+			name:  "very large numbers",
+			query: "?page=999999&page_size=1000",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := createTestRequest(tt.query)
+			result := ParseQueryRequest(req)
+
+			// Should not panic and return valid results
+			assert.NotNil(t, result)
+			assert.True(t, result.Page >= 1)    // Page should always be >= 1
+			assert.True(t, result.PageSize > 0) // PageSize should always be > 0
+		})
+	}
+}
+
+func TestParseQueryRequest_Integration(t *testing.T) {
+	// Test a complex real-world query
+	req := createTestRequest("?page=3&page_size=25&filter=status=active AND category IN (tech,science)&order_by=created_at desc,name asc")
+
+	result := ParseQueryRequest(req)
+
+	assert.Equal(t, 3, result.Page)
+	assert.Equal(t, 25, result.PageSize)
+	assert.Equal(t, "status=active AND category IN (tech,science)", result.Filter)
+	assert.Equal(t, "created_at desc,name asc", result.Sort)
+
+	// Test that it converts to QueryBuilder correctly
+	qb := result.ToQueryBuilder()
+	assert.True(t, qb.HasFilters())
+	assert.True(t, qb.HasOrdering())
+	assert.True(t, qb.HasPagination())
+	assert.Equal(t, 3, qb.GetPage())
+	assert.Equal(t, 25, qb.GetPageSize())
+}
+
+// Helper function to create test requests
+func createTestRequest(queryString string) *http.Request {
+	u, _ := url.Parse("http://example.com" + queryString)
+	return &http.Request{URL: u}
 }

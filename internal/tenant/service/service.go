@@ -7,6 +7,7 @@ import (
 
 	api_models "github.com/cjlapao/locally-cli/internal/api/models"
 	"github.com/cjlapao/locally-cli/internal/appctx"
+	certificates_interfaces "github.com/cjlapao/locally-cli/internal/certificates/interfaces"
 	claimsvc "github.com/cjlapao/locally-cli/internal/claim/interfaces"
 	claim_models "github.com/cjlapao/locally-cli/internal/claim/models"
 	"github.com/cjlapao/locally-cli/internal/database/filters"
@@ -21,6 +22,7 @@ import (
 	user_models "github.com/cjlapao/locally-cli/internal/user/models"
 	"github.com/cjlapao/locally-cli/pkg/diagnostics"
 	"github.com/cjlapao/locally-cli/pkg/models"
+	pkg_types "github.com/cjlapao/locally-cli/pkg/types"
 	"github.com/cjlapao/locally-cli/pkg/utils"
 	"gorm.io/gorm"
 )
@@ -32,19 +34,26 @@ var (
 )
 
 type TenantService struct {
-	tenantStore   stores.TenantDataStoreInterface
-	userService   usersvc.UserServiceInterface
-	roleService   rolesvc.RoleServiceInterface
-	claimService  claimsvc.ClaimServiceInterface
-	systemService system_interfaces.SystemServiceInterface
+	tenantStore        stores.TenantDataStoreInterface
+	userService        usersvc.UserServiceInterface
+	roleService        rolesvc.RoleServiceInterface
+	claimService       claimsvc.ClaimServiceInterface
+	systemService      system_interfaces.SystemServiceInterface
+	certificateService certificates_interfaces.CertificateServiceInterface
 }
 
-func Initialize(tenantStore stores.TenantDataStoreInterface, userService usersvc.UserServiceInterface, roleService rolesvc.RoleServiceInterface, systemService system_interfaces.SystemServiceInterface, claimService claimsvc.ClaimServiceInterface) interfaces.TenantServiceInterface {
+func Initialize(tenantStore stores.TenantDataStoreInterface,
+	userService usersvc.UserServiceInterface,
+	roleService rolesvc.RoleServiceInterface,
+	systemService system_interfaces.SystemServiceInterface,
+	claimService claimsvc.ClaimServiceInterface,
+	certificateService certificates_interfaces.CertificateServiceInterface,
+) interfaces.TenantServiceInterface {
 	tenantServiceMutex.Lock()
 	defer tenantServiceMutex.Unlock()
 
 	tenantServiceOnce.Do(func() {
-		globalTenantService = new(tenantStore, userService, roleService, systemService, claimService)
+		globalTenantService = new(tenantStore, userService, roleService, systemService, claimService, certificateService)
 	})
 	return globalTenantService
 }
@@ -64,13 +73,20 @@ func Reset() {
 	tenantServiceOnce = sync.Once{}
 }
 
-func new(tenantStore stores.TenantDataStoreInterface, userService usersvc.UserServiceInterface, roleService rolesvc.RoleServiceInterface, systemService system_interfaces.SystemServiceInterface, claimService claimsvc.ClaimServiceInterface) *TenantService {
+func new(tenantStore stores.TenantDataStoreInterface,
+	userService usersvc.UserServiceInterface,
+	roleService rolesvc.RoleServiceInterface,
+	systemService system_interfaces.SystemServiceInterface,
+	claimService claimsvc.ClaimServiceInterface,
+	certificateService certificates_interfaces.CertificateServiceInterface,
+) *TenantService {
 	return &TenantService{
-		tenantStore:   tenantStore,
-		userService:   userService,
-		roleService:   roleService,
-		systemService: systemService,
-		claimService:  claimService,
+		tenantStore:        tenantStore,
+		userService:        userService,
+		roleService:        roleService,
+		systemService:      systemService,
+		claimService:       claimService,
+		certificateService: certificateService,
 	}
 }
 
@@ -225,6 +241,22 @@ func (s *TenantService) CreateTenant(ctx *appctx.AppContext, request *tenant_mod
 				"error": err.Error(),
 			})
 		}
+	}
+
+	// Creating the tenant intermediate certificate
+	intermediateCert, generateDiag := s.certificateService.GenerateX509IntermediateCertificate(ctx, createdTenant.ID)
+	if generateDiag.HasErrors() {
+		diag.Append(generateDiag)
+		return nil, diag
+	}
+	certConfig := *intermediateCert.GetConfiguration()
+
+	_, createDiag := s.certificateService.CreateCertificate(ctx, createdTenant.ID, pkg_types.CertificateTypeIntermediate, certConfig)
+	if createDiag.HasErrors() {
+		diag.Append(createDiag)
+		// reverting the tenant creation
+		s.tenantStore.DeleteTenant(ctx, createdTenant.ID)
+		return nil, diag
 	}
 
 	return mappers.MapTenantToDto(createdTenant), diag

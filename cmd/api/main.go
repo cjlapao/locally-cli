@@ -17,7 +17,6 @@ import (
 	api_keys_interfaces "github.com/cjlapao/locally-cli/internal/api_keys/interfaces"
 	"github.com/cjlapao/locally-cli/internal/appctx"
 	"github.com/cjlapao/locally-cli/internal/auth"
-	"github.com/cjlapao/locally-cli/internal/auth/handlers"
 	auth_handlers "github.com/cjlapao/locally-cli/internal/auth/handlers"
 	auth_interfaces "github.com/cjlapao/locally-cli/internal/auth/interfaces"
 	"github.com/cjlapao/locally-cli/internal/certificates"
@@ -383,9 +382,11 @@ func initializeAuthService(cfg *config.Config, authDataStore stores.ApiKeyStoreI
 }
 
 // initializeCertificateService initializes the certificate service
-func initializeCertificateService(store stores.CertificatesDataStoreInterface) certificates_interfaces.CertificateServiceInterface {
+func initializeCertificateService(store stores.CertificatesDataStoreInterface,
+	tenantStore stores.TenantDataStoreInterface,
+) certificates_interfaces.CertificateServiceInterface {
 	logging.Info("Initializing certificate service...")
-	certificateService := certificates.Initialize(store)
+	certificateService := certificates.Initialize(store, tenantStore)
 	if certificateService == nil {
 		logging.Error("Certificate service not initialized")
 		panic("Certificate service not initialized")
@@ -395,9 +396,15 @@ func initializeCertificateService(store stores.CertificatesDataStoreInterface) c
 }
 
 // initializeTenantService initializes the tenant service
-func initializeTenantService(tenantStore stores.TenantDataStoreInterface, userService user_interfaces.UserServiceInterface, roleService rolesvc.RoleServiceInterface, systemService system_interfaces.SystemServiceInterface, claimService claim_interfaces.ClaimServiceInterface) tenant_interfaces.TenantServiceInterface {
+func initializeTenantService(tenantStore stores.TenantDataStoreInterface,
+	userService user_interfaces.UserServiceInterface,
+	roleService rolesvc.RoleServiceInterface,
+	systemService system_interfaces.SystemServiceInterface,
+	claimService claim_interfaces.ClaimServiceInterface,
+	certificateService certificates_interfaces.CertificateServiceInterface,
+) tenant_interfaces.TenantServiceInterface {
 	logging.Info("Initializing tenant service...")
-	tenantService := tenant.Initialize(tenantStore, userService, roleService, systemService, claimService)
+	tenantService := tenant.Initialize(tenantStore, userService, roleService, systemService, claimService, certificateService)
 	logging.Info("Tenant service initialized successfully")
 	return tenantService
 }
@@ -513,9 +520,16 @@ func seedDatabaseMigrations(ctx *appctx.AppContext, configSvc *config.ConfigServ
 		return diag
 	}
 
+	// Getting the certificate service
 	certificateService := certificates.GetInstance()
 	if certificateService == nil {
 		diag.AddError("certificate_service_not_initialized", "certificate service not initialized", "seed_database_migrations", nil)
+		return diag
+	}
+	// Getting the certificate store
+	certificateStore := stores.GetCertificatesDataStoreInstance()
+	if certificateStore == nil {
+		diag.AddError("certificate_store_not_initialized", "certificate store not initialized", "seed_database_migrations", nil)
 		return diag
 	}
 
@@ -526,14 +540,14 @@ func seedDatabaseMigrations(ctx *appctx.AppContext, configSvc *config.ConfigServ
 	// defaultRolesMigrationWorker := migrations.NewDefaultRolesMigrationWorker(db.GetDB(), configSvc.Get())
 	defaultTenantMigrationWorker := migrations.NewDefaultTenantMigrationWorker(db.GetDB(), tenantService)
 	defaultUsersMigrationWorker := migrations.NewDefaultUsersMigrationWorker(db.GetDB(), configSvc.Get(), systemService, userService)
-	rootCertificateMigrationWorker := migrations.NewRootCertificateMigrationWorker(db.GetDB(), certificateService)
+	rootCertificateMigrationWorker := migrations.NewRootCertificateMigrationWorker(db.GetDB(), certificateService, certificateStore)
 	// intermediateCertificateMigrationWorker := migrations.NewIntermediateCertificateMigrationWorker(db.GetDB(), certificateService)
 
 	// service.Register(defaultClaimsMigrationWorker)
 	// service.Register(defaultRolesMigrationWorker)
+	service.Register(rootCertificateMigrationWorker)
 	service.Register(defaultTenantMigrationWorker)
 	service.Register(defaultUsersMigrationWorker)
-	service.Register(rootCertificateMigrationWorker)
 	// service.Register(intermediateCertificateMigrationWorker)
 
 	// Running the migrations
@@ -649,8 +663,6 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	// initialize certificate service
-	certificateService := initializeCertificateService(certificatesStore)
 	// initialize auth service
 	authService, authServiceDiag := initializeAuthService(configSvc.Get(), apiKeyStore, userStore, tenantStore)
 	if authServiceDiag.HasErrors() {
@@ -658,6 +670,8 @@ func run() error {
 		panic(authServiceDiag.GetSummary())
 	}
 
+	// initialize certificate service
+	certificateService := initializeCertificateService(certificatesStore, tenantStore)
 	// initialize claim service
 	claimService := initializeClaimService(claimStore)
 	// initialize role service
@@ -665,11 +679,12 @@ func run() error {
 	// initialize user service
 	userService := initializeUserService(userStore, roleService, claimService, systemService)
 	// initialize tenant service
-	tenantService := initializeTenantService(tenantStore, userService, roleService, systemService, claimService)
+	tenantService := initializeTenantService(tenantStore, userService, roleService, systemService, claimService, certificateService)
 	// initialize api keys service
 	apiKeysService := initializeApiKeysService(apiKeyStore)
 	// initialize activity service
 	activityService := initializeActivityService(activityStore)
+
 	// initialize API server
 	apiServer, err := initializeAPIServer(configSvc.Get(), authService)
 	if err != nil {
@@ -703,7 +718,7 @@ func run() error {
 	// Register activity routes
 	apiServer.RegisterRoutes(activity.NewApiHandler(activityService, systemService))
 	// Register auth test routes
-	apiServer.RegisterRoutes(handlers.NewTestHandler(authService, apiKeyStore, activityService))
+	apiServer.RegisterRoutes(auth_handlers.NewTestHandler(authService, apiKeyStore, activityService))
 	logging.Info("Starting event service...")
 	if err := startEventService(ctx, eventService); err != nil {
 		return err
