@@ -9,7 +9,6 @@ import (
 	api_models "github.com/cjlapao/locally-cli/internal/api/models"
 	"github.com/cjlapao/locally-cli/internal/appctx"
 	"github.com/cjlapao/locally-cli/internal/config"
-	"github.com/cjlapao/locally-cli/internal/database/entities"
 	"github.com/cjlapao/locally-cli/internal/database/filters"
 	"github.com/cjlapao/locally-cli/internal/database/stores"
 	"github.com/cjlapao/locally-cli/internal/mappers"
@@ -64,57 +63,34 @@ func (s *ActivityService) GetName() string {
 	return "activity"
 }
 
-func (s *ActivityService) GetActivities(ctx *appctx.AppContext, tenantID string, filter *filters.Filter, pagination *api_models.Pagination) (*api_models.PaginatedResponse[pkg_models.Activity], *diagnostics.Diagnostics) {
-	diag := diagnostics.New("get_api_keys")
+func (s *ActivityService) GetActivities(ctx *appctx.AppContext, tenantID string, pagination *api_models.PaginationRequest) (*api_models.PaginationResponse[pkg_models.Activity], *diagnostics.Diagnostics) {
+	diag := diagnostics.New("get_activities")
 	defer diag.Complete()
-
-	cfg := config.GetInstance().Get()
-	if pagination == nil {
-		pagination = &api_models.Pagination{
-			Page:     1,
-			PageSize: cfg.GetInt(config.PaginationDefaultPageSizeKey, config.DefaultPageSizeInt),
-		}
+	var query *filters.QueryBuilder
+	if pagination != nil {
+		query = pagination.ToQueryBuilder()
 	}
 
-	var activities []entities.Activity
-	response := api_models.PaginatedResponse[pkg_models.Activity]{
+	activities, activitiesDiag := s.activityStore.GetActivitiesByQuery(ctx, tenantID, query)
+	if activitiesDiag.HasErrors() {
+		diag.Append(activitiesDiag)
+		return nil, diag
+	}
+
+	activitiesDto := make([]pkg_models.Activity, len(activities.Items))
+	for i, activity := range activities.Items {
+		activitiesDto[i] = *mappers.MapActivityToDto(&activity)
+	}
+
+	response := api_models.PaginationResponse[pkg_models.Activity]{
+		TotalCount: activities.Total,
 		Pagination: api_models.Pagination{
-			Page:     pagination.Page,
-			PageSize: pagination.PageSize,
+			Page:       activities.Page,
+			PageSize:   activities.PageSize,
+			TotalPages: activities.TotalPages,
 		},
+		Data: activitiesDto,
 	}
-
-	// If no filter is provided, get the paginated activities
-	if filter == nil {
-		paginatedActivities, err := s.activityStore.GetPaginatedActivities(ctx, tenantID, &filters.Pagination{
-			Page:     pagination.Page,
-			PageSize: pagination.PageSize,
-		})
-		if err != nil {
-			diag.AddError("failed_to_get_activities", "Failed to get activities: "+err.Error(), "activity_filter", map[string]interface{}{
-				"error": err.Error(),
-			})
-			return nil, diag
-		}
-		activities = paginatedActivities.Items
-		response.Pagination.Page = paginatedActivities.Page
-		response.Pagination.PageSize = paginatedActivities.PageSize
-		response.TotalCount = paginatedActivities.Total
-	} else {
-		filteredActivities, err := s.activityStore.GetActivitiesByFilter(ctx, tenantID, filter)
-		if err != nil {
-			diag.AddError("failed_to_get_activities", "Failed to get activities: "+err.Error(), "activity_filter", map[string]interface{}{
-				"error": err.Error(),
-			})
-			return nil, diag
-		}
-		activities = filteredActivities.Items
-		response.Pagination.Page = filteredActivities.Page
-		response.Pagination.PageSize = filteredActivities.PageSize
-		response.TotalCount = filteredActivities.Total
-	}
-
-	response.Data = mappers.MapActivitiesToDto(activities)
 
 	return &response, diag
 }
@@ -123,11 +99,9 @@ func (s *ActivityService) GetActivity(ctx *appctx.AppContext, tenantID string, a
 	diag := diagnostics.New("get_activity")
 	defer diag.Complete()
 
-	activity, err := s.activityStore.GetActivityByID(ctx, tenantID, activityID)
-	if err != nil {
-		diag.AddError("failed_to_get_activity", "Failed to get activity: "+err.Error(), "activity_id", map[string]interface{}{
-			"error": err.Error(),
-		})
+	activity, activityDiag := s.activityStore.GetActivityByID(ctx, tenantID, activityID)
+	if activityDiag.HasErrors() {
+		diag.Append(activityDiag)
 		return nil, diag
 	}
 
@@ -140,11 +114,9 @@ func (s *ActivityService) CreateActivity(ctx *appctx.AppContext, tenantID string
 
 	activityEntity := mappers.MapCreateActivityRequestToEntity(activity)
 
-	createdActivity, err := s.activityStore.CreateActivity(ctx, tenantID, activityEntity)
-	if err != nil {
-		diag.AddError("failed_to_create_activity", "Failed to create activity: "+err.Error(), "activity", map[string]interface{}{
-			"error": err.Error(),
-		})
+	createdActivity, createdActivityDiag := s.activityStore.CreateActivity(ctx, tenantID, activityEntity)
+	if createdActivityDiag.HasErrors() {
+		diag.Append(createdActivityDiag)
 		return nil, diag
 	}
 
@@ -155,21 +127,17 @@ func (s *ActivityService) UpdateActivity(ctx *appctx.AppContext, tenantID string
 	diag := diagnostics.New("update_activity")
 	defer diag.Complete()
 
-	activityEntity, err := s.activityStore.GetActivityByID(ctx, tenantID, activityID)
-	if err != nil {
-		diag.AddError("failed_to_get_activity", "Failed to get activity: "+err.Error(), "activity_id", map[string]interface{}{
-			"error": err.Error(),
-		})
+	activityEntity, activityEntityDiag := s.activityStore.GetActivityByID(ctx, tenantID, activityID)
+	if activityEntityDiag.HasErrors() {
+		diag.Append(activityEntityDiag)
 		return nil, diag
 	}
 
 	updatedActivityEntity := mappers.MapUpdateActivityRequestToEntity(activity, activityEntity)
 
-	err = s.activityStore.UpdateActivity(ctx, tenantID, updatedActivityEntity)
-	if err != nil {
-		diag.AddError("failed_to_update_activity", "Failed to update activity: "+err.Error(), "activity_id", map[string]interface{}{
-			"error": err.Error(),
-		})
+	updatedActivityEntityDiag := s.activityStore.UpdateActivity(ctx, tenantID, updatedActivityEntity)
+	if updatedActivityEntityDiag.HasErrors() {
+		diag.Append(updatedActivityEntityDiag)
 		return nil, diag
 	}
 
@@ -180,11 +148,9 @@ func (s *ActivityService) DeleteActivity(ctx *appctx.AppContext, tenantID string
 	diag := diagnostics.New("delete_activity")
 	defer diag.Complete()
 
-	activity, err := s.activityStore.GetActivityByID(ctx, tenantID, activityID)
-	if err != nil {
-		diag.AddError("failed_to_get_activity", "Failed to get activity: "+err.Error(), "activity_id", map[string]interface{}{
-			"error": err.Error(),
-		})
+	activity, activityDiag := s.activityStore.GetActivityByID(ctx, tenantID, activityID)
+	if activityDiag.HasErrors() {
+		diag.Append(activityDiag)
 		return diag
 	}
 	if activity == nil {
@@ -194,11 +160,9 @@ func (s *ActivityService) DeleteActivity(ctx *appctx.AppContext, tenantID string
 		return diag
 	}
 
-	err = s.activityStore.DeleteActivity(ctx, tenantID, activityID)
-	if err != nil {
-		diag.AddError("failed_to_delete_activity", "Failed to delete activity: "+err.Error(), "activity_id", map[string]interface{}{
-			"error": err.Error(),
-		})
+	deleteActivityDiag := s.activityStore.DeleteActivity(ctx, tenantID, activityID)
+	if deleteActivityDiag.HasErrors() {
+		diag.Append(deleteActivityDiag)
 		return diag
 	}
 
@@ -224,9 +188,7 @@ func (s *ActivityService) RecordErrorActivity(ctx *appctx.AppContext, activityTy
 	defer diag.Complete()
 
 	if record == nil {
-		diag.AddError("failed_to_record_error_activity", "Failed to record error activity: record is required", "activity", map[string]interface{}{
-			"error": "record is required",
-		})
+		diag.AddError("failed_to_record_error_activity", "Failed to record error activity: record is required", "activity")
 		return diag
 	}
 
@@ -291,26 +253,20 @@ func (s *ActivityService) RecordActivity(ctx *appctx.AppContext, record *types.A
 	// checking if the activity tenant id is set if this is not a error level activity
 	if activityLevel != types.ActivityLevelError {
 		if activity.TenantID == "" || activity.TenantID == "unknown" {
-			diag.AddError("failed_to_record_info_activity", "Failed to record info activity: tenant ID is required", "activity", map[string]interface{}{
-				"error": "tenant ID is required",
-			})
+			diag.AddError("failed_to_record_info_activity", "Failed to record info activity: tenant ID is required", "activity")
 			return diag
 		}
 		if err := uuid.Validate(activity.TenantID); err != nil {
-			diag.AddError("failed_to_record_info_activity", "Failed to record info activity: tenant ID is not a valid UUID", "activity", map[string]interface{}{
-				"error": "tenant ID is not a valid UUID",
-			})
+			diag.AddError("failed_to_record_info_activity", "Failed to record info activity: tenant ID is not a valid UUID", "activity")
 			return diag
 		}
 	}
 
 	dbActivity := mappers.MapActivityToEntity(activity)
 
-	createdActivity, err := s.activityStore.CreateActivity(ctx, activity.TenantID, dbActivity)
-	if err != nil {
-		diag.AddError("failed_to_create_activity", "Failed to create activity: "+err.Error(), "activity", map[string]interface{}{
-			"error": err.Error(),
-		})
+	createdActivity, createdActivityDiag := s.activityStore.CreateActivity(ctx, activity.TenantID, dbActivity)
+	if createdActivityDiag.HasErrors() {
+		diag.Append(createdActivityDiag)
 		return diag
 	}
 

@@ -276,19 +276,15 @@ func (h *ClaimsApiHandler) Routes() []api_types.Route {
 
 func (h *ClaimsApiHandler) HandleGetClaims(w http.ResponseWriter, r *http.Request) {
 	ctx := appctx.FromContext(r.Context())
-	filter, err := utils.GetFilterFromRequest(r)
-	if err != nil {
-		api.WriteError(w, r, http.StatusBadRequest, "Invalid filter", "Invalid filter", err.Error())
-		return
-	}
-
 	tenantID := ctx.GetTenantID()
 	if tenantID == "" {
 		api.WriteError(w, r, http.StatusBadRequest, "tenant_id is required", "tenant_id is required", "")
 		return
 	}
 
-	claims, diag := h.claimService.GetClaimsByFilter(ctx, tenantID, filter)
+	pagination := utils.ParseQueryRequest(r)
+
+	claims, diag := h.claimService.GetClaims(ctx, tenantID, pagination)
 	if diag.HasErrors() {
 		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, "failed_to_get_claims", "Failed to get claims", diag)
 		return
@@ -439,12 +435,9 @@ func (h *ClaimsApiHandler) HandleGetClaimUsers(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	page, pageSize := utils.GetPaginationFromRequest(r)
+	pagination := utils.ParseQueryRequest(r)
 
-	users, diag := h.claimService.GetClaimUsers(ctx, tenantID, id, &pkg_models.Pagination{
-		Page:     page,
-		PageSize: pageSize,
-	})
+	users, diag := h.claimService.GetClaimUsers(ctx, tenantID, id, pagination)
 
 	if diag.HasErrors() {
 		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, "failed_to_get_claim_users", "Failed to get claim users", diag)
@@ -610,12 +603,9 @@ func (h *ClaimsApiHandler) HandleGetClaimRoles(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	page, pageSize := utils.GetPaginationFromRequest(r)
+	pagination := utils.ParseQueryRequest(r)
 
-	roles, diag := h.claimService.GetClaimRoles(ctx, tenantID, id, &pkg_models.Pagination{
-		Page:     page,
-		PageSize: pageSize,
-	})
+	roles, diag := h.claimService.GetClaimRoles(ctx, tenantID, id, pagination)
 
 	if diag.HasErrors() {
 		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, "failed_to_get_claim_roles", "Failed to get claim roles", diag)
@@ -697,12 +687,9 @@ func (h *ClaimsApiHandler) HandleGetClaimApiKeys(w http.ResponseWriter, r *http.
 		return
 	}
 
-	page, pageSize := utils.GetPaginationFromRequest(r)
+	pagination := utils.ParseQueryRequest(r)
 
-	apiKeys, diag := h.claimService.GetClaimApiKeys(ctx, tenantID, id, &pkg_models.Pagination{
-		Page:     page,
-		PageSize: pageSize,
-	})
+	apiKeys, diag := h.claimService.GetClaimApiKeys(ctx, tenantID, id, pagination)
 
 	if diag.HasErrors() {
 		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, "failed_to_get_claim_api_keys", "Failed to get claim api keys", diag)

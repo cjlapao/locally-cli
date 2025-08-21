@@ -369,7 +369,11 @@ func initializeEncryptionService(cfg *config.Config) (*encryption.EncryptionServ
 }
 
 // initializeAuthService initializes the auth service
-func initializeAuthService(cfg *config.Config, authDataStore stores.ApiKeyStoreInterface, userStore stores.UserDataStoreInterface, tenantStore stores.TenantDataStoreInterface) (auth_interfaces.AuthServiceInterface, *diagnostics.Diagnostics) {
+func initializeAuthService(cfg *config.Config,
+	authDataStore stores.ApiKeyStoreInterface,
+	userStore stores.UserDataStoreInterface,
+	tenantStore stores.TenantDataStoreInterface,
+) (auth_interfaces.AuthServiceInterface, *diagnostics.Diagnostics) {
 	logging.Info("Initializing auth service...")
 
 	authService, diag := auth.Initialize(auth.AuthServiceConfig{
@@ -384,9 +388,10 @@ func initializeAuthService(cfg *config.Config, authDataStore stores.ApiKeyStoreI
 // initializeCertificateService initializes the certificate service
 func initializeCertificateService(store stores.CertificatesDataStoreInterface,
 	tenantStore stores.TenantDataStoreInterface,
+	activityService activity_interfaces.ActivityServiceInterface,
 ) certificates_interfaces.CertificateServiceInterface {
 	logging.Info("Initializing certificate service...")
-	certificateService := certificates.Initialize(store, tenantStore)
+	certificateService := certificates.Initialize(store, tenantStore, activityService)
 	if certificateService == nil {
 		logging.Error("Certificate service not initialized")
 		panic("Certificate service not initialized")
@@ -450,13 +455,14 @@ func initializeActivityService(activityStore stores.ActivityDataStoreInterface) 
 }
 
 // initializeAPIServer initializes the API server
-func initializeAPIServer(cfg *config.Config, authService auth_interfaces.AuthServiceInterface) (*api.Server, error) {
+func initializeAPIServer(cfg *config.Config, authService auth_interfaces.AuthServiceInterface, activityService activity_interfaces.ActivityServiceInterface) (*api.Server, error) {
 	logging.Info("Initializing API server...")
 	server := api.NewServer(api.Config{
-		AuthService: authService,
-		Port:        cfg.Get(config.ServerAPIPortKey).GetInt(),
-		Hostname:    cfg.Get(config.ServerBindAddressKey).GetString(),
-		Prefix:      cfg.Get(config.ServerAPIPrefixKey).GetString(),
+		AuthService:     authService,
+		ActivityService: activityService,
+		Port:            cfg.Get(config.ServerAPIPortKey).GetInt(),
+		Hostname:        cfg.Get(config.ServerBindAddressKey).GetString(),
+		Prefix:          cfg.Get(config.ServerAPIPrefixKey).GetString(),
 	})
 	logging.Info("API server initialized successfully")
 	return server, nil
@@ -663,6 +669,9 @@ func run() error {
 	if err != nil {
 		return err
 	}
+
+	// initialize activity service
+	activityService := initializeActivityService(activityStore)
 	// initialize auth service
 	authService, authServiceDiag := initializeAuthService(configSvc.Get(), apiKeyStore, userStore, tenantStore)
 	if authServiceDiag.HasErrors() {
@@ -671,7 +680,7 @@ func run() error {
 	}
 
 	// initialize certificate service
-	certificateService := initializeCertificateService(certificatesStore, tenantStore)
+	certificateService := initializeCertificateService(certificatesStore, tenantStore, activityService)
 	// initialize claim service
 	claimService := initializeClaimService(claimStore)
 	// initialize role service
@@ -682,11 +691,9 @@ func run() error {
 	tenantService := initializeTenantService(tenantStore, userService, roleService, systemService, claimService, certificateService)
 	// initialize api keys service
 	apiKeysService := initializeApiKeysService(apiKeyStore)
-	// initialize activity service
-	activityService := initializeActivityService(activityStore)
 
 	// initialize API server
-	apiServer, err := initializeAPIServer(configSvc.Get(), authService)
+	apiServer, err := initializeAPIServer(configSvc.Get(), authService, activityService)
 	if err != nil {
 		return err
 	}

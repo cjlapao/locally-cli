@@ -11,8 +11,11 @@ import (
 	"github.com/cjlapao/locally-cli/internal/certificates/errors"
 	"github.com/cjlapao/locally-cli/internal/certificates/interfaces"
 	"github.com/cjlapao/locally-cli/internal/config"
-	"github.com/cjlapao/locally-cli/pkg/models"
+	"github.com/cjlapao/locally-cli/pkg/diagnostics"
+	pkg_models "github.com/cjlapao/locally-cli/pkg/models"
+	"github.com/cjlapao/locally-cli/pkg/types"
 	"github.com/cjlapao/locally-cli/pkg/utils"
+	"github.com/gorilla/mux"
 )
 
 type CertificatesApiHandlers struct {
@@ -33,7 +36,24 @@ func (h *CertificatesApiHandlers) Routes() []api_types.Route {
 			Handler:     h.HandleGetCertificates,
 			Description: "Get all certificates",
 			SecurityRequirement: &api_types.SecurityRequirement{
-				SecurityLevel: models.ApiKeySecurityLevelAny,
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "certificates", Module: "api", Action: pkg_models.AccessLevelRead}},
+				},
+			},
+		},
+		{
+			Method:      http.MethodPost,
+			Path:        "/v1/certificates",
+			Handler:     h.HandleCreateCertificate,
+			Description: "Create a certificate",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "certificates", Module: "api", Action: pkg_models.AccessLevelWrite}},
+				},
 			},
 		},
 		{
@@ -42,25 +62,11 @@ func (h *CertificatesApiHandlers) Routes() []api_types.Route {
 			Handler:     h.HandleGetRootCertificate,
 			Description: "Get the root certificate",
 			SecurityRequirement: &api_types.SecurityRequirement{
-				SecurityLevel: models.ApiKeySecurityLevelAny,
-			},
-		},
-		{
-			Method:      http.MethodPost,
-			Path:        "/v1/certificates/root",
-			Handler:     h.HandleCreateRootCertificate,
-			Description: "Create a new root certificate",
-			SecurityRequirement: &api_types.SecurityRequirement{
-				SecurityLevel: models.ApiKeySecurityLevelSuperUser,
-			},
-		},
-		{
-			Method:      http.MethodDelete,
-			Path:        "/v1/certificates/root",
-			Handler:     h.HandleDeleteRootCertificate,
-			Description: "Delete a root certificate",
-			SecurityRequirement: &api_types.SecurityRequirement{
-				SecurityLevel: models.ApiKeySecurityLevelSuperUser,
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "certificates", Module: "api", Action: pkg_models.AccessLevelRead}},
+				},
 			},
 		},
 		{
@@ -69,35 +75,58 @@ func (h *CertificatesApiHandlers) Routes() []api_types.Route {
 			Handler:     h.HandleGetIntermediateCertificate,
 			Description: "Get the intermediate certificate",
 			SecurityRequirement: &api_types.SecurityRequirement{
-				SecurityLevel: models.ApiKeySecurityLevelAny,
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "certificates", Module: "api", Action: pkg_models.AccessLevelRead}},
+				},
 			},
 		},
 		{
-			Method:      http.MethodPost,
-			Path:        "/v1/certificates/ca",
-			Handler:     h.HandleCreateIntermediateCertificate,
-			Description: "Create a new intermediate certificate",
+			Method:      http.MethodGet,
+			Path:        "/v1/certificates/type/{type}",
+			Handler:     h.HandleGetCertificateByType,
+			Description: "Get a certificate by type",
 			SecurityRequirement: &api_types.SecurityRequirement{
-				SecurityLevel: models.ApiKeySecurityLevelSuperUser,
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "certificates", Module: "api", Action: pkg_models.AccessLevelRead}},
+				},
+			},
+		},
+		{
+			Method:      http.MethodGet,
+			Path:        "/v1/certificates/{certificate_id}",
+			Handler:     h.HandleGetCertificate,
+			Description: "Get a certificate by id",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "certificates", Module: "api", Action: pkg_models.AccessLevelRead}},
+				},
 			},
 		},
 	}
 }
 
 func (h *CertificatesApiHandlers) HandleGetCertificates(w http.ResponseWriter, r *http.Request) {
+	diag := diagnostics.New("get_certificates_handler")
 	ctx := appctx.FromContext(r.Context())
 	ctx.LogInfo("Getting all certificates")
 	pagination := utils.ParseQueryRequest(r)
 	tenantID := ctx.GetTenantID()
 	if tenantID == "" {
-		ctx.Log().Error("Tenant ID is missing")
-		api.WriteError(w, r, http.StatusBadRequest, errors.ErrorMissingTenantID, "Tenant ID is missing")
+		diag.AddError(errors.ErrorMissingTenantID, "Tenant ID is missing", "certificates_handler", map[string]interface{}{
+			"tenant_id": tenantID,
+		})
+		api.WriteErrorWithDiagnostics(w, r, http.StatusBadRequest, errors.ErrorMissingTenantID, "Tenant ID is missing", diag)
 		return
 	}
 
 	certificates, diag := h.certificateService.GetCertificates(ctx, tenantID, pagination)
 	if diag.HasErrors() {
-		ctx.Log().Error("Error getting certificates", diag.Errors)
 		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, errors.ErrorGettingCertificates, "Error getting certificates", diag)
 		return
 	}
@@ -109,19 +138,86 @@ func (h *CertificatesApiHandlers) HandleGetCertificates(w http.ResponseWriter, r
 	ctx.Log().Info("Certificates retrieved successfully")
 }
 
-func (h *CertificatesApiHandlers) HandleGetRootCertificate(w http.ResponseWriter, r *http.Request) {
+func (h *CertificatesApiHandlers) HandleCreateCertificate(w http.ResponseWriter, r *http.Request) {
+	// diag := diagnostics.New("create_certificate_handler")
 	ctx := appctx.FromContext(r.Context())
-	ctx.LogInfo("Getting the root certificate")
+	ctx.LogInfo("Creating a certificate")
 
-	certificate, diag := h.certificateService.GetCertificateBy(ctx, config.GlobalTenantID, config.GlobalRootCertificateID)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	ctx.Log().Info("Certificate retrieved successfully")
+}
+
+func (h *CertificatesApiHandlers) HandleGetCertificate(w http.ResponseWriter, r *http.Request) {
+	diag := diagnostics.New("get_certificate_handler")
+	ctx := appctx.FromContext(r.Context())
+	ctx.LogInfo("Getting a certificate")
+	vars := mux.Vars(r)
+	certificateID := vars["certificate_id"]
+	if certificateID == "" {
+		diag.AddError(errors.ErrorMissingCertificateID, "Certificate ID is missing", "certificates_handler", map[string]interface{}{
+			"certificate_id": certificateID,
+		})
+	}
+	tenantID := ctx.GetTenantID()
+	if tenantID == "" {
+		diag.AddError(errors.ErrorMissingTenantID, "Tenant ID is missing", "certificates_handler", map[string]interface{}{
+			"tenant_id": tenantID,
+		})
+	}
+
 	if diag.HasErrors() {
-		ctx.Log().Error("Error getting root certificate", diag.Errors)
-		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, errors.ErrorGettingRootCertificate, "Error getting root certificate", diag)
+		api.WriteErrorWithDiagnostics(w, r, http.StatusBadRequest, errors.ErrorMissingCertificateID, "Certificate ID is missing", diag)
+		return
+	}
+
+	certificate, getDiag := h.certificateService.GetCertificateBy(ctx, tenantID, certificateID)
+	if getDiag.HasErrors() {
+		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, errors.ErrorGettingCertificate, "Error getting certificate", getDiag)
 		return
 	}
 	if certificate == nil {
-		ctx.Log().Error("Root certificate not found")
-		api.WriteNotFound(w, r, "Root certificate not found")
+		diag.AddError(errors.ErrorGettingCertificate, "Certificate not found", "certificates_handler", map[string]interface{}{
+			"tenant_id":      tenantID,
+			"certificate_id": certificateID,
+		})
+		api.WriteErrorWithDiagnostics(w, r, http.StatusNotFound, errors.ErrorGettingCertificate, "Certificate not found", diag)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(certificate)
+
+	ctx.Log().Info("Certificate retrieved successfully")
+}
+
+func (h *CertificatesApiHandlers) HandleGetRootCertificate(w http.ResponseWriter, r *http.Request) {
+	diag := diagnostics.New("get_root_certificate_handler")
+	ctx := appctx.FromContext(r.Context())
+	ctx.LogInfo("Getting the root certificate")
+
+	certificate, getDiag := h.certificateService.GetCertificateBy(ctx, config.GlobalTenantID, config.GlobalRootCertificateID)
+	if getDiag.HasErrors() {
+		diag.AddError(errors.ErrorGettingRootCertificate, "Error getting root certificate", "certificates_handler", map[string]interface{}{
+			"tenant_id": config.GlobalTenantID,
+		})
+		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, errors.ErrorGettingRootCertificate, "Error getting root certificate", diag)
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(certificate)
+
+		ctx.Log().Info("Certificate retrieved successfully")
+		return
+	}
+
+	if certificate == nil {
+		diag.AddError(errors.ErrorGettingRootCertificate, "Root certificate not found", "certificates_handler", map[string]interface{}{
+			"tenant_id": config.GlobalTenantID,
+		})
+		api.WriteErrorWithDiagnostics(w, r, http.StatusNotFound, errors.ErrorGettingRootCertificate, "Root certificate not found", diag)
 		return
 	}
 
@@ -132,146 +228,80 @@ func (h *CertificatesApiHandlers) HandleGetRootCertificate(w http.ResponseWriter
 	ctx.Log().Info("Root certificate retrieved successfully")
 }
 
-func (h *CertificatesApiHandlers) HandleCreateRootCertificate(w http.ResponseWriter, r *http.Request) {
+func (h *CertificatesApiHandlers) HandleGetCertificateByType(w http.ResponseWriter, r *http.Request) {
+	diag := diagnostics.New("get_certificate_by_type_handler")
 	ctx := appctx.FromContext(r.Context())
-	ctx.LogInfo("Creating a new root certificate")
+	ctx.LogInfo("Getting a certificate by type")
+	vars := mux.Vars(r)
+	pagination := utils.ParseQueryRequest(r)
+	tenantID := ctx.GetTenantID()
+	if tenantID == "" {
+		diag.AddError(errors.ErrorMissingTenantID, "Tenant ID is missing", "certificates_handler", map[string]interface{}{
+			"tenant_id": tenantID,
+		})
+		api.WriteErrorWithDiagnostics(w, r, http.StatusBadRequest, errors.ErrorMissingTenantID, "Tenant ID is missing", diag)
+		return
+	}
+	typeStr := vars["type"]
+	if typeStr == "" {
+		diag.AddError(errors.ErrorMissingCertificateType, "Certificate type is missing", "certificates_handler", map[string]interface{}{
+			"type": typeStr,
+		})
+		api.WriteErrorWithDiagnostics(w, r, http.StatusBadRequest, errors.ErrorMissingCertificateType, "Certificate type is missing", diag)
+		return
+	}
 
-	// ctx.Log().Info("Checking if root certificate already exists")
-	// // checking if we already have a root certificate with us, we can only get one root certificate per database
-	// dbCertificate, dbCertDiag := h.certificateService.GetCertificate(ctx, config.RootCertificateSlug)
-	// if dbCertDiag.HasErrors() {
-	// 	ctx.Log().Error("Error getting root certificate", dbCertDiag.Errors)
-	// 	api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, errors.ErrorGettingRootCertificate, "Error getting root certificate", dbCertDiag)
-	// 	return
-	// }
+	response, diag := h.certificateService.GetCertificatesByType(ctx, tenantID, types.CertificateType(typeStr), pagination)
+	if diag.HasErrors() {
+		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, errors.ErrorGettingCertificates, "Error getting certificates", diag)
+		return
+	}
 
-	// if dbCertificate != nil {
-	// 	ctx.Log().Info("Root certificate already exists")
-	// 	api.WriteErrorWithDiagnostics(w, r, http.StatusOK, errors.ErrorGettingRootCertificate, "Root certificate already exists", nil)
-	// 	return
-	// }
+	if response == nil {
+		diag.AddError(errors.ErrorGettingCertificatesByType, "Certificate not found", "certificates_handler", map[string]interface{}{
+			"tenant_id": tenantID,
+			"type":      typeStr,
+		})
+		api.WriteErrorWithDiagnostics(w, r, http.StatusNotFound, errors.ErrorGettingCertificatesByType, "Certificate not found", diag)
+		return
+	}
 
-	// ctx.Log().Info("Generating root certificate")
-	// rootCA, dbCertDiag := h.certificateService.GenerateRootCertificate(ctx)
-	// if dbCertDiag.HasErrors() {
-	// 	ctx.Log().Error("Error generating root certificate", dbCertDiag.Errors)
-	// 	api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, errors.ErrorCreatingRootCertificate, "Error generating root certificate", dbCertDiag)
-	// 	return
-	// }
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
 
-	// ctx.Log().Info("Persisting root certificate")
-	// dbEntity := mappers.MapRootCertificateToEntity(rootCA.GetCertificate())
-	// createdEntity, dbCertDiag := h.certificateService.CreateRootCertificate(ctx, &dbEntity)
-	// if dbCertDiag.HasErrors() {
-	// 	ctx.Log().Error("Error creating root certificate", dbCertDiag.Errors)
-	// 	api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, errors.ErrorCreatingRootCertificate, "Error creating root certificate", dbCertDiag)
-	// 	return
-	// }
-
-	// result := mappers.MapRootCertificateToDto(*createdEntity)
-
-	// w.Header().Set("Content-Type", "application/json")
-	// w.WriteHeader(http.StatusOK)
-	// json.NewEncoder(w).Encode(result)
-
-	ctx.Log().Info("Root certificate created successfully")
-}
-
-func (h *CertificatesApiHandlers) HandleDeleteRootCertificate(w http.ResponseWriter, r *http.Request) {
-	ctx := appctx.FromContext(r.Context())
-	ctx.LogInfo("Deleting the root certificate")
-
-	// diag := h.certificateService.DeleteRootCertificate(ctx, config.RootCertificateSlug)
-	// if diag.HasErrors() {
-	// 	ctx.Log().Error("Error deleting root certificate", diag.Errors)
-	// 	api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, errors.ErrorDeletingRootCertificate, "Error deleting root certificate", diag)
-	// 	return
-	// }
-
-	// response := api_models.StatusResponse{
-	// 	ID:     config.RootCertificateSlug,
-	// 	Status: "deleted",
-	// }
-
-	// w.WriteHeader(http.StatusOK)
-	// json.NewEncoder(w).Encode(response)
-
-	ctx.Log().Info("Root certificate deleted successfully")
+	ctx.Log().Info("Certificate retrieved successfully")
 }
 
 func (h *CertificatesApiHandlers) HandleGetIntermediateCertificate(w http.ResponseWriter, r *http.Request) {
+	diag := diagnostics.New("get_intermediate_certificate_handler")
 	ctx := appctx.FromContext(r.Context())
 	ctx.LogInfo("Getting the intermediate certificate")
+	tenantID := ctx.GetTenantID()
+	if tenantID == "" {
+		diag.AddError(errors.ErrorMissingTenantID, "Tenant ID is missing", "certificates_handler", map[string]interface{}{
+			"tenant_id": tenantID,
+		})
+		api.WriteErrorWithDiagnostics(w, r, http.StatusBadRequest, errors.ErrorMissingTenantID, "Tenant ID is missing", diag)
+		return
+	}
 
-	// dbCertificates, diag := h.certificateService.GetCertificate(ctx, config.IntermediateCertificateSlug)
-	// if diag.HasErrors() {
-	// 	ctx.Log().Error("Error getting intermediate certificate", diag.Errors)
-	// 	api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, errors.ErrorGettingIntermediateCertificate, "Error getting intermediate certificate", diag)
-	// 	return
-	// }
-	// if dbCertificates == nil {
-	// 	ctx.Log().Error("Intermediate certificate not found")
-	// 	api.WriteNotFound(w, r, "Intermediate certificate not found")
-	// 	return
-	// }
+	certificate, diag := h.certificateService.GetTenantIntermediateCertificate(ctx, tenantID)
+	if diag.HasErrors() {
+		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, errors.ErrorGettingIntermediateCertificate, "Error getting intermediate certificate", diag)
+		return
+	}
+	if certificate == nil {
+		diag.AddError(errors.ErrorGettingIntermediateCertificate, "Root certificate not found", "certificates_handler", map[string]interface{}{
+			"tenant_id": tenantID,
+		})
+		api.WriteErrorWithDiagnostics(w, r, http.StatusNotFound, errors.ErrorGettingIntermediateCertificate, "Root certificate not found", diag)
+		return
+	}
 
-	// dtoModel := mappers.MapIntermediateCertificateToDto(*dbCertificates)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(certificate)
 
-	// w.Header().Set("Content-Type", "application/json")
-	// w.WriteHeader(http.StatusOK)
-	// json.NewEncoder(w).Encode(dtoModel)
-
-	ctx.Log().Info("Intermediate certificate retrieved successfully")
-}
-
-func (h *CertificatesApiHandlers) HandleCreateIntermediateCertificate(w http.ResponseWriter, r *http.Request) {
-	ctx := appctx.FromContext(r.Context())
-	ctx.LogInfo("Creating a new intermediate certificate")
-
-	// dbCertificates, diag := h.certificateService.GetCertificate(ctx, config.IntermediateCertificateSlug)
-	// if diag.HasErrors() {
-	// 	ctx.Log().Error("Error getting intermediate certificate", diag.Errors)
-	// 	api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, errors.ErrorGettingIntermediateCertificate, "Error getting intermediate certificate", diag)
-	// 	return
-	// }
-
-	// ctx.Log().Info("Checking if intermediate certificate already exists")
-	// if dbCertificates != nil {
-	// 	ctx.Log().Info("Intermediate certificate already exists")
-	// 	api.WriteErrorWithDiagnostics(w, r, http.StatusOK, errors.ErrorGettingIntermediateCertificate, "Intermediate certificate already exists", nil)
-	// 	return
-	// }
-
-	// ctx.Log().Info("Generating intermediate certificate")
-	// rootCA, dbCertDiag := h.certificateService.GetCertificate(ctx, config.RootCertificateSlug)
-	// if dbCertDiag.HasErrors() {
-	// 	ctx.Log().Error("Error getting root certificate", dbCertDiag.Errors)
-	// 	api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, errors.ErrorGettingRootCertificate, "Error getting root certificate", dbCertDiag)
-	// 	return
-	// }
-	// dtoRootCA := mappers.MapRootCertificateToDto(*rootCA)
-
-	// intermediateCA, intermediateCertDiag := h.certificateService.GenerateIntermediateCertificate(ctx, &dtoRootCA)
-	// if intermediateCertDiag.HasErrors() {
-	// 	ctx.Log().Error("Error generating intermediate certificate", intermediateCertDiag.Errors)
-	// 	api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, errors.ErrorCreatingIntermediateCertificate, "Error generating intermediate certificate", intermediateCertDiag)
-	// 	return
-	// }
-
-	// ctx.Log().Info("Persisting intermediate certificate")
-	// dbEntity := mappers.MapIntermediateCertificateToEntity(*intermediateCA)
-	// createdEntity, createIntermediateCertDiag := h.certificateService.CreateIntermediateCertificate(ctx, &dbEntity)
-	// if createIntermediateCertDiag.HasErrors() {
-	// 	ctx.Log().Error("Error creating intermediate certificate", createIntermediateCertDiag.Errors)
-	// 	api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, errors.ErrorCreatingIntermediateCertificate, "Error creating intermediate certificate", createIntermediateCertDiag)
-	// 	return
-	// }
-
-	// result := mappers.MapIntermediateCertificateToDto(*createdEntity)
-
-	// w.Header().Set("Content-Type", "application/json")
-	// w.WriteHeader(http.StatusOK)
-	// json.NewEncoder(w).Encode(result)
-
-	ctx.Log().Info("Intermediate certificate created successfully")
+	ctx.Log().Info("Root certificate retrieved successfully")
 }

@@ -7,7 +7,6 @@ import (
 	api_models "github.com/cjlapao/locally-cli/internal/api/models"
 	"github.com/cjlapao/locally-cli/internal/appctx"
 	claim_interfaces "github.com/cjlapao/locally-cli/internal/claim/interfaces"
-	"github.com/cjlapao/locally-cli/internal/config"
 	"github.com/cjlapao/locally-cli/internal/database/entities"
 	"github.com/cjlapao/locally-cli/internal/database/filters"
 	"github.com/cjlapao/locally-cli/internal/database/stores"
@@ -68,46 +67,31 @@ func (s *RoleService) GetName() string {
 	return "role"
 }
 
-func (s *RoleService) GetRoles(ctx *appctx.AppContext, tenantID string) ([]pkg_models.Role, *diagnostics.Diagnostics) {
+func (s *RoleService) GetRoles(ctx *appctx.AppContext, tenantID string, pagination *api_models.PaginationRequest) (*api_models.PaginationResponse[pkg_models.Role], *diagnostics.Diagnostics) {
 	diag := diagnostics.New("get_roles")
 	defer diag.Complete()
 
-	dbRoles, err := s.roleStore.GetRoles(ctx, tenantID)
-	if err != nil {
-		diag.AddError("failed_to_get_roles", "failed to get roles", "role", map[string]interface{}{
-			"error": err.Error(),
-		})
-		return nil, diag
+	var query *filters.QueryBuilder
+	if pagination != nil {
+		query = pagination.ToQueryBuilder()
 	}
 
-	roles := mappers.MapRolesToDto(dbRoles)
-
-	return roles, diag
-}
-
-func (s *RoleService) GetRolesByFilter(ctx *appctx.AppContext, tenantID string, filter *filters.Filter) (*api_models.PaginatedResponse[pkg_models.Role], *diagnostics.Diagnostics) {
-	diag := diagnostics.New("get_roles_by_filter")
-	defer diag.Complete()
-
-	dbRoles, err := s.roleStore.GetRolesByFilter(ctx, tenantID, filter)
-	if err != nil {
-		diag.AddError("failed_to_get_roles_by_filter", "failed to get roles by filter", "role", map[string]interface{}{
-			"error": err.Error(),
-		})
-		return nil, diag
+	dbRoles, getRolesDiag := s.roleStore.GetRolesByQuery(ctx, tenantID, query)
+	if getRolesDiag.HasErrors() {
+		diag.Append(getRolesDiag)
+		return &api_models.PaginationResponse[pkg_models.Role]{}, diag
 	}
 
 	roles := mappers.MapRolesToDto(dbRoles.Items)
-	pagination := api_models.Pagination{
-		Page:       dbRoles.Page,
-		PageSize:   dbRoles.PageSize,
-		TotalPages: dbRoles.TotalPages,
-	}
 
-	response := api_models.PaginatedResponse[pkg_models.Role]{
+	response := api_models.PaginationResponse[pkg_models.Role]{
 		Data:       roles,
 		TotalCount: dbRoles.Total,
-		Pagination: pagination,
+		Pagination: api_models.Pagination{
+			Page:       dbRoles.Page,
+			PageSize:   dbRoles.PageSize,
+			TotalPages: dbRoles.TotalPages,
+		},
 	}
 
 	return &response, diag
@@ -117,11 +101,9 @@ func (s *RoleService) GetRoleByIDorSlug(ctx *appctx.AppContext, tenantID string,
 	diag := diagnostics.New("get_role_by_id_or_slug")
 	defer diag.Complete()
 
-	role, err := s.roleStore.GetRoleBySlugOrID(ctx, tenantID, idOrSlug)
-	if err != nil {
-		diag.AddError("failed_to_get_role_by_id", "failed to get role by id", "role", map[string]interface{}{
-			"error": err.Error(),
-		})
+	role, getRoleDiag := s.roleStore.GetRoleBySlugOrID(ctx, tenantID, idOrSlug)
+	if getRoleDiag.HasErrors() {
+		diag.Append(getRoleDiag)
 		return nil, diag
 	}
 
@@ -136,11 +118,9 @@ func (s *RoleService) GetRoleByIDorSlugWithClaims(ctx *appctx.AppContext, tenant
 	diag := diagnostics.New("get_role_by_id_or_slug_with_claims")
 	defer diag.Complete()
 
-	role, err := s.roleStore.GetRoleBySlugOrID(ctx, tenantID, idOrSlug)
-	if err != nil {
-		diag.AddError("failed_to_get_role_by_id", "failed to get role by id", "role", map[string]interface{}{
-			"error": err.Error(),
-		})
+	role, getRoleDiag := s.roleStore.GetRoleBySlugOrID(ctx, tenantID, idOrSlug)
+	if getRoleDiag.HasErrors() {
+		diag.Append(getRoleDiag)
 		return nil, diag
 	}
 
@@ -169,11 +149,9 @@ func (s *RoleService) CreateRole(ctx *appctx.AppContext, tenantID string, role *
 	}
 
 	roleEntity.Claims = dbClaims
-	roleEntity, err := s.roleStore.CreateRole(ctx, tenantID, roleEntity)
-	if err != nil {
-		diag.AddError("failed_to_create_role", "failed to create role", "role", map[string]interface{}{
-			"error": err.Error(),
-		})
+	roleEntity, createRoleDiag := s.roleStore.CreateRole(ctx, tenantID, roleEntity)
+	if createRoleDiag.HasErrors() {
+		diag.Append(createRoleDiag)
 		return nil, diag
 	}
 
@@ -185,11 +163,9 @@ func (s *RoleService) UpdateRole(ctx *appctx.AppContext, tenantID string, role *
 	defer diag.Complete()
 
 	roleEntity := MapUpdateRoleRequestToEntity(role)
-	err := s.roleStore.UpdateRole(ctx, tenantID, roleEntity)
-	if err != nil {
-		diag.AddError("failed_to_update_role", "failed to update role", "role", map[string]interface{}{
-			"error": err.Error(),
-		})
+	updateRoleDiag := s.roleStore.UpdateRole(ctx, tenantID, roleEntity)
+	if updateRoleDiag.HasErrors() {
+		diag.Append(updateRoleDiag)
 		return "", diag
 	}
 
@@ -201,11 +177,9 @@ func (s *RoleService) DeleteRole(ctx *appctx.AppContext, tenantID string, id str
 	defer diag.Complete()
 
 	// checking if the role is used by any user
-	users, err := s.roleStore.GetRoleUsers(ctx, tenantID, id)
-	if err != nil {
-		diag.AddError("failed_to_check_role_usage", "failed to check role usage", "role", map[string]interface{}{
-			"error": err.Error(),
-		})
+	users, getRoleUsersDiag := s.roleStore.GetRoleUsers(ctx, tenantID, id)
+	if getRoleUsersDiag.HasErrors() {
+		diag.Append(getRoleUsersDiag)
 		return diag
 	}
 
@@ -217,41 +191,33 @@ func (s *RoleService) DeleteRole(ctx *appctx.AppContext, tenantID string, id str
 		return diag
 	}
 
-	err = s.roleStore.DeleteRole(ctx, tenantID, id)
-	if err != nil {
-		diag.AddError("failed_to_delete_role", "failed to delete role", "role", map[string]interface{}{
-			"error": err.Error(),
-		})
+	deleteRoleDiag := s.roleStore.DeleteRole(ctx, tenantID, id)
+	if deleteRoleDiag.HasErrors() {
+		diag.Append(deleteRoleDiag)
 		return diag
 	}
 
 	return diag
 }
 
-func (s *RoleService) GetRoleUsers(ctx *appctx.AppContext, tenantID string, id string, pagination *pkg_models.Pagination) (*api_models.PaginatedResponse[pkg_models.User], *diagnostics.Diagnostics) {
+func (s *RoleService) GetRoleUsers(ctx *appctx.AppContext, tenantID string, id string, pagination *api_models.PaginationRequest) (*api_models.PaginationResponse[pkg_models.User], *diagnostics.Diagnostics) {
 	diag := diagnostics.New("get_role_users")
 	defer diag.Complete()
-	cfg := config.GetInstance().Get()
 
-	if pagination == nil {
-		pagination = &pkg_models.Pagination{
-			Page:     1,
-			PageSize: cfg.GetInt(config.PaginationDefaultPageSizeKey, config.DefaultPageSizeInt),
-		}
+	var query *filters.QueryBuilder
+	if pagination != nil {
+		query = pagination.ToQueryBuilder()
 	}
 
-	dbPagination := mappers.MapPaginationToEntity(pagination)
-
-	dbUsers, err := s.roleStore.GetPaginatedRoleUsers(ctx, tenantID, id, dbPagination)
-	if err != nil {
-		diag.AddError("failed_to_get_role_users", "failed to get role users", "role", map[string]interface{}{
-			"error": err.Error(),
-		})
+	dbUsers, getUsersDiag := s.roleStore.GetRoleUsersByQuery(ctx, tenantID, id, query)
+	if getUsersDiag.HasErrors() {
+		diag.Append(getUsersDiag)
 		return nil, diag
 	}
 
-	response := api_models.PaginatedResponse[pkg_models.User]{
-		Data:       mappers.MapUsersToDto(dbUsers.Items),
+	users := mappers.MapUsersToDto(dbUsers.Items)
+	response := api_models.PaginationResponse[pkg_models.User]{
+		Data:       users,
 		TotalCount: dbUsers.Total,
 		Pagination: api_models.Pagination{
 			Page:       dbUsers.Page,
@@ -267,11 +233,9 @@ func (s *RoleService) AddUserToRole(ctx *appctx.AppContext, tenantID string, use
 	diag := diagnostics.New("add_user_role")
 	defer diag.Complete()
 
-	err := s.roleStore.AddUserToRole(ctx, tenantID, userID, roleSlug)
-	if err != nil {
-		diag.AddError("failed_to_add_user_role", "failed to add user role", "role", map[string]interface{}{
-			"error": err.Error(),
-		})
+	addUserToRoleDiag := s.roleStore.AddUserToRole(ctx, tenantID, userID, roleSlug)
+	if addUserToRoleDiag.HasErrors() {
+		diag.Append(addUserToRoleDiag)
 		return diag
 	}
 
@@ -282,71 +246,61 @@ func (s *RoleService) RemoveUserFromRole(ctx *appctx.AppContext, tenantID string
 	diag := diagnostics.New("remove_user_role")
 	defer diag.Complete()
 
-	err := s.roleStore.RemoveUserFromRole(ctx, tenantID, userID, roleSlug)
-	if err != nil {
-		diag.AddError("failed_to_remove_user_role", "failed to remove user role", "role", map[string]interface{}{
-			"error": err.Error(),
-		})
+	removeUserFromRoleDiag := s.roleStore.RemoveUserFromRole(ctx, tenantID, userID, roleSlug)
+	if removeUserFromRoleDiag.HasErrors() {
+		diag.Append(removeUserFromRoleDiag)
 		return diag
 	}
 
 	return diag
 }
 
-func (s *RoleService) GetUserRoles(ctx *appctx.AppContext, tenantID string, userID string) ([]pkg_models.Role, *diagnostics.Diagnostics) {
-	diag := diagnostics.New("get_user_roles")
-	defer diag.Complete()
-
-	dbRoles, err := s.roleStore.GetUserRoles(ctx, tenantID, userID)
-	if err != nil {
-		diag.AddError("failed_to_get_user_roles", "failed to get user roles", "role", map[string]interface{}{
-			"error": err.Error(),
-		})
-		return nil, diag
-	}
-
-	roles := mappers.MapRolesToDto(dbRoles)
-
-	return roles, diag
-}
-
-func (s *RoleService) GetRoleClaims(ctx *appctx.AppContext, tenantID string, roleID string) ([]pkg_models.Claim, *diagnostics.Diagnostics) {
+func (s *RoleService) GetRoleClaims(ctx *appctx.AppContext, tenantID string, roleID string, pagination *api_models.PaginationRequest) (*api_models.PaginationResponse[pkg_models.Claim], *diagnostics.Diagnostics) {
 	diag := diagnostics.New("get_role_claims")
 	defer diag.Complete()
 
-	dbClaims, err := s.roleStore.GetRoleClaims(ctx, tenantID, roleID)
-	if err != nil {
-		diag.AddError("failed_to_get_role_claims", "failed to get role claims", "role", map[string]interface{}{
-			"error": err.Error(),
-		})
-		return nil, diag
+	var query *filters.QueryBuilder
+	if pagination != nil {
+		query = pagination.ToQueryBuilder()
 	}
 
-	claims := mappers.MapClaimsToDto(dbClaims)
-
-	return claims, diag
-}
-
-func (s *RoleService) GetPaginatedRoleClaims(ctx *appctx.AppContext, tenantID string, roleID string, pagination *pkg_models.Pagination) (*api_models.PaginatedResponse[pkg_models.Claim], *diagnostics.Diagnostics) {
-	diag := diagnostics.New("get_paginated_role_claims")
-	defer diag.Complete()
-
-	// Convert pkg_models.Pagination to filters.Pagination
-	filterPagination := &filters.Pagination{
-		Page:     pagination.Page,
-		PageSize: pagination.PageSize,
-	}
-
-	dbClaims, err := s.roleStore.GetPaginatedRoleClaims(ctx, tenantID, roleID, filterPagination)
-	if err != nil {
-		diag.AddError("failed_to_get_paginated_role_claims", "failed to get paginated role claims", "role", map[string]interface{}{
-			"error": err.Error(),
-		})
+	dbClaims, getRoleClaimsDiag := s.roleStore.GetRoleClaimsByQuery(ctx, tenantID, roleID, query)
+	if getRoleClaimsDiag.HasErrors() {
+		diag.Append(getRoleClaimsDiag)
 		return nil, diag
 	}
 
 	claims := mappers.MapClaimsToDto(dbClaims.Items)
-	response := api_models.PaginatedResponse[pkg_models.Claim]{
+	response := api_models.PaginationResponse[pkg_models.Claim]{
+		Data:       claims,
+		TotalCount: dbClaims.Total,
+		Pagination: api_models.Pagination{
+			Page:       dbClaims.Page,
+			PageSize:   dbClaims.PageSize,
+			TotalPages: dbClaims.TotalPages,
+		},
+	}
+
+	return &response, diag
+}
+
+func (s *RoleService) GetPaginatedRoleClaims(ctx *appctx.AppContext, tenantID string, roleID string, pagination *api_models.PaginationRequest) (*api_models.PaginationResponse[pkg_models.Claim], *diagnostics.Diagnostics) {
+	diag := diagnostics.New("get_paginated_role_claims")
+	defer diag.Complete()
+
+	var query *filters.QueryBuilder
+	if pagination != nil {
+		query = pagination.ToQueryBuilder()
+	}
+
+	dbClaims, getRoleClaimsDiag := s.roleStore.GetRoleClaimsByQuery(ctx, tenantID, roleID, query)
+	if getRoleClaimsDiag.HasErrors() {
+		diag.Append(getRoleClaimsDiag)
+		return nil, diag
+	}
+
+	claims := mappers.MapClaimsToDto(dbClaims.Items)
+	response := api_models.PaginationResponse[pkg_models.Claim]{
 		Data:       claims,
 		TotalCount: dbClaims.Total,
 		Pagination: api_models.Pagination{
@@ -363,11 +317,9 @@ func (s *RoleService) AddClaimToRole(ctx *appctx.AppContext, tenantID string, ro
 	diag := diagnostics.New("add_claim_to_role")
 	defer diag.Complete()
 
-	err := s.roleStore.AddClaimToRole(ctx, tenantID, roleID, claimID)
-	if err != nil {
-		diag.AddError("failed_to_add_claim_to_role", "failed to add claim to role", "role", map[string]interface{}{
-			"error": err.Error(),
-		})
+	addClaimToRoleDiag := s.roleStore.AddClaimToRole(ctx, tenantID, roleID, claimID)
+	if addClaimToRoleDiag.HasErrors() {
+		diag.Append(addClaimToRoleDiag)
 		return diag
 	}
 
@@ -378,11 +330,9 @@ func (s *RoleService) RemoveClaimFromRole(ctx *appctx.AppContext, tenantID strin
 	diag := diagnostics.New("remove_claim_from_role")
 	defer diag.Complete()
 
-	err := s.roleStore.RemoveClaimFromRole(ctx, tenantID, roleID, claimID)
-	if err != nil {
-		diag.AddError("failed_to_remove_claim_from_role", "failed to remove claim from role", "role", map[string]interface{}{
-			"error": err.Error(),
-		})
+	removeClaimFromRoleDiag := s.roleStore.RemoveClaimFromRole(ctx, tenantID, roleID, claimID)
+	if removeClaimFromRoleDiag.HasErrors() {
+		diag.Append(removeClaimFromRoleDiag)
 		return diag
 	}
 

@@ -12,6 +12,7 @@ import (
 	"github.com/cjlapao/locally-cli/internal/database/entities"
 	"github.com/cjlapao/locally-cli/internal/database/filters"
 	"github.com/cjlapao/locally-cli/internal/database/utils"
+	db_utils "github.com/cjlapao/locally-cli/internal/database/utils"
 	"github.com/cjlapao/locally-cli/internal/encryption"
 	"github.com/cjlapao/locally-cli/internal/logging"
 	"github.com/cjlapao/locally-cli/pkg/diagnostics"
@@ -26,21 +27,24 @@ var (
 )
 
 type UserDataStoreInterface interface {
-	GetUserByID(ctx *appctx.AppContext, tenantID string, id string) (*entities.User, error)
-	GetUserByUsername(ctx *appctx.AppContext, tenantID string, username string) (*entities.User, error)
-	GetUsersByFilter(ctx *appctx.AppContext, tenantID string, filterObj *filters.Filter) (*filters.FilterResponse[entities.User], error)
-	CreateUser(ctx *appctx.AppContext, tenantID string, user *entities.User) (*entities.User, error)
-	UpdateUser(ctx *appctx.AppContext, tenantID string, user *entities.User) error
-	UpdateUserPassword(ctx *appctx.AppContext, tenantID string, id string, password string) error
-	BlockUser(ctx *appctx.AppContext, tenantID string, id string) error
-	SetRefreshToken(ctx *appctx.AppContext, tenantID string, id string, refreshToken string) error
-	DeleteUser(ctx *appctx.AppContext, tenantID string, id string) error
-	GetUserClaims(ctx *appctx.AppContext, tenantID string, userID string) ([]entities.Claim, error)
-	GetUserRoles(ctx *appctx.AppContext, tenantID string, userID string) ([]entities.Role, error)
-	AddUserToRole(ctx *appctx.AppContext, tenantID string, userID string, roleIds []string) error
-	RemoveUserFromRole(ctx *appctx.AppContext, tenantID string, userID string, roleIdOrSlug string) error
-	AddClaimToUser(ctx *appctx.AppContext, tenantID string, userID string, claimIdOrSlug string) error
-	RemoveClaimFromUser(ctx *appctx.AppContext, tenantID string, userID string, claimIdOrSlug string) error
+	GetUserByID(ctx *appctx.AppContext, tenantID string, id string) (*entities.User, *diagnostics.Diagnostics)
+	GetUserByUsername(ctx *appctx.AppContext, tenantID string, username string) (*entities.User, *diagnostics.Diagnostics)
+	GetUsers(ctx *appctx.AppContext, tenantID string) ([]entities.User, *diagnostics.Diagnostics)
+	GetUsersByQuery(ctx *appctx.AppContext, tenantID string, filterObj *filters.QueryBuilder) (*filters.QueryBuilderResponse[entities.User], *diagnostics.Diagnostics)
+	CreateUser(ctx *appctx.AppContext, tenantID string, user *entities.User) (*entities.User, *diagnostics.Diagnostics)
+	UpdateUser(ctx *appctx.AppContext, tenantID string, user *entities.User) *diagnostics.Diagnostics
+	UpdateUserPassword(ctx *appctx.AppContext, tenantID string, id string, password string) *diagnostics.Diagnostics
+	BlockUser(ctx *appctx.AppContext, tenantID string, id string) *diagnostics.Diagnostics
+	SetRefreshToken(ctx *appctx.AppContext, tenantID string, id string, refreshToken string) *diagnostics.Diagnostics
+	DeleteUser(ctx *appctx.AppContext, tenantID string, id string) *diagnostics.Diagnostics
+	GetUserClaims(ctx *appctx.AppContext, tenantID string, userID string) ([]entities.Claim, *diagnostics.Diagnostics)
+	GetUserClaimsByQuery(ctx *appctx.AppContext, tenantID string, userID string, filterObj *filters.QueryBuilder) (*filters.QueryBuilderResponse[entities.Claim], *diagnostics.Diagnostics)
+	AddClaimToUser(ctx *appctx.AppContext, tenantID string, userID string, claimIdOrSlug string) *diagnostics.Diagnostics
+	RemoveClaimFromUser(ctx *appctx.AppContext, tenantID string, userID string, claimIdOrSlug string) *diagnostics.Diagnostics
+	GetUserRoles(ctx *appctx.AppContext, tenantID string, userID string) ([]entities.Role, *diagnostics.Diagnostics)
+	GetUserRolesByQuery(ctx *appctx.AppContext, tenantID string, userID string, filterObj *filters.QueryBuilder) (*filters.QueryBuilderResponse[entities.Role], *diagnostics.Diagnostics)
+	AddUserToRole(ctx *appctx.AppContext, tenantID string, userID string, roleId string) *diagnostics.Diagnostics
+	RemoveUserFromRole(ctx *appctx.AppContext, tenantID string, userID string, roleId string) *diagnostics.Diagnostics
 }
 
 type UserDataStore struct {
@@ -86,40 +90,37 @@ func InitializeUserDataStore() (UserDataStoreInterface, *diagnostics.Diagnostics
 func (s *UserDataStore) Migrate() *diagnostics.Diagnostics {
 	diag := diagnostics.New("migrate_user_data_store")
 	if err := s.GetDB().AutoMigrate(&entities.UserRoles{}); err != nil {
-		diag.AddError("failed_to_migrate_user_role_table", "failed to migrate user role table", "user_data_store", nil)
+		diag.AddError("failed_to_migrate_user_role_table", fmt.Sprintf("failed to migrate user role table: %s", err.Error()), "user_data_store", nil)
 		return diag
 	}
 
 	if err := s.GetDB().AutoMigrate(&entities.UserClaims{}); err != nil {
-		diag.AddError("failed_to_migrate_user_claim_table", "failed to migrate user claim table", "user_data_store", nil)
+		diag.AddError("failed_to_migrate_user_claim_table", fmt.Sprintf("failed to migrate user claim table: %s", err.Error()), "user_data_store", nil)
 		return diag
 	}
 
 	if err := s.GetDB().AutoMigrate(&entities.User{}); err != nil {
-		diag.AddError("failed_to_migrate_user_table", "failed to migrate user table", "user_data_store", nil)
+		diag.AddError("failed_to_migrate_user_table", fmt.Sprintf("failed to migrate user table: %s", err.Error()), "user_data_store", nil)
 		return diag
 	}
 
 	// Add unique constraints to prevent duplicates
 	if err := s.GetDB().Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_user_roles_unique ON user_roles(user_id, role_id);").Error; err != nil {
-		diag.AddError("failed_to_create_unique_index_on_user_roles", "failed to create unique index on user roles", "user_data_store", nil)
+		diag.AddError("failed_to_create_unique_index_on_user_roles", fmt.Sprintf("failed to create unique index on user roles: %s", err.Error()), "user_data_store", nil)
 		return diag
 	}
 
 	if err := s.GetDB().Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_user_claims_unique ON user_claims(user_id, claim_id);").Error; err != nil {
-		diag.AddError("failed_to_create_unique_index_on_user_claims", "failed to create unique index on user claims", "user_data_store", nil)
+		diag.AddError("failed_to_create_unique_index_on_user_claims", fmt.Sprintf("failed to create unique index on user claims: %s", err.Error()), "user_data_store", nil)
 		return diag
 	}
 
 	return diag
 }
 
-func (s *UserDataStore) GetUsersByFilter(ctx *appctx.AppContext, tenantID string, filterObj *filters.Filter) (*filters.FilterResponse[entities.User], error) {
-	return utils.PaginatedFilteredQueryWithPreload(s.GetDB(), tenantID, filterObj, entities.User{}, "Roles", "Claims")
-}
-
 // CreateUser creates a new user
-func (s *UserDataStore) CreateUser(ctx *appctx.AppContext, tenantID string, user *entities.User) (*entities.User, error) {
+func (s *UserDataStore) CreateUser(ctx *appctx.AppContext, tenantID string, user *entities.User) (*entities.User, *diagnostics.Diagnostics) {
+	diag := diagnostics.New("create_user")
 	if user.ID == "" {
 		user.ID = uuid.New().String()
 	}
@@ -133,7 +134,8 @@ func (s *UserDataStore) CreateUser(ctx *appctx.AppContext, tenantID string, user
 	encryptionService := encryption.GetInstance()
 	encryptedPassword, err := encryptionService.HashPassword(user.Password)
 	if err != nil {
-		return nil, fmt.Errorf("failed to encrypt password: %w", err)
+		diag.AddError("failed_to_encrypt_password", fmt.Sprintf("failed to encrypt password: %s", err.Error()), "user_data_store", nil)
+		return nil, diag
 	}
 	user.Password = encryptedPassword
 
@@ -145,7 +147,8 @@ func (s *UserDataStore) CreateUser(ctx *appctx.AppContext, tenantID string, user
 
 	result := s.GetDB().Create(user)
 	if result.Error != nil {
-		return nil, fmt.Errorf("failed to create user: %w", result.Error)
+		diag.AddError("failed_to_create_user", fmt.Sprintf("failed to create user: %s", result.Error.Error()), "user_data_store", nil)
+		return nil, diag
 	}
 
 	// Associate roles if any were provided
@@ -155,19 +158,22 @@ func (s *UserDataStore) CreateUser(ctx *appctx.AppContext, tenantID string, user
 		for _, role := range rolesToAssociate {
 			var dbRole entities.Role
 			if result := s.GetDB().Where("id = ?", role.ID).First(&dbRole); result.Error != nil {
-				return nil, fmt.Errorf("failed to get role with id %s: %w", role.ID, result.Error)
+				diag.AddError("failed_to_get_role", fmt.Sprintf("failed to get role with id %s: %s", role.ID, result.Error.Error()), "user_data_store", nil)
+				return nil, diag
 			}
 			dbRoles = append(dbRoles, dbRole)
 		}
 
 		// First, clear any existing role associations
 		if err := s.GetDB().Model(user).Association("Roles").Clear(); err != nil {
-			return nil, fmt.Errorf("failed to clear existing role associations: %w", err)
+			diag.AddError("failed_to_clear_existing_role_associations", fmt.Sprintf("failed to clear existing role associations: %s", err.Error()), "user_data_store", nil)
+			return nil, diag
 		}
 
 		// Then add the new role associations
 		if err := s.GetDB().Model(user).Association("Roles").Append(dbRoles); err != nil {
-			return nil, fmt.Errorf("failed to associate roles with user: %w", err)
+			diag.AddError("failed_to_associate_roles_with_user", fmt.Sprintf("failed to associate roles with user: %s", err.Error()), "user_data_store", nil)
+			return nil, diag
 		}
 	}
 
@@ -178,64 +184,109 @@ func (s *UserDataStore) CreateUser(ctx *appctx.AppContext, tenantID string, user
 		for _, claim := range claimsToAssociate {
 			var dbClaim entities.Claim
 			if result := s.GetDB().Where("id = ?", claim.ID).First(&dbClaim); result.Error != nil {
-				return nil, fmt.Errorf("failed to get claim with id %s: %w", claim.ID, result.Error)
+				diag.AddError("failed_to_get_claim", fmt.Sprintf("failed to get claim with id %s: %s", claim.ID, result.Error.Error()), "user_data_store", nil)
+				return nil, diag
 			}
 			dbClaims = append(dbClaims, dbClaim)
 		}
 
 		// First, clear any existing claim associations
 		if err := s.GetDB().Model(user).Association("Claims").Clear(); err != nil {
-			return nil, fmt.Errorf("failed to clear existing claim associations: %w", err)
+			diag.AddError("failed_to_clear_existing_claim_associations", fmt.Sprintf("failed to clear existing claim associations: %s", err.Error()), "user_data_store", nil)
+			return nil, diag
 		}
 
 		// Then add the new claim associations
 		if err := s.GetDB().Model(user).Association("Claims").Append(dbClaims); err != nil {
-			return nil, fmt.Errorf("failed to associate claims with user: %w", err)
+			diag.AddError("failed_to_associate_claims_with_user", fmt.Sprintf("failed to associate claims with user: %s", err.Error()), "user_data_store", nil)
+			return nil, diag
 		}
 	}
 
-	return user, nil
+	return user, diag
 }
 
 // GetUserByID retrieves a user by ID
-func (s *UserDataStore) GetUserByID(ctx *appctx.AppContext, tenantID string, id string) (*entities.User, error) {
+func (s *UserDataStore) GetUserByID(ctx *appctx.AppContext, tenantID string, id string) (*entities.User, *diagnostics.Diagnostics) {
+	diag := diagnostics.New("get_user_by_id")
 	var user entities.User
 	result := s.GetDB().Preload("Roles").Preload("Claims").First(&user, "tenant_id = ? AND (id = ? OR slug = ?)", tenantID, id, id)
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			return nil, fmt.Errorf("user not found")
+			return nil, diag
 		}
-		return nil, fmt.Errorf("failed to get user by id: %w", result.Error)
+		diag.AddError("failed_to_get_user_by_id", fmt.Sprintf("failed to get user by id: %s", result.Error.Error()), "user_data_store", nil)
+		return nil, diag
 	}
-	return &user, nil
+	return &user, diag
 }
 
 // GetUserByUsername retrieves a user by username
-func (s *UserDataStore) GetUserByUsername(ctx *appctx.AppContext, tenantID string, username string) (*entities.User, error) {
+func (s *UserDataStore) GetUserByUsername(ctx *appctx.AppContext, tenantID string, username string) (*entities.User, *diagnostics.Diagnostics) {
+	diag := diagnostics.New("get_user_by_username")
 	var user entities.User
-	result := s.GetDB().Preload("Roles").Preload("Claims").First(&user, "tenant_id = ? AND username = ?", tenantID, username)
+	result := s.GetDB().
+		Preload("Roles", func(db *gorm.DB) *gorm.DB {
+			return db.Order("roles.created_at DESC")
+		}).
+		Preload("Claims", func(db *gorm.DB) *gorm.DB {
+			return db.Order("claims.created_at DESC")
+		}).
+		First(&user, "tenant_id = ? AND username = ?", tenantID, username)
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			return nil, nil
+			return nil, diag
 		}
-		return nil, fmt.Errorf("failed to get user by username: %w", result.Error)
+		diag.AddError("failed_to_get_user_by_username", fmt.Sprintf("failed to get user by username: %s", result.Error.Error()), "user_data_store", nil)
+		return nil, diag
 	}
-	return &user, nil
+	return &user, diag
+}
+
+func (s *UserDataStore) GetUsers(ctx *appctx.AppContext, tenantID string) ([]entities.User, *diagnostics.Diagnostics) {
+	diag := diagnostics.New("get_users")
+	var users []entities.User
+	result := s.GetDB().Where("tenant_id = ?", tenantID).Find(&users)
+	if result.Error != nil {
+		diag.AddError("failed_to_get_users", fmt.Sprintf("failed to get users: %s", result.Error.Error()), "user_data_store", nil)
+		return nil, diag
+	}
+	return users, diag
+}
+
+func (s *UserDataStore) GetUsersByQuery(ctx *appctx.AppContext, tenantID string, queryObj *filters.QueryBuilder) (*filters.QueryBuilderResponse[entities.User], *diagnostics.Diagnostics) {
+	diag := diagnostics.New("get_users_by_query")
+	db := s.GetDB()
+	db = db.Preload("Roles", func(db *gorm.DB) *gorm.DB {
+		return db.Order("roles.created_at DESC")
+	}).Preload("Claims", func(db *gorm.DB) *gorm.DB {
+		return db.Order("claims.created_at DESC")
+	}).Where("tenant_id = ?", tenantID)
+
+	result, err := db_utils.QueryDatabase[entities.User](db, tenantID, queryObj)
+	if err != nil {
+		diag.AddError("failed_to_get_users_by_query", fmt.Sprintf("failed to get users by query: %s", err.Error()), "user_data_store", nil)
+		return nil, diag
+	}
+	return result, diag
 }
 
 // UpdateUser updates an existing user
-func (s *UserDataStore) UpdateUser(ctx *appctx.AppContext, tenantID string, user *entities.User) error {
+func (s *UserDataStore) UpdateUser(ctx *appctx.AppContext, tenantID string, user *entities.User) *diagnostics.Diagnostics {
+	diag := diagnostics.New("update_user")
 	user.UpdatedAt = time.Now()
 	user.TenantID = tenantID
-	currentUser, err := s.GetUserByID(ctx, tenantID, user.ID)
-	if err != nil {
-		return fmt.Errorf("failed to get current user: %w", err)
+	currentUser, getUserDiag := s.GetUserByID(ctx, tenantID, user.ID)
+	if getUserDiag.HasErrors() {
+		diag.Append(getUserDiag)
+		return diag
 	}
 	if user.Password != "" {
 		encryptionService := encryption.GetInstance()
 		encryptedPassword, err := encryptionService.HashPassword(user.Password)
 		if err != nil {
-			return fmt.Errorf("failed to encrypt password: %w", err)
+			diag.AddError("failed_to_encrypt_password", fmt.Sprintf("failed to encrypt password: %s", err.Error()), "user_data_store", nil)
+			return diag
 		}
 		user.Password = encryptedPassword
 	}
@@ -245,20 +296,24 @@ func (s *UserDataStore) UpdateUser(ctx *appctx.AppContext, tenantID string, user
 
 	updates := utils.PartialUpdateMap(currentUser, user, "updated_at", "slug")
 	if err := s.GetDB().Model(&entities.User{}).Where("id = ?", user.ID).Updates(updates).Error; err != nil {
-		return err
+		diag.AddError("failed_to_update_user", fmt.Sprintf("failed to update user: %s", err.Error()), "user_data_store", nil)
+		return diag
 	}
-	return nil
+	return diag
 }
 
-func (s *UserDataStore) UpdateUserPassword(ctx *appctx.AppContext, tenantID string, id string, password string) error {
-	user, err := s.GetUserByID(ctx, tenantID, id)
-	if err != nil {
-		return fmt.Errorf("failed to get user: %w", err)
+func (s *UserDataStore) UpdateUserPassword(ctx *appctx.AppContext, tenantID string, id string, password string) *diagnostics.Diagnostics {
+	diag := diagnostics.New("update_user_password")
+	user, getUserDiag := s.GetUserByID(ctx, tenantID, id)
+	if getUserDiag.HasErrors() {
+		diag.Append(getUserDiag)
+		return diag
 	}
 	encryptionService := encryption.GetInstance()
 	encryptedPassword, err := encryptionService.HashPassword(password)
 	if err != nil {
-		return fmt.Errorf("failed to encrypt password: %w", err)
+		diag.AddError("failed_to_encrypt_password", fmt.Sprintf("failed to encrypt password: %s", err.Error()), "user_data_store", nil)
+		return diag
 	}
 
 	// Create a minimal user object with only the fields we want to update
@@ -273,15 +328,18 @@ func (s *UserDataStore) UpdateUserPassword(ctx *appctx.AppContext, tenantID stri
 	// Use PartialUpdateMap to only update the password and updated_at fields
 	updates := utils.PartialUpdateMap(user, updatedUser, "updated_at")
 	if err := s.GetDB().Model(&entities.User{}).Where("id = ?", user.ID).Updates(updates).Error; err != nil {
-		return err
+		diag.AddError("failed_to_update_user_password", fmt.Sprintf("failed to update user password: %s", err.Error()), "user_data_store", nil)
+		return diag
 	}
-	return nil
+	return diag
 }
 
-func (s *UserDataStore) BlockUser(ctx *appctx.AppContext, tenantID string, id string) error {
-	user, err := s.GetUserByID(ctx, tenantID, id)
-	if err != nil {
-		return fmt.Errorf("failed to get user: %w", err)
+func (s *UserDataStore) BlockUser(ctx *appctx.AppContext, tenantID string, id string) *diagnostics.Diagnostics {
+	diag := diagnostics.New("block_user")
+	user, getUserDiag := s.GetUserByID(ctx, tenantID, id)
+	if getUserDiag.HasErrors() {
+		diag.Append(getUserDiag)
+		return diag
 	}
 
 	// Create a minimal user object with only the fields we want to update
@@ -296,15 +354,18 @@ func (s *UserDataStore) BlockUser(ctx *appctx.AppContext, tenantID string, id st
 	// Use PartialUpdateMap to only update the blocked and updated_at fields
 	updates := utils.PartialUpdateMap(user, updatedUser, "updated_at")
 	if err := s.GetDB().Model(&entities.User{}).Where("id = ?", user.ID).Updates(updates).Error; err != nil {
-		return err
+		diag.AddError("failed_to_block_user", fmt.Sprintf("failed to block user: %s", err.Error()), "user_data_store", nil)
+		return diag
 	}
-	return nil
+	return diag
 }
 
-func (s *UserDataStore) SetRefreshToken(ctx *appctx.AppContext, tenantID string, id string, refreshToken string) error {
-	user, err := s.GetUserByID(ctx, tenantID, id)
-	if err != nil {
-		return fmt.Errorf("failed to get user: %w", err)
+func (s *UserDataStore) SetRefreshToken(ctx *appctx.AppContext, tenantID string, id string, refreshToken string) *diagnostics.Diagnostics {
+	diag := diagnostics.New("set_refresh_token")
+	user, getUserDiag := s.GetUserByID(ctx, tenantID, id)
+	if getUserDiag.HasErrors() {
+		diag.Append(getUserDiag)
+		return diag
 	}
 
 	// Create a minimal user object with only the fields we want to update
@@ -320,92 +381,208 @@ func (s *UserDataStore) SetRefreshToken(ctx *appctx.AppContext, tenantID string,
 	// Use PartialUpdateMap to only update the refresh token fields and updated_at
 	updates := utils.PartialUpdateMap(user, updatedUser, "updated_at")
 	if err := s.GetDB().Model(&entities.User{}).Where("id = ?", user.ID).Updates(updates).Error; err != nil {
-		return err
+		diag.AddError("failed_to_set_refresh_token", fmt.Sprintf("failed to set refresh token: %s", err.Error()), "user_data_store", nil)
+		return diag
 	}
-	return nil
+	return diag
 }
 
 // DeleteUser deletes a user
-func (s *UserDataStore) DeleteUser(ctx *appctx.AppContext, tenantID string, id string) error {
-	user, err := s.GetUserByID(ctx, tenantID, id)
-	if err != nil {
-		return fmt.Errorf("failed to get user: %w", err)
+func (s *UserDataStore) DeleteUser(ctx *appctx.AppContext, tenantID string, id string) *diagnostics.Diagnostics {
+	diag := diagnostics.New("delete_user")
+	user, getUserDiag := s.GetUserByID(ctx, tenantID, id)
+	if getUserDiag.HasErrors() {
+		diag.Append(getUserDiag)
+		return diag
 	}
-	return s.GetDB().Delete(user).Error
+	if err := s.GetDB().Delete(user).Error; err != nil {
+		diag.AddError("failed_to_delete_user", fmt.Sprintf("failed to delete user: %s", err.Error()), "user_data_store", nil)
+		return diag
+	}
+	return diag
 }
 
-func (s *UserDataStore) GetUserClaims(ctx *appctx.AppContext, tenantID string, userID string) ([]entities.Claim, error) {
+func (s *UserDataStore) GetUserClaims(ctx *appctx.AppContext, tenantID string, userID string) ([]entities.Claim, *diagnostics.Diagnostics) {
+	diag := diagnostics.New("get_user_claims")
 	var user entities.User
 	result := s.GetDB().
-		Preload("Claims").
-		Preload("Roles").
+		Preload("Claims", func(db *gorm.DB) *gorm.DB {
+			return db.Order("claims.created_at DESC")
+		}).
 		Where("users.id = ?", userID).
 		Find(&user)
 	if result.Error != nil {
-		return nil, fmt.Errorf("failed to get user claims: %w", result.Error)
+		diag.AddError("failed_to_get_user_claims", fmt.Sprintf("failed to get user claims: %s", result.Error.Error()), "user_data_store", nil)
+		return nil, diag
 	}
 	if user.ID == "" {
-		return nil, fmt.Errorf("user not found")
+		diag.AddError("user_not_found", "user not found", "user_data_store", nil)
+		return nil, diag
 	}
 
-	return user.Claims, nil
+	return user.Claims, diag
 }
 
-func (s *UserDataStore) GetUserRoles(ctx *appctx.AppContext, tenantID string, userID string) ([]entities.Role, error) {
+func (s *UserDataStore) GetUserClaimsByQuery(ctx *appctx.AppContext, tenantID string, userID string, queryObj *filters.QueryBuilder) (*filters.QueryBuilderResponse[entities.Claim], *diagnostics.Diagnostics) {
+	diag := diagnostics.New("get_user_claims_by_query")
+	db := s.GetDB()
+	db = db.Table("user_claims").
+		Joins("JOIN claims ON claims.id = user_claims.claim_id").
+		Where("user_claims.user_id = ?", userID).
+		Where("claims.tenant_id = ?", tenantID)
+
+	result, err := db_utils.QueryDatabase[entities.Claim](db, tenantID, queryObj)
+	if err != nil {
+		diag.AddError("failed_to_get_user_claims_by_query", fmt.Sprintf("failed to get user claims by query: %s", err.Error()), "user_data_store", nil)
+		return nil, diag
+	}
+	return result, diag
+}
+
+func (s *UserDataStore) GetUserRoles(ctx *appctx.AppContext, tenantID string, userID string) ([]entities.Role, *diagnostics.Diagnostics) {
+	diag := diagnostics.New("get_user_roles")
 	var user entities.User
 	result := s.GetDB().
-		Preload("Roles").
+		Preload("Roles", func(db *gorm.DB) *gorm.DB {
+			return db.Order("roles.created_at DESC")
+		}).
 		Where("users.id = ?", userID).
 		Find(&user)
 	if result.Error != nil {
-		return nil, fmt.Errorf("failed to get user roles: %w", result.Error)
+		diag.AddError("failed_to_get_user_roles", fmt.Sprintf("failed to get user roles: %s", result.Error.Error()), "user_data_store", nil)
+		return nil, diag
 	}
 	if user.ID == "" {
-		return nil, fmt.Errorf("user not found")
+		diag.AddError("user_not_found", "user not found", "user_data_store", nil)
+		return nil, diag
 	}
 
-	return user.Roles, nil
+	return user.Roles, diag
 }
 
-func (s *UserDataStore) AddUserToRole(ctx *appctx.AppContext, tenantID string, userID string, roleIds []string) error {
-	_, err := s.GetUserByID(ctx, tenantID, userID)
+func (s *UserDataStore) GetUserRolesByQuery(ctx *appctx.AppContext, tenantID string, userID string, queryObj *filters.QueryBuilder) (*filters.QueryBuilderResponse[entities.Role], *diagnostics.Diagnostics) {
+	diag := diagnostics.New("get_user_roles_by_query")
+	db := s.GetDB()
+
+	// query the user_roles table and join the roles table and filter by the user_id
+	// and apply the query object to the query
+	db = db.Table("user_roles").
+		Joins("JOIN roles ON roles.id = user_roles.role_id").
+		Where("user_roles.user_id = ?", userID).
+		Where("roles.tenant_id = ?", tenantID)
+
+	result, err := db_utils.QueryDatabase[entities.Role](db, tenantID, queryObj)
 	if err != nil {
-		return fmt.Errorf("failed to get user: %w", err)
+		diag.AddError("failed_to_get_user_roles_by_query", fmt.Sprintf("failed to get user roles by query: %s", err.Error()), "user_data_store", nil)
+		return nil, diag
 	}
-
-	// This method will need to be updated to use the role store
-	// For now, we'll keep it simple and just return an error
-	return fmt.Errorf("add user to role functionality moved to role service")
+	return result, diag
 }
 
-func (s *UserDataStore) RemoveUserFromRole(ctx *appctx.AppContext, tenantID string, userID string, roleIdOrSlug string) error {
-	_, err := s.GetUserByID(ctx, tenantID, userID)
-	if err != nil {
-		return fmt.Errorf("failed to get user: %w", err)
+func (s *UserDataStore) AddUserToRole(ctx *appctx.AppContext, tenantID string, userID string, roleId string) *diagnostics.Diagnostics {
+	diag := diagnostics.New("add_user_to_role")
+	_, getUserDiag := s.GetUserByID(ctx, tenantID, userID)
+	if getUserDiag.HasErrors() {
+		diag.Append(getUserDiag)
+		return diag
 	}
 
-	// This method will need to be updated to use the role store
-	// For now, we'll keep it simple and just return an error
-	return fmt.Errorf("remove user from role functionality moved to role service")
+	// checking if the dbRole exists in the database
+	var dbRole entities.Role
+	roleDbResult := s.GetDB().Where("tenant_id = ? AND id = ?", tenantID, roleId).First(&dbRole)
+	if roleDbResult.Error != nil {
+		diag.AddError("failed_to_get_role", fmt.Sprintf("failed to get role: %s", roleDbResult.Error.Error()), "user_data_store", nil)
+		return diag
+	}
+	if dbRole.ID == "" {
+		diag.AddError("role_not_found", "role not found", "user_data_store", nil)
+		return diag
+	}
+
+	// role exists in the relationship
+	var userRole entities.UserRoles
+	userRoleDbResult := s.GetDB().Where("user_id = ? AND role_id = ?", userID, roleId).First(&userRole)
+	if userRoleDbResult.Error != nil {
+		diag.AddError("failed_to_get_user_role", fmt.Sprintf("failed to get user role: %s", userRoleDbResult.Error.Error()), "user_data_store", nil)
+		return diag
+	}
+	if userRole.RoleID != "" {
+		diag.AddError("role_already_associated_with_user", "role already associated with user", "user_data_store", nil)
+		return diag
+	}
+
+	// create the user role association
+	userRole = entities.UserRoles{
+		UserID: userID,
+		RoleID: roleId,
+	}
+
+	createUserRoleDbResult := s.GetDB().Create(&userRole)
+	if createUserRoleDbResult.Error != nil {
+		diag.AddError("failed_to_create_user_role", fmt.Sprintf("failed to create user role: %s", createUserRoleDbResult.Error.Error()), "user_data_store", nil)
+		return diag
+	}
+
+	return diag
 }
 
-func (s *UserDataStore) AddClaimToUser(ctx *appctx.AppContext, tenantID string, userID string, claimIdOrSlug string) error {
+func (s *UserDataStore) RemoveUserFromRole(ctx *appctx.AppContext, tenantID string, userID string, roleId string) *diagnostics.Diagnostics {
+	diag := diagnostics.New("remove_user_from_role")
+	_, getUserDiag := s.GetUserByID(ctx, tenantID, userID)
+	if getUserDiag.HasErrors() {
+		diag.Append(getUserDiag)
+		return diag
+	}
+
+	// checking if the user role exists in the database
+	var userRole entities.UserRoles
+	userRoleDbResult := s.GetDB().Where("user_id = ? AND role_id = ?", userID, roleId).First(&userRole)
+	if userRoleDbResult.Error != nil {
+		diag.AddError("failed_to_get_user_role", fmt.Sprintf("failed to get user role: %s", userRoleDbResult.Error.Error()), "user_data_store", nil)
+		return diag
+	}
+	if userRole.RoleID == "" {
+		diag.AddError("user_role_not_found", "user role not found", "user_data_store", nil)
+		return diag
+	}
+
+	// delete the user role association
+	userRoleDbResult = s.GetDB().Delete(&userRole)
+	if userRoleDbResult.Error != nil {
+		diag.AddError("failed_to_delete_user_role", fmt.Sprintf("failed to delete user role: %s", userRoleDbResult.Error.Error()), "user_data_store", nil)
+		return diag
+	}
+
+	return diag
+}
+
+func (s *UserDataStore) AddClaimToUser(ctx *appctx.AppContext, tenantID string, userID string, claimIdOrSlug string) *diagnostics.Diagnostics {
+	diag := diagnostics.New("add_claim_to_user")
+	_, getUserDiag := s.GetUserByID(ctx, tenantID, userID)
+	if getUserDiag.HasErrors() {
+		diag.Append(getUserDiag)
+		return diag
+	}
 	var user entities.User
 	result := s.GetDB().Where("tenant_id = ? AND id = ?", tenantID, userID).First(&user)
 	if result.Error != nil {
-		return fmt.Errorf("failed to get user: %w", result.Error)
+		diag.AddError("failed_to_get_user", fmt.Sprintf("failed to get user: %s", result.Error.Error()), "user_data_store", nil)
+		return diag
 	}
 	if user.ID == "" {
-		return fmt.Errorf("user not found")
+		diag.AddError("user_not_found", "user not found", "user_data_store", nil)
+		return diag
 	}
 
 	var claim entities.Claim
 	result = s.GetDB().Where("tenant_id = ? AND id = ?", tenantID, claimIdOrSlug).First(&claim)
 	if result.Error != nil {
-		return fmt.Errorf("failed to get claim: %w", result.Error)
+		diag.AddError("failed_to_get_claim", fmt.Sprintf("failed to get claim: %s", result.Error.Error()), "user_data_store", nil)
+		return diag
 	}
 	if claim.ID == "" {
-		return fmt.Errorf("claim not found")
+		diag.AddError("claim_not_found", "claim not found", "user_data_store", nil)
+		return diag
 	}
 
 	// Check if the claim is already associated with the user
@@ -413,11 +590,13 @@ func (s *UserDataStore) AddClaimToUser(ctx *appctx.AppContext, tenantID string, 
 	result = s.GetDB().Where("user_id = ? AND claim_id = ?", user.ID, claim.ID).First(&userClaims)
 	if result.Error != nil {
 		if !errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			return fmt.Errorf("failed to get user claim: %w", result.Error)
+			diag.AddError("failed_to_get_user_claim", fmt.Sprintf("failed to get user claim: %s", result.Error.Error()), "user_data_store", nil)
+			return diag
 		}
 	}
 	if userClaims.ClaimID != "" {
-		return fmt.Errorf("claim already associated with user")
+		diag.AddError("claim_already_associated_with_user", "claim already associated with user", "user_data_store", nil)
+		return diag
 	}
 
 	// Create the user claim association
@@ -428,29 +607,41 @@ func (s *UserDataStore) AddClaimToUser(ctx *appctx.AppContext, tenantID string, 
 
 	result = s.GetDB().Create(&userClaim)
 	if result.Error != nil {
-		return fmt.Errorf("failed to create user claim: %w", result.Error)
+		diag.AddError("failed_to_create_user_claim", fmt.Sprintf("failed to create user claim: %s", result.Error.Error()), "user_data_store", nil)
+		return diag
 	}
 
-	return nil
+	return diag
 }
 
-func (s *UserDataStore) RemoveClaimFromUser(ctx *appctx.AppContext, tenantID string, userID string, claimIdOrSlug string) error {
+func (s *UserDataStore) RemoveClaimFromUser(ctx *appctx.AppContext, tenantID string, userID string, claimIdOrSlug string) *diagnostics.Diagnostics {
+	diag := diagnostics.New("remove_claim_from_user")
+	_, getUserDiag := s.GetUserByID(ctx, tenantID, userID)
+	if getUserDiag.HasErrors() {
+		diag.Append(getUserDiag)
+		return diag
+	}
+
 	var user entities.User
 	result := s.GetDB().Where("tenant_id = ? AND id = ?", tenantID, userID).First(&user)
 	if result.Error != nil {
-		return fmt.Errorf("failed to get user: %w", result.Error)
+		diag.AddError("failed_to_get_user", fmt.Sprintf("failed to get user: %s", result.Error.Error()), "user_data_store", nil)
+		return diag
 	}
 	if user.ID == "" {
-		return fmt.Errorf("user not found")
+		diag.AddError("user_not_found", "user not found", "user_data_store", nil)
+		return diag
 	}
 
 	var claim entities.Claim
 	result = s.GetDB().Where("tenant_id = ? AND id = ?", tenantID, claimIdOrSlug).First(&claim)
 	if result.Error != nil {
-		return fmt.Errorf("failed to get claim: %w", result.Error)
+		diag.AddError("failed_to_get_claim", fmt.Sprintf("failed to get claim: %s", result.Error.Error()), "user_data_store", nil)
+		return diag
 	}
 	if claim.ID == "" {
-		return fmt.Errorf("claim not found")
+		diag.AddError("claim_not_found", "claim not found", "user_data_store", nil)
+		return diag
 	}
 
 	// Check if the claim is associated with the user
@@ -458,18 +649,21 @@ func (s *UserDataStore) RemoveClaimFromUser(ctx *appctx.AppContext, tenantID str
 	result = s.GetDB().Where("user_id = ? AND claim_id = ?", user.ID, claim.ID).First(&userClaims)
 	if result.Error != nil {
 		if !errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			return fmt.Errorf("failed to get user claim: %w", result.Error)
+			diag.AddError("failed_to_get_user_claim", fmt.Sprintf("failed to get user claim: %s", result.Error.Error()), "user_data_store", nil)
+			return diag
 		}
 	}
 	if userClaims.ClaimID == "" {
-		return fmt.Errorf("claim not associated with user")
+		diag.AddError("claim_not_associated_with_user", "claim not associated with user", "user_data_store", nil)
+		return diag
 	}
 
 	// Delete the user claim association
 	result = s.GetDB().Delete(&userClaims)
 	if result.Error != nil {
-		return fmt.Errorf("failed to delete user claim: %w", result.Error)
+		diag.AddError("failed_to_delete_user_claim", fmt.Sprintf("failed to delete user claim: %s", result.Error.Error()), "user_data_store", nil)
+		return diag
 	}
 
-	return nil
+	return diag
 }

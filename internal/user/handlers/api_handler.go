@@ -153,8 +153,56 @@ func (h *ApiHandler) Routes() []api_types.Route {
 				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
 				Claims: &api_types.SecurityRequirementClaims{
 					Relation: api_types.SecurityRequirementRelationAnd,
-					Items:    []pkg_models.Claim{{Service: "user", Module: "api", Action: pkg_models.AccessLevelRead}},
+					Items:    []pkg_models.Claim{{Service: "user", Module: "api", Action: pkg_models.AccessLevelWrite}},
 				},
+			},
+		},
+		{
+			Method:      http.MethodGet,
+			Path:        "/v1/users/{id}/roles",
+			Handler:     h.HandleGetUserRoles,
+			Description: "Get a user roles",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "user", Module: "api", Action: pkg_models.AccessLevelWrite}},
+				},
+			},
+		},
+		{
+			Method:      http.MethodPost,
+			Path:        "/v1/users/{id}/roles",
+			Handler:     h.HandleAddRoleToUser,
+			Description: "Add a role to a user",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "user", Module: "api", Action: pkg_models.AccessLevelWrite}},
+				},
+			},
+		},
+		{
+			Method:      http.MethodDelete,
+			Path:        "/v1/users/{id}/roles/{roleId}",
+			Handler:     h.HandleRemoveRoleFromUser,
+			Description: "Remove a role from a user",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "user", Module: "api", Action: pkg_models.AccessLevelWrite}},
+				},
+			},
+		},
+		{
+			Method:      http.MethodGet,
+			Path:        "/v1/users/self/roles",
+			Handler:     h.HandleGetSelfUserRoles,
+			Description: "Get the current user roles",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
 			},
 		},
 	}
@@ -215,22 +263,19 @@ func (h *ApiHandler) HandleGetSelfUser(w http.ResponseWriter, r *http.Request) {
 // @Router       /users [get]
 func (h *ApiHandler) HandleGetUsers(w http.ResponseWriter, r *http.Request) {
 	ctx := appctx.FromContext(r.Context())
-	filter, err := utils.GetFilterFromRequest(r)
-	if err != nil {
-		api.WriteError(w, r, http.StatusBadRequest, "Invalid filter", "Invalid filter", err.Error())
-		return
-	}
+
+	pagination := utils.ParseQueryRequest(r)
 	tenantID := ctx.GetTenantID()
 	if tenantID == "" {
 		api.WriteError(w, r, http.StatusBadRequest, "Tenant ID is required", "Tenant ID is required", "")
 		return
 	}
-	users, diag := h.userService.GetUsersByFilter(ctx, tenantID, filter)
+	users, diag := h.userService.GetUsers(ctx, tenantID, pagination)
 	if diag.HasErrors() {
 		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, "Failed to get users", "Failed to get users", diag)
 		return
 	}
-	api.WritePaginatedResponse(w, r, users.Data, users.Pagination, users.TotalCount)
+	api.WriteObjectResponse(w, r, users)
 }
 
 // @Summary      Get user by ID
@@ -476,7 +521,9 @@ func (h *ApiHandler) HandleGetUserClaims(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	claims, diag := h.userService.GetUserClaims(ctx, tenantID, id)
+	pagination := utils.ParseQueryRequest(r)
+
+	claims, diag := h.userService.GetUserClaims(ctx, tenantID, id, pagination)
 	if diag.HasErrors() {
 		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, "Failed to get user claims", "Failed to get user claims", diag)
 		return
@@ -499,11 +546,121 @@ func (h *ApiHandler) HandleGetSelfUserClaims(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	claims, diag := h.userService.GetUserClaims(ctx, tenantID, id)
+	pagination := utils.ParseQueryRequest(r)
+
+	claims, diag := h.userService.GetUserClaims(ctx, tenantID, id, pagination)
 	if diag.HasErrors() {
 		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, "Failed to get user claims", "Failed to get user claims", diag)
 		return
 	}
 
 	api.WriteObjectResponse(w, r, claims)
+}
+
+func (h *ApiHandler) HandleGetUserRoles(w http.ResponseWriter, r *http.Request) {
+	ctx := appctx.FromContext(r.Context())
+	tenantID := ctx.GetTenantID()
+	if tenantID == "" {
+		api.WriteError(w, r, http.StatusBadRequest, "Tenant ID is required", "Tenant ID is required", "")
+		return
+	}
+
+	id := mux.Vars(r)["id"]
+	if id == "" {
+		api.WriteError(w, r, http.StatusBadRequest, "User ID is required", "User ID is required", "")
+		return
+	}
+
+	pagination := utils.ParseQueryRequest(r)
+
+	roles, diag := h.userService.GetUserRoles(ctx, tenantID, id, pagination)
+	if diag.HasErrors() {
+		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, "Failed to get user roles", "Failed to get user roles", diag)
+		return
+	}
+
+	api.WriteObjectResponse(w, r, roles)
+}
+
+func (h *ApiHandler) HandleAddRoleToUser(w http.ResponseWriter, r *http.Request) {
+	ctx := appctx.FromContext(r.Context())
+	tenantID := ctx.GetTenantID()
+	if tenantID == "" {
+		api.WriteError(w, r, http.StatusBadRequest, "Tenant ID is required", "Tenant ID is required", "")
+		return
+	}
+
+	id := mux.Vars(r)["id"]
+	if id == "" {
+		api.WriteError(w, r, http.StatusBadRequest, "User ID is required", "User ID is required", "")
+		return
+	}
+
+	roleId := mux.Vars(r)["roleId"]
+	if roleId == "" {
+		api.WriteError(w, r, http.StatusBadRequest, "Role ID is required", "Role ID is required", "")
+		return
+	}
+
+	diag := h.userService.AddRoleToUser(ctx, tenantID, id, roleId)
+	if diag.HasErrors() {
+		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, "Failed to add role to user", "Failed to add role to user", diag)
+		return
+	}
+
+	api.WriteSuccessResponse(w, r, id, "Role added to user successfully")
+}
+
+func (h *ApiHandler) HandleRemoveRoleFromUser(w http.ResponseWriter, r *http.Request) {
+	ctx := appctx.FromContext(r.Context())
+	tenantID := ctx.GetTenantID()
+	if tenantID == "" {
+		api.WriteError(w, r, http.StatusBadRequest, "Tenant ID is required", "Tenant ID is required", "")
+		return
+	}
+
+	id := mux.Vars(r)["id"]
+	if id == "" {
+		api.WriteError(w, r, http.StatusBadRequest, "User ID is required", "User ID is required", "")
+		return
+	}
+
+	roleId := mux.Vars(r)["roleId"]
+	if roleId == "" {
+		api.WriteError(w, r, http.StatusBadRequest, "Role ID is required", "Role ID is required", "")
+		return
+	}
+
+	diag := h.userService.RemoveRoleFromUser(ctx, tenantID, id, roleId)
+	if diag.HasErrors() {
+		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, "Failed to remove role from user", "Failed to remove role from user", diag)
+		return
+	}
+
+	api.WriteSuccessResponse(w, r, id, "Role removed from user successfully")
+}
+
+func (h *ApiHandler) HandleGetSelfUserRoles(w http.ResponseWriter, r *http.Request) {
+	ctx := appctx.FromContext(r.Context())
+	tenantID := ctx.GetTenantID()
+	if tenantID == "" {
+		api.WriteError(w, r, http.StatusBadRequest, "Tenant ID is required", "Tenant ID is required", "")
+		return
+	}
+
+	id := ctx.GetUserID()
+	if id == "" {
+		api.WriteError(w, r, http.StatusBadRequest, "User ID is required", "User ID is required", "")
+		return
+	}
+
+	pagination := utils.ParseQueryRequest(r)
+
+	roles, diag := h.userService.GetUserRoles(ctx, tenantID, id, pagination)
+	if diag.HasErrors() {
+		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, "Failed to get user roles", "Failed to get user roles", diag)
+		return
+	}
+
+	api.WriteObjectResponse(w, r, roles)
 }

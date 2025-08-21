@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sync"
 
+	activity_interfaces "github.com/cjlapao/locally-cli/internal/activity/interfaces"
+	activity_types "github.com/cjlapao/locally-cli/internal/activity/types"
 	api_models "github.com/cjlapao/locally-cli/internal/api/models"
 	"github.com/cjlapao/locally-cli/internal/appctx"
 	"github.com/cjlapao/locally-cli/internal/certificates/interfaces"
@@ -29,10 +31,12 @@ var (
 type CertificateService struct {
 	certificatesStore stores.CertificatesDataStoreInterface
 	tenantStore       stores.TenantDataStoreInterface
+	activityService   activity_interfaces.ActivityServiceInterface
 }
 
 func Initialize(certificatesStore stores.CertificatesDataStoreInterface,
 	tenantStore stores.TenantDataStoreInterface,
+	activityService activity_interfaces.ActivityServiceInterface,
 ) interfaces.CertificateServiceInterface {
 	certificateServiceMutex.Lock()
 	defer certificateServiceMutex.Unlock()
@@ -269,13 +273,13 @@ func (s *CertificateService) GetX509Certificate(ctx *appctx.AppContext, tenantId
 	return cert, diag
 }
 
-func (s *CertificateService) GetCertificates(ctx *appctx.AppContext, tenantId string, pagination *api_models.PaginationRequest) (*api_models.PaginatedResponse[models.Certificate], *diagnostics.Diagnostics) {
+func (s *CertificateService) GetCertificates(ctx *appctx.AppContext, tenantId string, pagination *api_models.PaginationRequest) (*api_models.PaginationResponse[models.Certificate], *diagnostics.Diagnostics) {
 	diag := diagnostics.New("get_certificates")
 	var query *filters.QueryBuilder
 	if pagination != nil {
 		query = pagination.ToQueryBuilder()
 	}
-	certificates, certificatesDiag := s.certificatesStore.GetCertificates(ctx, tenantId, query)
+	certificates, certificatesDiag := s.certificatesStore.GetCertificatesByQuery(ctx, tenantId, query)
 	if certificatesDiag.HasErrors() {
 		diag.Append(certificatesDiag)
 		return nil, certificatesDiag
@@ -286,7 +290,7 @@ func (s *CertificateService) GetCertificates(ctx *appctx.AppContext, tenantId st
 		certs[i] = mappers.MapCertificateToDto(cert)
 	}
 
-	return &api_models.PaginatedResponse[models.Certificate]{
+	return &api_models.PaginationResponse[models.Certificate]{
 		TotalCount: certificates.Total,
 		Pagination: api_models.Pagination{
 			Page:       certificates.Page,
@@ -310,6 +314,35 @@ func (s *CertificateService) GetCertificateBy(ctx *appctx.AppContext, tenantId s
 
 	cert := mappers.MapCertificateToDto(*certificate)
 	return &cert, diag
+}
+
+func (s *CertificateService) GetCertificatesByType(ctx *appctx.AppContext, tenantId string, certType pkg_types.CertificateType, pagination *api_models.PaginationRequest) (*api_models.PaginationResponse[models.Certificate], *diagnostics.Diagnostics) {
+	diag := diagnostics.New("get_certificates_by_type")
+	var query *filters.QueryBuilder
+	if pagination != nil {
+		query = pagination.ToQueryBuilder()
+	}
+
+	certificates, certificatesDiag := s.certificatesStore.GetCertificatesByType(ctx, tenantId, certType, query)
+	if certificatesDiag.HasErrors() {
+		diag.Append(certificatesDiag)
+		return nil, certificatesDiag
+	}
+
+	certs := make([]models.Certificate, len(certificates.Items))
+	for i, cert := range certificates.Items {
+		certs[i] = mappers.MapCertificateToDto(cert)
+	}
+
+	return &api_models.PaginationResponse[models.Certificate]{
+		TotalCount: certificates.Total,
+		Pagination: api_models.Pagination{
+			Page:       certificates.Page,
+			PageSize:   certificates.PageSize,
+			TotalPages: certificates.TotalPages,
+		},
+		Data: certs,
+	}, diag
 }
 
 func (s *CertificateService) CreateCertificate(ctx *appctx.AppContext, tenantId string, certType pkg_types.CertificateType, certificateConfig models.CertificateConfig) (*models.Certificate, *diagnostics.Diagnostics) {
@@ -365,6 +398,25 @@ func (s *CertificateService) CreateCertificate(ctx *appctx.AppContext, tenantId 
 		return nil, diag
 	}
 
+	// creating the activity
+	activityDiags := s.activityService.RecordSuccessActivity(ctx, "create_certificate", &activity_types.ActivityRecord{
+		Module:        CertificateModuleKey,
+		Message:       "Certificate created successfully",
+		Service:       "certificates",
+		Success:       true,
+		ActorType:     activity_types.ActorTypeUser,
+		ActivityType:  activity_types.ActivityTypeCreate,
+		ActivityLevel: activity_types.ActivityLevelInfo,
+		Data: &activity_types.ActivityData{
+			Metadata: map[string]interface{}{
+				"certificate_id": createdCert.ID,
+			},
+		},
+	})
+	if activityDiags.HasErrors() {
+		diag.Append(activityDiags)
+	}
+
 	response := mappers.MapCertificateToDto(*createdCert)
 
 	return &response, diag
@@ -378,6 +430,17 @@ func (s *CertificateService) GetRootCertificate(ctx *appctx.AppContext) (*models
 		return nil, rootCertificateDiag
 	}
 	cert := mappers.MapCertificateToDto(*rootCertificate)
+	return &cert, diag
+}
+
+func (s *CertificateService) GetTenantIntermediateCertificate(ctx *appctx.AppContext, tenantId string) (*models.Certificate, *diagnostics.Diagnostics) {
+	diag := diagnostics.New("get_tenant_intermediate_certificate")
+	intermediateCertificate, intermediateCertificateDiag := s.certificatesStore.GetTenantIntermediateCertificate(ctx, tenantId)
+	if intermediateCertificateDiag.HasErrors() {
+		diag.Append(intermediateCertificateDiag)
+		return nil, intermediateCertificateDiag
+	}
+	cert := mappers.MapCertificateToDto(*intermediateCertificate)
 	return &cert, diag
 }
 

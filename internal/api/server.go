@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	activity_interfaces "github.com/cjlapao/locally-cli/internal/activity/interfaces"
 	"github.com/cjlapao/locally-cli/internal/api/middleware"
 	"github.com/cjlapao/locally-cli/internal/api/types"
 	auth_interfaces "github.com/cjlapao/locally-cli/internal/auth/interfaces"
@@ -26,15 +27,17 @@ type Server struct {
 	middlewareChain *middleware.MiddlewareChain
 	routeGroups     []types.RouteGroup
 	authService     auth_interfaces.AuthServiceInterface
+	activityService activity_interfaces.ActivityServiceInterface
 }
 
 // Config represents the server configuration
 type Config struct {
-	Port        int
-	Hostname    string
-	Prefix      string
-	AuthService auth_interfaces.AuthServiceInterface
-	CORSConfig  *middleware.CORSConfig // Optional CORS configuration
+	Port            int
+	Hostname        string
+	Prefix          string
+	AuthService     auth_interfaces.AuthServiceInterface
+	ActivityService activity_interfaces.ActivityServiceInterface
+	CORSConfig      *middleware.CORSConfig // Optional CORS configuration
 }
 
 // NewServer creates a new HTTP server
@@ -56,6 +59,7 @@ func NewServer(cfg Config) *Server {
 		middlewareChain: middlewareChain,
 		routeGroups:     make([]types.RouteGroup, 0),
 		authService:     cfg.AuthService,
+		activityService: cfg.ActivityService,
 	}
 }
 
@@ -100,7 +104,7 @@ func (s *Server) registerRoute(route types.Route) {
 	}
 
 	// Add new auth middleware if required
-	routeChain.AddPreMiddleware(middleware.NewAuthorizationPreMiddleware(s.authService, &route))
+	routeChain.AddPreMiddleware(middleware.NewAuthorizationPreMiddleware(s.authService, s.activityService, &route))
 
 	// Add global post-middlewares
 	for _, middleware := range s.middlewareChain.PostMiddlewares {
@@ -186,7 +190,7 @@ func (s *Server) Start() error {
 				routeChain.AddPreMiddleware(middleware)
 			}
 
-			routeChain.AddPreMiddleware(middleware.NewAuthorizationPreMiddleware(s.authService, &route))
+			routeChain.AddPreMiddleware(middleware.NewAuthorizationPreMiddleware(s.authService, s.activityService, &route))
 
 			// Add global post-middlewares
 			for _, middleware := range s.middlewareChain.PostMiddlewares {

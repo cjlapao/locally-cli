@@ -12,18 +12,6 @@ import (
 // This can be used for general API functionality that doesn't belong to specific domains
 type Handler struct{}
 
-type PaginatedResponse[T any] struct {
-	TotalCount int64      `json:"total_count"`
-	Pagination Pagination `json:"pagination"`
-	Data       []T        `json:"data"`
-}
-
-type Pagination struct {
-	Page       int `json:"page,omitempty"`
-	PageSize   int `json:"page_size,omitempty"`
-	TotalPages int `json:"total_pages,omitempty"`
-}
-
 type PaginationRequest struct {
 	Page     int    `json:"page,omitempty"`
 	PageSize int    `json:"page_size,omitempty"`
@@ -119,6 +107,12 @@ type PaginationResponse[T any] struct {
 	TotalCount int64      `json:"total_count"`
 	Pagination Pagination `json:"pagination"`
 	Data       []T        `json:"data"`
+}
+
+type Pagination struct {
+	Page       int `json:"page,omitempty"`
+	PageSize   int `json:"page_size,omitempty"`
+	TotalPages int `json:"total_pages,omitempty"`
 }
 
 type StatusResponse struct {

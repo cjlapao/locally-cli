@@ -2,6 +2,7 @@ package stores
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -27,13 +28,14 @@ var (
 type CertificatesDataStoreInterface interface {
 	GetRootCertificate(ctx *appctx.AppContext) (*entities.Certificate, *diagnostics.Diagnostics)
 	GetTenantIntermediateCertificate(ctx *appctx.AppContext, tenantID string) (*entities.Certificate, *diagnostics.Diagnostics)
-	GetCertificates(ctx *appctx.AppContext, tenantID string, query_builder *filters.QueryBuilder) (*filters.QueryBuilderResponse[entities.Certificate], *diagnostics.Diagnostics)
+	GetCertificates(ctx *appctx.AppContext, tenantID string) ([]entities.Certificate, *diagnostics.Diagnostics)
+	GetCertificatesByQuery(ctx *appctx.AppContext, tenantID string, query_builder *filters.QueryBuilder) (*filters.QueryBuilderResponse[entities.Certificate], *diagnostics.Diagnostics)
 	CreateCertificate(ctx *appctx.AppContext, tenantID string, certificate *entities.Certificate) (*entities.Certificate, *diagnostics.Diagnostics)
 	DeleteCertificate(ctx *appctx.AppContext, tenantID string, id string) *diagnostics.Diagnostics
 	// new ones
 	GetCertificateBy(ctx *appctx.AppContext, tenantId string, slugOrId string) (*entities.Certificate, *diagnostics.Diagnostics)
 	GetCertificateByType(ctx *appctx.AppContext, tenantId string, certType pkg_types.CertificateType, slugOrId string) (*entities.Certificate, *diagnostics.Diagnostics)
-	GetCertificatesByType(ctx *appctx.AppContext, tenantId string, certType pkg_types.CertificateType) ([]entities.Certificate, *diagnostics.Diagnostics)
+	GetCertificatesByType(ctx *appctx.AppContext, tenantId string, certType pkg_types.CertificateType, query_builder *filters.QueryBuilder) (*filters.QueryBuilderResponse[entities.Certificate], *diagnostics.Diagnostics)
 }
 
 type CertificatesDataStore struct {
@@ -79,11 +81,11 @@ func InitializeCertificatesDataStore() (CertificatesDataStoreInterface, *diagnos
 func (s *CertificatesDataStore) Migrate() *diagnostics.Diagnostics {
 	diag := diagnostics.New("migrate_certificates_data_store")
 	if err := s.GetDB().AutoMigrate(&entities.Certificate{}); err != nil {
-		diag.AddError("failed_to_migrate_certificates_table", "failed to migrate certificates table", "certificates_data_store", nil)
+		diag.AddError("failed_to_migrate_certificates_table", fmt.Sprintf("failed to migrate certificates table: %v", err), "certificates_data_store", nil)
 		return diag
 	}
 	if err := s.GetDB().AutoMigrate(&entities.CertificateConfig{}); err != nil {
-		diag.AddError("failed_to_migrate_certificate_configs_table", "failed to migrate certificate configs table", "certificates_data_store", nil)
+		diag.AddError("failed_to_migrate_certificate_configs_table", fmt.Sprintf("failed to migrate certificate configs table: %v", err), "certificates_data_store", nil)
 		return diag
 	}
 	return diag
@@ -100,7 +102,7 @@ func (s *CertificatesDataStore) GetCertificateBy(ctx *appctx.AppContext, tenantI
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, diag
 		}
-		diag.AddError("failed_to_get_certificate_by", "failed to get certificate by", "certificates_data_store", nil)
+		diag.AddError("failed_to_get_certificate_by", fmt.Sprintf("failed to get certificate by: %v", err), "certificates_data_store", nil)
 		return nil, diag
 	}
 	return &certificate, diag
@@ -117,24 +119,29 @@ func (s *CertificatesDataStore) GetCertificateByType(ctx *appctx.AppContext, ten
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, diag
 		}
-		diag.AddError("failed_to_get_certificate_by", "failed to get certificate by", "certificates_data_store", nil)
+		diag.AddError("failed_to_get_certificate_by", fmt.Sprintf("failed to get certificate by: %v", err), "certificates_data_store", nil)
 		return nil, diag
 	}
 	return &certificate, diag
 }
 
-func (s *CertificatesDataStore) GetCertificatesByType(ctx *appctx.AppContext, tenantId string, certType pkg_types.CertificateType) ([]entities.Certificate, *diagnostics.Diagnostics) {
+func (s *CertificatesDataStore) GetCertificatesByType(ctx *appctx.AppContext, tenantID string, certType pkg_types.CertificateType, queryBuilder *filters.QueryBuilder) (*filters.QueryBuilderResponse[entities.Certificate], *diagnostics.Diagnostics) {
 	diag := diagnostics.New("store_get_certificates_by_type")
 	db := s.GetDB()
-	var certificates []entities.Certificate
-	if err := db.Where("tenant_id = ? AND type = ?", tenantId, certType).Find(&certificates).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, diag
-		}
-		diag.AddError("failed_to_get_certificate_by_type", "failed to get certificate by type", "certificates_data_store", nil)
+	db = db.Preload("Config")
+	db = db.Where("type = ?", certType)
+
+	if queryBuilder == nil {
+		queryBuilder = filters.NewQueryBuilder("")
+	}
+
+	result, err := db_utils.QueryDatabase[entities.Certificate](db, tenantID, queryBuilder)
+	if err != nil {
+		diag.AddError("failed_to_get_certificates", fmt.Sprintf("failed to get certificates: %v", err), "certificates_data_store", nil)
 		return nil, diag
 	}
-	return certificates, diag
+
+	return result, diag
 }
 
 func (s *CertificatesDataStore) GetRootCertificate(ctx *appctx.AppContext) (*entities.Certificate, *diagnostics.Diagnostics) {
@@ -156,10 +163,16 @@ func (s *CertificatesDataStore) GetRootCertificate(ctx *appctx.AppContext) (*ent
 
 func (s *CertificatesDataStore) GetTenantIntermediateCertificate(ctx *appctx.AppContext, tenantID string) (*entities.Certificate, *diagnostics.Diagnostics) {
 	diag := diagnostics.New("store_get_tenant_intermediate_certificate")
-	certificate, certificateDiag := s.GetCertificateByType(ctx, tenantID, pkg_types.CertificateTypeIntermediate, tenantID)
-	if certificateDiag.HasErrors() {
-		diag.Append(certificateDiag)
-		return nil, certificateDiag
+	db := s.GetDB()
+	db = db.Preload("Config")
+	db = db.Where("tenant_id = ? AND type = ?", tenantID, pkg_types.CertificateTypeIntermediate)
+	var certificate *entities.Certificate
+	if err := db.First(&certificate).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, diag
+		}
+		diag.AddError("failed_to_get_intermediate_certificate", fmt.Sprintf("failed to get intermediate certificate: %v", err), "certificates_data_store", nil)
+		return nil, diag
 	}
 	if certificate == nil {
 		diag.AddError("intermediate_certificate_not_found", "intermediate certificate not found", "certificates_data_store", nil)
@@ -168,7 +181,27 @@ func (s *CertificatesDataStore) GetTenantIntermediateCertificate(ctx *appctx.App
 	return certificate, diag
 }
 
-func (s *CertificatesDataStore) GetCertificates(ctx *appctx.AppContext, tenantID string, queryBuilder *filters.QueryBuilder) (*filters.QueryBuilderResponse[entities.Certificate], *diagnostics.Diagnostics) {
+func (s *CertificatesDataStore) GetCertificates(ctx *appctx.AppContext, tenantID string) ([]entities.Certificate, *diagnostics.Diagnostics) {
+	diag := diagnostics.New("store_get_certificates")
+	if tenantID == "" {
+		diag.AddError("tenant_id_cannot_be_empty", "tenant ID cannot be empty", "certificates_data_store", nil)
+		return nil, diag
+	}
+
+	db := s.GetDB()
+	db = db.Preload("Config")
+	db = db.Where("tenant_id = ?", tenantID)
+
+	var certificates []entities.Certificate
+	if err := db.Find(&certificates).Error; err != nil {
+		diag.AddError("failed_to_get_certificates", fmt.Sprintf("failed to get certificates: %v", err), "certificates_data_store", nil)
+		return nil, diag
+	}
+
+	return certificates, diag
+}
+
+func (s *CertificatesDataStore) GetCertificatesByQuery(ctx *appctx.AppContext, tenantID string, queryBuilder *filters.QueryBuilder) (*filters.QueryBuilderResponse[entities.Certificate], *diagnostics.Diagnostics) {
 	diag := diagnostics.New("store_get_certificates")
 	db := s.GetDB()
 	db = db.Preload("Config")
@@ -179,7 +212,7 @@ func (s *CertificatesDataStore) GetCertificates(ctx *appctx.AppContext, tenantID
 
 	result, err := db_utils.QueryDatabase[entities.Certificate](db, tenantID, queryBuilder)
 	if err != nil {
-		diag.AddError("failed_to_get_certificates", "failed to get certificates", "certificates_data_store", nil)
+		diag.AddError("failed_to_get_certificates", fmt.Sprintf("failed to get certificates: %v", err), "certificates_data_store", nil)
 		return nil, diag
 	}
 
@@ -228,7 +261,7 @@ func (s *CertificatesDataStore) CreateCertificate(ctx *appctx.AppContext, tenant
 
 	db := s.GetDB()
 	if err := db.Save(certificate).Error; err != nil {
-		diag.AddError("failed_to_create_certificate", "failed to create certificate", "certificates_data_store", map[string]interface{}{
+		diag.AddError("failed_to_create_certificate", fmt.Sprintf("failed to create certificate: %v", err), "certificates_data_store", map[string]interface{}{
 			"error":          err.Error(),
 			"certificate_id": certificate.ID,
 		})
@@ -244,7 +277,7 @@ func (s *CertificatesDataStore) DeleteCertificate(ctx *appctx.AppContext, tenant
 	if err := db.
 		Where("tenant_id = ? AND id = ?", tenantID, id).
 		Delete(&entities.Certificate{}).Error; err != nil {
-		diag.AddError("failed_to_delete_certificate", "failed to delete certificate", "certificates_data_store", nil)
+		diag.AddError("failed_to_delete_certificate", fmt.Sprintf("failed to delete certificate: %v", err), "certificates_data_store", nil)
 		return diag
 	}
 	return diag

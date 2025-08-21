@@ -9,6 +9,7 @@ import (
 	"github.com/cjlapao/locally-cli/internal/appctx"
 	"github.com/cjlapao/locally-cli/internal/system/defaults"
 	"github.com/cjlapao/locally-cli/internal/system/interfaces"
+	"github.com/cjlapao/locally-cli/pkg/diagnostics"
 	"github.com/cjlapao/locally-cli/pkg/models"
 )
 
@@ -71,17 +72,22 @@ func (s *SystemService) GetService(name string) (*models.ServiceDefinition, bool
 }
 
 // ValidateClaim validates if a claim is valid according to the system definition
-func (s *SystemService) ValidateClaim(claim *models.Claim) error {
+func (s *SystemService) ValidateClaim(claim *models.Claim) *diagnostics.Diagnostics {
+	diag := diagnostics.New("validate_claim")
+	defer diag.Complete()
+
 	// Check if service exists
 	service, exists := s.services[claim.Service]
 	if !exists {
-		return fmt.Errorf("service '%s' does not exist", claim.Service)
+		diag.AddError("service_not_found", fmt.Sprintf("service '%s' does not exist", claim.Service), "system", nil)
+		return diag
 	}
 
 	// Check if module exists
 	module, exists := service.Modules[claim.Module]
 	if !exists {
-		return fmt.Errorf("module '%s' does not exist in service '%s'", claim.Module, claim.Service)
+		diag.AddError("module_not_found", fmt.Sprintf("module '%s' does not exist in service '%s'", claim.Module, claim.Service), "system", nil)
+		return diag
 	}
 
 	// Check if action is allowed for this module
@@ -94,25 +100,31 @@ func (s *SystemService) ValidateClaim(claim *models.Claim) error {
 	}
 
 	if !actionAllowed {
-		return fmt.Errorf("action '%s' is not allowed for module '%s' in service '%s'", claim.Action, claim.Module, claim.Service)
+		diag.AddError("action_not_allowed", fmt.Sprintf("action '%s' is not allowed for module '%s' in service '%s'", claim.Action, claim.Module, claim.Service), "system", nil)
+		return diag
 	}
 
-	return nil
+	return diag
 }
 
 // ParseClaim parses a claim from a slug and validates it against the system
-func (s *SystemService) ParseClaim(slug string) (*models.Claim, error) {
+func (s *SystemService) ParseClaim(slug string) (*models.Claim, *diagnostics.Diagnostics) {
+	diag := diagnostics.New("parse_claim")
+	defer diag.Complete()
+
 	claim, err := models.ParseClaim(slug)
 	if err != nil {
-		return nil, err
+		diag.AddError("failed_to_parse_claim", err.Error(), "system", nil)
+		return nil, diag
 	}
 
 	// Validate the claim against the system
 	if err := s.ValidateClaim(claim); err != nil {
-		return nil, err
+		diag.Append(err)
+		return nil, diag
 	}
 
-	return claim, nil
+	return claim, diag
 }
 
 // GetDefaultAccessLevel returns the default access level for a security level
@@ -136,14 +148,18 @@ func GetDefaultAccessLevel(securityLevel models.SecurityLevel) models.AccessLeve
 }
 
 // CreateDefaultClaim creates a default claim for a service and module based on security level
-func (s *SystemService) CreateDefaultClaim(service, module string, securityLevel models.SecurityLevel) (*models.Claim, error) {
+func (s *SystemService) CreateDefaultClaim(service, module string, securityLevel models.SecurityLevel) (*models.Claim, *diagnostics.Diagnostics) {
+	diag := diagnostics.New("create_default_claim")
+	defer diag.Complete()
+
 	// Validate service and module exist
 	if err := s.ValidateClaim(&models.Claim{
 		Service: service,
 		Module:  module,
 		Action:  models.AccessLevelRead, // Use read as a test action
 	}); err != nil {
-		return nil, err
+		diag.Append(err)
+		return nil, diag
 	}
 
 	// Get default access level for the security level
@@ -157,22 +173,27 @@ func (s *SystemService) CreateDefaultClaim(service, module string, securityLevel
 		Slug:    fmt.Sprintf("%s::%s::%s", service, module, defaultAction),
 	}
 
-	return claim, nil
+	return claim, diag
 }
 
 // GetAllowedActions returns all allowed actions for a service and module
-func (s *SystemService) GetAllowedActions(service, module string) ([]models.AccessLevel, error) {
+func (s *SystemService) GetAllowedActions(service, module string) ([]models.AccessLevel, *diagnostics.Diagnostics) {
+	diag := diagnostics.New("get_allowed_actions")
+	defer diag.Complete()
+
 	serviceDef, exists := s.services[service]
 	if !exists {
-		return nil, fmt.Errorf("service '%s' does not exist", service)
+		diag.AddError("service_not_found", fmt.Sprintf("service '%s' does not exist", service), "system", nil)
+		return nil, diag
 	}
 
 	moduleDef, exists := serviceDef.Modules[module]
 	if !exists {
-		return nil, fmt.Errorf("module '%s' does not exist in service '%s'", module, service)
+		diag.AddError("module_not_found", fmt.Sprintf("module '%s' does not exist in service '%s'", module, service), "system", nil)
+		return nil, diag
 	}
 
-	return moduleDef.Actions, nil
+	return moduleDef.Actions, diag
 }
 
 // GetSecurityLevelForAction determines the appropriate security level for a given action
@@ -398,13 +419,17 @@ func (s *SystemService) LogSummary(ctx *appctx.AppContext) {
 	}
 }
 
-func (s *SystemService) GetRoleBySecurityLevel(securityLevel models.SecurityLevel) (*models.Role, error) {
+func (s *SystemService) GetRoleBySecurityLevel(securityLevel models.SecurityLevel) (*models.Role, *diagnostics.Diagnostics) {
+	diag := diagnostics.New("get_role_by_security_level")
+	defer diag.Complete()
+
 	for _, role := range defaults.DefaultRoles {
 		if role.SecurityLevel == securityLevel {
-			return &role, nil
+			return &role, diag
 		}
 	}
-	return nil, fmt.Errorf("role with security level %s not found", securityLevel)
+	diag.AddError("role_not_found", fmt.Sprintf("role with security level %s not found", securityLevel), "system", nil)
+	return nil, diag
 }
 
 func (s *SystemService) GetRoleByName(name string) *models.Role {

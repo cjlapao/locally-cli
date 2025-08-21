@@ -2,6 +2,7 @@ package stores
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/cjlapao/locally-cli/internal/database/entities"
 	"github.com/cjlapao/locally-cli/internal/logging"
 	"github.com/cjlapao/locally-cli/pkg/diagnostics"
+	"gorm.io/gorm"
 )
 
 var (
@@ -18,7 +20,7 @@ var (
 )
 
 type ConfigurationDataStoreInterface interface {
-	GetConfigurationValue(ctx context.Context, key string, value interface{}) (interface{}, error)
+	GetConfigurationValue(ctx context.Context, tenantID string, key string, value interface{}) (interface{}, *diagnostics.Diagnostics)
 }
 
 type ConfigurationDataStore struct {
@@ -64,16 +66,35 @@ func InitializeConfigurationDataStore() (ConfigurationDataStoreInterface, *diagn
 func (s *ConfigurationDataStore) Migrate() *diagnostics.Diagnostics {
 	diag := diagnostics.New("migrate_configuration_data_store")
 	if err := s.GetDB().AutoMigrate(&entities.Configuration{}); err != nil {
-		diag.AddError("failed_to_migrate_configuration_table", fmt.Sprintf("failed to migrate configuration table, %v", err), "configuration_data_store", nil)
+		diag.AddError("failed_to_migrate_configuration_table", fmt.Sprintf("failed to migrate configuration table: %v", err), "configuration_data_store", nil)
 		return diag
 	}
 	return diag
 }
 
-func (s *ConfigurationDataStore) GetConfigurationValue(ctx context.Context, key string, value interface{}) (interface{}, error) {
+func (s *ConfigurationDataStore) GetConfigurationValue(ctx context.Context, tenantID string, key string, value interface{}) (interface{}, *diagnostics.Diagnostics) {
+	diag := diagnostics.New("store_get_configuration_value")
 	db := s.GetDB()
+	if tenantID == "" {
+		diag.AddError("tenant_id_cannot_be_empty", "tenant ID cannot be empty", "configuration_data_store")
+		return nil, diag
+	}
+	if key == "" {
+		diag.AddError("key_cannot_be_empty", "key cannot be empty", "configuration_data_store")
+		return nil, diag
+	}
 
-	db.Where("key = ?", key).First(&entities.Configuration{}).Scan(&value)
+	err := db.Where("key = ?", key).
+		Where("tenant_id = ?", tenantID).
+		First(&entities.Configuration{}).
+		Scan(&value).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, diag
+		}
+		diag.AddError("failed_to_get_configuration_value", fmt.Sprintf("failed to get configuration value: %v", err), "configuration_data_store", nil)
+		return nil, diag
+	}
 
-	return value, nil
+	return value, diag
 }

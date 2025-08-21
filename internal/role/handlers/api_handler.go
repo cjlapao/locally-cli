@@ -172,11 +172,6 @@ func (h *RolesApiHandler) Routes() []api_types.Route {
 
 func (h *RolesApiHandler) HandleGetRoles(w http.ResponseWriter, r *http.Request) {
 	ctx := appctx.FromContext(r.Context())
-	filter, err := utils.GetFilterFromRequest(r)
-	if err != nil {
-		api.WriteError(w, r, http.StatusBadRequest, "Invalid filter", "Invalid filter", err.Error())
-		return
-	}
 
 	tenantID := ctx.GetTenantID()
 	if tenantID == "" {
@@ -184,7 +179,9 @@ func (h *RolesApiHandler) HandleGetRoles(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	roles, diag := h.roleService.GetRolesByFilter(ctx, tenantID, filter)
+	pagination := utils.ParseQueryRequest(r)
+
+	roles, diag := h.roleService.GetRoles(ctx, tenantID, pagination)
 	if diag.HasErrors() {
 		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, "failed_to_get_roles", "Failed to get roles", diag)
 		return
@@ -323,12 +320,9 @@ func (h *RolesApiHandler) HandleGetRoleUsers(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	page, pageSize := utils.GetPaginationFromRequest(r)
+	pagination := utils.ParseQueryRequest(r)
 
-	users, diag := h.roleService.GetRoleUsers(ctx, tenantID, id, &pkg_models.Pagination{
-		Page:     page,
-		PageSize: pageSize,
-	})
+	users, diag := h.roleService.GetRoleUsers(ctx, tenantID, id, pagination)
 
 	if diag.HasErrors() {
 		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, "failed_to_get_role_users", "Failed to get role users", diag)
@@ -442,7 +436,9 @@ func (h *RolesApiHandler) HandleGetRoleClaims(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	claims, diag := h.roleService.GetRoleClaims(ctx, tenantID, existingRole.ID)
+	pagination := utils.ParseQueryRequest(r)
+
+	claims, diag := h.roleService.GetRoleClaims(ctx, tenantID, existingRole.ID, pagination)
 	if diag.HasErrors() {
 		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, "failed_to_get_role_claims", "Failed to get role claims", diag)
 		return

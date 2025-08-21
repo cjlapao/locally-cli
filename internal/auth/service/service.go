@@ -100,16 +100,16 @@ func (s *AuthService) GetName() string { return "auth" }
 
 func (s *AuthService) GetUserByID(ctx *appctx.AppContext, tenantID string, userID string) (*pkg_models.User, *diagnostics.Diagnostics) {
 	diag := diagnostics.New("get_user_by_id")
-	user, err := s.UserStore.GetUserByID(ctx, tenantID, userID)
-	if err != nil {
-		diag.AddError("get_user_by_id", "failed to get user by id", err.Error())
+	user, getUserDiag := s.UserStore.GetUserByID(ctx, tenantID, userID)
+	if getUserDiag.HasErrors() {
+		diag.Append(getUserDiag)
 		return nil, diag
 	}
 	if user == nil {
 		diag.AddError("get_user_by_id", "user not found", "")
 		return nil, diag
 	}
-	return mappers.MapUserToDto(user), nil
+	return mappers.MapUserToDto(user), diag
 }
 
 // GenerateSecureAPIKey generates a cryptographically secure API key
@@ -203,9 +203,9 @@ func (s *AuthService) GenerateToken(ctx *appctx.AppContext, user *pkg_models.Use
 			return nil, diag
 		}
 
-		err = s.UserStore.SetRefreshToken(ctx, tenantID, user.ID, refreshTokenString)
-		if err != nil {
-			diag.AddError("generate_token", "failed to set refresh token", err.Error())
+		setRefreshTokenDiag := s.UserStore.SetRefreshToken(ctx, tenantID, user.ID, refreshTokenString)
+		if setRefreshTokenDiag.HasErrors() {
+			diag.Append(setRefreshTokenDiag)
 			return nil, diag
 		}
 	}
@@ -238,10 +238,10 @@ func (s *AuthService) AuthenticateWithPassword(ctx *appctx.AppContext, creds aut
 		creds.TenantID = strings.TrimSpace(creds.TenantID)
 	}
 	if strings.EqualFold(creds.TenantID, config.GlobalTenantID) {
-		tenant, err := s.TenantStore.GetTenantByIdOrSlug(ctx, creds.TenantID)
-		if err != nil {
-			diag.AddError("authenticate_with_password", "failed to get tenant", err.Error())
-			errorToken.Error = fmt.Sprintf("failed to get tenant: %s", err.Error())
+		tenant, getTenantDiag := s.TenantStore.GetTenantByIdOrSlug(ctx, creds.TenantID)
+		if getTenantDiag.HasErrors() {
+			diag.Append(getTenantDiag)
+			errorToken.Error = fmt.Sprintf("failed to get tenant: %s", getTenantDiag.GetSummary())
 			return errorToken, diag
 		}
 		if tenant == nil {
@@ -255,10 +255,10 @@ func (s *AuthService) AuthenticateWithPassword(ctx *appctx.AppContext, creds aut
 	errorToken.TenantID = creds.TenantID
 
 	// Get the user by username
-	dbUser, err := s.UserStore.GetUserByUsername(ctx, creds.TenantID, creds.Username)
-	if err != nil {
-		diag.AddError("authenticate_with_password", "failed to get user", err.Error())
-		errorToken.Error = fmt.Sprintf("failed to get user: %s", err.Error())
+	dbUser, getUserDiag := s.UserStore.GetUserByUsername(ctx, creds.TenantID, creds.Username)
+	if getUserDiag.HasErrors() {
+		diag.Append(getUserDiag)
+		errorToken.Error = fmt.Sprintf("failed to get user: %s", getUserDiag.GetSummary())
 		errorToken.UserID = config.UnknownUserID
 		return errorToken, diag
 	}
@@ -272,7 +272,7 @@ func (s *AuthService) AuthenticateWithPassword(ctx *appctx.AppContext, creds aut
 	errorToken.UserID = dbUser.ID
 	user := mappers.MapUserToDto(dbUser)
 	encryptionService := encryption.GetInstance()
-	err = encryptionService.VerifyPassword(creds.Password, dbUser.Password)
+	err := encryptionService.VerifyPassword(creds.Password, dbUser.Password)
 	if err != nil {
 		diag.AddError("authenticate_with_password", "invalid credentials", err.Error())
 		errorToken.Error = "invalid credentials"
@@ -325,9 +325,9 @@ func (s *AuthService) AuthenticateWithAPIKey(ctx *appctx.AppContext, creds auth_
 	keyPrefix := creds.APIKey[:prefixLen]
 
 	// Find the API key in the database by prefix
-	apiKey, err := s.AuthDataStore.GetApiKeyByPrefix(ctx, creds.TenantID, keyPrefix)
-	if err != nil {
-		diag.AddError("authenticate_with_api_key", "failed to get API key", err.Error())
+	apiKey, getApiKeyDiag := s.AuthDataStore.GetApiKeyByPrefix(ctx, creds.TenantID, keyPrefix)
+	if getApiKeyDiag.HasErrors() {
+		diag.Append(getApiKeyDiag)
 		return nil, diag
 	}
 	if apiKey == nil {
@@ -359,9 +359,9 @@ func (s *AuthService) AuthenticateWithAPIKey(ctx *appctx.AppContext, creds auth_
 	_ = s.AuthDataStore.GetDB().Model(apiKey).Update("last_used_at", now).Error
 
 	// Get the dbUser associated with this API key
-	dbUser, err := s.UserStore.GetUserByID(ctx, apiKey.TenantID, apiKey.CreatedBy)
-	if err != nil {
-		diag.AddError("authenticate_with_api_key", "failed to get user", err.Error())
+	dbUser, getUserDiag := s.UserStore.GetUserByID(ctx, apiKey.TenantID, apiKey.CreatedBy)
+	if getUserDiag.HasErrors() {
+		diag.Append(getUserDiag)
 		return nil, diag
 	}
 	if dbUser == nil {
@@ -424,9 +424,9 @@ func (s *AuthService) ValidateApiKey(ctx *appctx.AppContext, tenantID string, ap
 	keyPrefix := apiKey[:prefixLen]
 
 	// Lookup by prefix then verify hash
-	dbKey, err := s.AuthDataStore.GetApiKeyByPrefix(ctx, tenantID, keyPrefix)
-	if err != nil {
-		diag.AddError("validate_api_key", "failed to get API key", err.Error())
+	dbKey, getApiKeyDiag := s.AuthDataStore.GetApiKeyByPrefix(ctx, tenantID, keyPrefix)
+	if getApiKeyDiag.HasErrors() {
+		diag.Append(getApiKeyDiag)
 		return nil, diag
 	}
 	if dbKey == nil {
@@ -539,9 +539,9 @@ func (s *AuthService) RefreshToken(ctx *appctx.AppContext, refreshTokenString st
 	var user *pkg_models.User
 	var tenantID string
 	if claims, ok := refreshToken.Claims.(jwt.MapClaims); ok {
-		dbUser, userErr := s.UserStore.GetUserByID(ctx, claims["tenant_id"].(string), claims["id"].(string))
-		if userErr != nil {
-			return nil, fmt.Errorf("failed to get user: %w", userErr)
+		dbUser, getUserDiag := s.UserStore.GetUserByID(ctx, claims["tenant_id"].(string), claims["id"].(string))
+		if getUserDiag.HasErrors() {
+			return nil, fmt.Errorf("failed to get user:  %s", getUserDiag.GetSummary())
 		}
 		if dbUser == nil {
 			return nil, fmt.Errorf("user not found")
@@ -601,9 +601,9 @@ func (s *AuthService) UpdateApiKeyLastUsed(ctx *appctx.AppContext, tenantID stri
 	keyPrefix := apiKeyID[:prefixLen]
 
 	// Lookup by prefix then verify hash
-	dbKey, err := s.AuthDataStore.GetApiKeyByPrefix(ctx, tenantID, keyPrefix)
-	if err != nil {
-		diag.AddError("update_api_key_last_used", "failed to get API key", err.Error())
+	dbKey, getApiKeyDiag := s.AuthDataStore.GetApiKeyByPrefix(ctx, tenantID, keyPrefix)
+	if getApiKeyDiag.HasErrors() {
+		diag.Append(getApiKeyDiag)
 		return diag
 	}
 	if dbKey == nil {
@@ -612,9 +612,9 @@ func (s *AuthService) UpdateApiKeyLastUsed(ctx *appctx.AppContext, tenantID stri
 	}
 
 	// Update the API key last used
-	err = s.AuthDataStore.UpdateApiKeyLastUsed(ctx, tenantID, dbKey.ID)
-	if err != nil {
-		diag.AddError("update_api_key_last_used", "failed to update API key last used", err.Error())
+	updateApiKeyLastUsedDiag := s.AuthDataStore.UpdateApiKeyLastUsed(ctx, tenantID, dbKey.ID)
+	if updateApiKeyLastUsedDiag.HasErrors() {
+		diag.Append(updateApiKeyLastUsedDiag)
 		return diag
 	}
 	return nil

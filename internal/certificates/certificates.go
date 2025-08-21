@@ -2,6 +2,7 @@
 package certificates
 
 import (
+	activity_interfaces "github.com/cjlapao/locally-cli/internal/activity/interfaces"
 	"github.com/cjlapao/locally-cli/internal/certificates/handlers"
 	"github.com/cjlapao/locally-cli/internal/certificates/interfaces"
 	"github.com/cjlapao/locally-cli/internal/certificates/service"
@@ -11,8 +12,9 @@ import (
 // Initialize initializes the claim service
 func Initialize(certificatesStore stores.CertificatesDataStoreInterface,
 	tenantStore stores.TenantDataStoreInterface,
+	activityService activity_interfaces.ActivityServiceInterface,
 ) interfaces.CertificateServiceInterface {
-	return service.Initialize(certificatesStore, tenantStore)
+	return service.Initialize(certificatesStore, tenantStore, activityService)
 }
 
 // GetInstance returns the claim service instance

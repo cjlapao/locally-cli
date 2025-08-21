@@ -7,10 +7,10 @@ import (
 	"github.com/cjlapao/locally-cli/internal/api/models"
 )
 
-func WritePaginatedResponse[T any](w http.ResponseWriter, r *http.Request, data []T, pagination models.Pagination, totalCount int64) {
+func WritePaginationResponse[T any](w http.ResponseWriter, r *http.Request, data []T, pagination models.Pagination, totalCount int64) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	response := models.PaginatedResponse[T]{
+	response := models.PaginationResponse[T]{
 		Data:       data,
 		Pagination: pagination,
 		TotalCount: totalCount,

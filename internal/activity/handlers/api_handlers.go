@@ -64,7 +64,7 @@ func (h *ActivityApiHandler) HandleGetAudits(w http.ResponseWriter, r *http.Requ
 	requestContext := utils.GetRequestContextFromRequest(r)
 	ctx.Log().Info("Getting audits")
 
-	response, diag := h.activityService.GetActivities(ctx, requestContext.TenantID, requestContext.Filter, requestContext.Pagination)
+	response, diag := h.activityService.GetActivities(ctx, requestContext.TenantID, requestContext.Pagination)
 	if diag.HasErrors() {
 		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, "failed_to_get_audits", "Failed to get audits", diag)
 		return

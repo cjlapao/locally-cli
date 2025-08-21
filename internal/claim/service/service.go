@@ -8,7 +8,6 @@ import (
 	"github.com/cjlapao/locally-cli/internal/appctx"
 	"github.com/cjlapao/locally-cli/internal/claim/interfaces"
 	"github.com/cjlapao/locally-cli/internal/claim/models"
-	"github.com/cjlapao/locally-cli/internal/config"
 	"github.com/cjlapao/locally-cli/internal/database/filters"
 	"github.com/cjlapao/locally-cli/internal/database/stores"
 	"github.com/cjlapao/locally-cli/internal/mappers"
@@ -61,60 +60,41 @@ func (s *ClaimService) GetName() string {
 	return "claim"
 }
 
-func (s *ClaimService) GetClaims(ctx *appctx.AppContext, tenantID string) ([]pkg_models.Claim, *diagnostics.Diagnostics) {
+func (s *ClaimService) GetClaims(ctx *appctx.AppContext, tenantID string, pagination *api_models.PaginationRequest) (*api_models.PaginationResponse[pkg_models.Claim], *diagnostics.Diagnostics) {
 	diag := diagnostics.New("get_claims")
 	defer diag.Complete()
 
-	dbClaims, err := s.claimStore.GetClaims(ctx, tenantID)
-	if err != nil {
-		diag.AddError("failed_to_get_claims", "failed to get claims", "claim", map[string]interface{}{
-			"error": err.Error(),
-		})
-		return nil, diag
+	var query *filters.QueryBuilder
+	if pagination != nil {
+		query = pagination.ToQueryBuilder()
 	}
 
-	claims := mappers.MapClaimsToDto(dbClaims)
-
-	return claims, diag
-}
-
-func (s *ClaimService) GetClaimsByFilter(ctx *appctx.AppContext, tenantID string, filter *filters.Filter) (*api_models.PaginatedResponse[pkg_models.Claim], *diagnostics.Diagnostics) {
-	diag := diagnostics.New("get_claims_by_filter")
-	defer diag.Complete()
-
-	dbClaims, err := s.claimStore.GetClaimsByFilter(ctx, tenantID, filter)
-	if err != nil {
-		diag.AddError("failed_to_get_claims_by_filter", "failed to get claims by filter", "claim", map[string]interface{}{
-			"error": err.Error(),
-		})
+	dbClaims, getClaimsDiag := s.claimStore.GetClaimsByQuery(ctx, tenantID, query)
+	if getClaimsDiag.HasErrors() {
+		diag.Append(getClaimsDiag)
 		return nil, diag
 	}
 
 	claims := mappers.MapClaimsToDto(dbClaims.Items)
-	pagination := api_models.Pagination{
-		Page:       dbClaims.Page,
-		PageSize:   dbClaims.PageSize,
-		TotalPages: dbClaims.TotalPages,
-	}
 
-	response := api_models.PaginatedResponse[pkg_models.Claim]{
+	return &api_models.PaginationResponse[pkg_models.Claim]{
 		Data:       claims,
 		TotalCount: dbClaims.Total,
-		Pagination: pagination,
-	}
-
-	return &response, diag
+		Pagination: api_models.Pagination{
+			Page:       dbClaims.Page,
+			PageSize:   dbClaims.PageSize,
+			TotalPages: dbClaims.TotalPages,
+		},
+	}, diag
 }
 
 func (s *ClaimService) GetClaimByIDOrSlug(ctx *appctx.AppContext, tenantID string, idOrSlug string) (*pkg_models.Claim, *diagnostics.Diagnostics) {
 	diag := diagnostics.New("get_claim_by_id_or_slug")
 	defer diag.Complete()
 
-	claim, err := s.claimStore.GetClaimBySlugOrID(ctx, tenantID, idOrSlug)
-	if err != nil {
-		diag.AddError("failed_to_get_claim_by_id", "failed to get claim by id", "claim", map[string]interface{}{
-			"error": err.Error(),
-		})
+	claim, getClaimDiag := s.claimStore.GetClaimBySlugOrID(ctx, tenantID, idOrSlug)
+	if getClaimDiag.HasErrors() {
+		diag.Append(getClaimDiag)
 		return nil, diag
 	}
 	if claim == nil {
@@ -129,11 +109,9 @@ func (s *ClaimService) CreateClaim(ctx *appctx.AppContext, tenantID string, clai
 	defer diag.Complete()
 
 	claimEntity := MapCreateClaimRequestToEntity(claim)
-	claimEntity, err := s.claimStore.CreateClaim(ctx, tenantID, claimEntity)
-	if err != nil {
-		diag.AddError("failed_to_create_claim", "failed to create claim", "claim", map[string]interface{}{
-			"error": err.Error(),
-		})
+	claimEntity, createClaimDiag := s.claimStore.CreateClaim(ctx, tenantID, claimEntity)
+	if createClaimDiag.HasErrors() {
+		diag.Append(createClaimDiag)
 		return nil, diag
 	}
 
@@ -145,11 +123,9 @@ func (s *ClaimService) UpdateClaim(ctx *appctx.AppContext, tenantID string, requ
 	defer diag.Complete()
 
 	claimEntity := MapUpdateClaimRequestToEntity(request)
-	err := s.claimStore.UpdateClaim(ctx, tenantID, claimEntity)
-	if err != nil {
-		diag.AddError("failed_to_update_claim", "failed to update claim", "claim", map[string]interface{}{
-			"error": err.Error(),
-		})
+	updateClaimDiag := s.claimStore.UpdateClaim(ctx, tenantID, claimEntity)
+	if updateClaimDiag.HasErrors() {
+		diag.Append(updateClaimDiag)
 		return "", diag
 	}
 
@@ -161,11 +137,9 @@ func (s *ClaimService) DeleteClaim(ctx *appctx.AppContext, tenantID string, id s
 	defer diag.Complete()
 
 	// checking if the claim is used by any user
-	users, err := s.claimStore.GetClaimUsers(ctx, tenantID, id)
-	if err != nil {
-		diag.AddError("failed_to_check_claim_usage", "failed to check claim usage", "claim", map[string]interface{}{
-			"error": err.Error(),
-		})
+	users, getClaimUsersDiag := s.claimStore.GetClaimUsers(ctx, tenantID, id)
+	if getClaimUsersDiag.HasErrors() {
+		diag.Append(getClaimUsersDiag)
 		return diag
 	}
 
@@ -177,40 +151,34 @@ func (s *ClaimService) DeleteClaim(ctx *appctx.AppContext, tenantID string, id s
 		return diag
 	}
 
-	err = s.claimStore.DeleteClaim(ctx, tenantID, id)
-	if err != nil {
-		diag.AddError("failed_to_delete_claim", "failed to delete claim", "claim", map[string]interface{}{
-			"error": err.Error(),
-		})
+	deleteClaimDiag := s.claimStore.DeleteClaim(ctx, tenantID, id)
+	if deleteClaimDiag.HasErrors() {
+		diag.Append(deleteClaimDiag)
 		return diag
 	}
 
 	return diag
 }
 
-func (s *ClaimService) GetClaimUsers(ctx *appctx.AppContext, tenantID string, claimID string, pagination *pkg_models.Pagination) (*api_models.PaginatedResponse[pkg_models.User], *diagnostics.Diagnostics) {
+func (s *ClaimService) GetClaimUsers(ctx *appctx.AppContext, tenantID string, claimID string, pagination *api_models.PaginationRequest) (*api_models.PaginationResponse[pkg_models.User], *diagnostics.Diagnostics) {
 	diag := diagnostics.New("get_claim_users")
 	defer diag.Complete()
-	cfg := config.GetInstance().Get()
 
-	if pagination == nil {
-		pagination = &pkg_models.Pagination{
-			Page:     1,
-			PageSize: cfg.GetInt(config.PaginationDefaultPageSizeKey, config.DefaultPageSizeInt),
-		}
+	var query *filters.QueryBuilder
+	if pagination != nil {
+		query = pagination.ToQueryBuilder()
 	}
-	dbPagination := mappers.MapPaginationToEntity(pagination)
 
-	dbUsers, err := s.claimStore.GetPaginatedClaimUsers(ctx, tenantID, claimID, dbPagination)
-	if err != nil {
-		diag.AddError("failed_to_get_claim_users", "failed to get claim users", "claim", map[string]interface{}{
-			"error": err.Error(),
-		})
+	dbUsers, getClaimUsersDiag := s.claimStore.GetClaimUsersByQuery(ctx, tenantID, claimID, query)
+	if getClaimUsersDiag.HasErrors() {
+		diag.Append(getClaimUsersDiag)
 		return nil, diag
 	}
 
-	response := api_models.PaginatedResponse[pkg_models.User]{
-		Data:       mappers.MapUsersToDto(dbUsers.Items),
+	users := mappers.MapUsersToDto(dbUsers.Items)
+
+	response := &api_models.PaginationResponse[pkg_models.User]{
+		Data:       users,
 		TotalCount: dbUsers.Total,
 		Pagination: api_models.Pagination{
 			Page:       dbUsers.Page,
@@ -219,7 +187,7 @@ func (s *ClaimService) GetClaimUsers(ctx *appctx.AppContext, tenantID string, cl
 		},
 	}
 
-	return &response, diag
+	return response, diag
 }
 
 func (s *ClaimService) AddClaimToUser(ctx *appctx.AppContext, tenantID string, userID string, claimSlug string) *diagnostics.Diagnostics {
@@ -240,11 +208,9 @@ func (s *ClaimService) AddClaimToUser(ctx *appctx.AppContext, tenantID string, u
 		return diag
 	}
 
-	err := s.claimStore.AddClaimToUser(ctx, tenantID, userID, claimSlug)
-	if err != nil {
-		diag.AddError("failed_to_add_user_claim", "failed to add user claim", "claim", map[string]interface{}{
-			"error": err.Error(),
-		})
+	addClaimToUserDiag := s.claimStore.AddClaimToUser(ctx, tenantID, userID, existingClaim.ID)
+	if addClaimToUserDiag.HasErrors() {
+		diag.Append(addClaimToUserDiag)
 		return diag
 	}
 
@@ -269,11 +235,9 @@ func (s *ClaimService) RemoveClaimFromUser(ctx *appctx.AppContext, tenantID stri
 		return diag
 	}
 
-	err := s.claimStore.RemoveClaimFromUser(ctx, tenantID, userID, existingClaim.ID)
-	if err != nil {
-		diag.AddError("failed_to_remove_user_claim", "failed to remove user claim", "claim", map[string]interface{}{
-			"error": err.Error(),
-		})
+	removeClaimFromUserDiag := s.claimStore.RemoveClaimFromUser(ctx, tenantID, userID, existingClaim.ID)
+	if removeClaimFromUserDiag.HasErrors() {
+		diag.Append(removeClaimFromUserDiag)
 		return diag
 	}
 
@@ -284,11 +248,9 @@ func (s *ClaimService) GetAllSuperUserLevelClaims(ctx *appctx.AppContext, tenant
 	diag := diagnostics.New("get_all_superuser_level_claims")
 	defer diag.Complete()
 
-	dbClaims, err := s.claimStore.GetClaimsByLevel(ctx, tenantID, pkg_models.SecurityLevelSuperUser)
-	if err != nil {
-		diag.AddError("failed_to_get_all_superuser_level_claims", "failed to get all superuser level claims", "claim", map[string]interface{}{
-			"error": err.Error(),
-		})
+	dbClaims, getClaimsDiag := s.claimStore.GetClaimsByLevel(ctx, tenantID, pkg_models.SecurityLevelSuperUser)
+	if getClaimsDiag.HasErrors() {
+		diag.Append(getClaimsDiag)
 		return nil, diag
 	}
 
@@ -301,11 +263,9 @@ func (s *ClaimService) GetAllUserLevelClaims(ctx *appctx.AppContext, tenantID st
 	diag := diagnostics.New("get_all_user_level_claims")
 	defer diag.Complete()
 
-	dbClaims, err := s.claimStore.GetClaimsByLevel(ctx, tenantID, pkg_models.SecurityLevelUser)
-	if err != nil {
-		diag.AddError("failed_to_get_all_user_level_claims", "failed to get all user level claims", "claim", map[string]interface{}{
-			"error": err.Error(),
-		})
+	dbClaims, getClaimsDiag := s.claimStore.GetClaimsByLevel(ctx, tenantID, pkg_models.SecurityLevelUser)
+	if getClaimsDiag.HasErrors() {
+		diag.Append(getClaimsDiag)
 		return nil, diag
 	}
 
@@ -318,11 +278,9 @@ func (s *ClaimService) GetAllAdminLevelClaims(ctx *appctx.AppContext, tenantID s
 	diag := diagnostics.New("get_all_admin_level_claims")
 	defer diag.Complete()
 
-	dbClaims, err := s.claimStore.GetClaimsByLevel(ctx, tenantID, pkg_models.SecurityLevelAdmin)
-	if err != nil {
-		diag.AddError("failed_to_get_all_admin_level_claims", "failed to get all admin level claims", "claim", map[string]interface{}{
-			"error": err.Error(),
-		})
+	dbClaims, getClaimsDiag := s.claimStore.GetClaimsByLevel(ctx, tenantID, pkg_models.SecurityLevelAdmin)
+	if getClaimsDiag.HasErrors() {
+		diag.Append(getClaimsDiag)
 		return nil, diag
 	}
 
@@ -335,11 +293,9 @@ func (s *ClaimService) GetAllManagerLevelClaims(ctx *appctx.AppContext, tenantID
 	diag := diagnostics.New("get_all_manager_level_claims")
 	defer diag.Complete()
 
-	dbClaims, err := s.claimStore.GetClaimsByLevel(ctx, tenantID, pkg_models.SecurityLevelManager)
-	if err != nil {
-		diag.AddError("failed_to_get_all_manager_level_claims", "failed to get all manager level claims", "claim", map[string]interface{}{
-			"error": err.Error(),
-		})
+	dbClaims, getClaimsDiag := s.claimStore.GetClaimsByLevel(ctx, tenantID, pkg_models.SecurityLevelManager)
+	if getClaimsDiag.HasErrors() {
+		diag.Append(getClaimsDiag)
 		return nil, diag
 	}
 
@@ -352,11 +308,9 @@ func (s *ClaimService) GetAllGuestLevelClaims(ctx *appctx.AppContext, tenantID s
 	diag := diagnostics.New("get_all_guest_level_claims")
 	defer diag.Complete()
 
-	dbClaims, err := s.claimStore.GetClaimsByLevel(ctx, tenantID, pkg_models.SecurityLevelGuest)
-	if err != nil {
-		diag.AddError("failed_to_get_all_guest_level_claims", "failed to get all guest level claims", "claim", map[string]interface{}{
-			"error": err.Error(),
-		})
+	dbClaims, getClaimsDiag := s.claimStore.GetClaimsByLevel(ctx, tenantID, pkg_models.SecurityLevelGuest)
+	if getClaimsDiag.HasErrors() {
+		diag.Append(getClaimsDiag)
 		return nil, diag
 	}
 
@@ -365,30 +319,25 @@ func (s *ClaimService) GetAllGuestLevelClaims(ctx *appctx.AppContext, tenantID s
 	return claims, diag
 }
 
-func (s *ClaimService) GetClaimRoles(ctx *appctx.AppContext, tenantID string, claimID string, pagination *pkg_models.Pagination) (*api_models.PaginatedResponse[pkg_models.Role], *diagnostics.Diagnostics) {
+func (s *ClaimService) GetClaimRoles(ctx *appctx.AppContext, tenantID string, claimID string, pagination *api_models.PaginationRequest) (*api_models.PaginationResponse[pkg_models.Role], *diagnostics.Diagnostics) {
 	diag := diagnostics.New("get_claim_roles")
 	defer diag.Complete()
 
-	cfg := config.GetInstance().Get()
-
-	if pagination == nil {
-		pagination = &pkg_models.Pagination{
-			Page:     1,
-			PageSize: cfg.GetInt(config.PaginationDefaultPageSizeKey, config.DefaultPageSizeInt),
-		}
+	var query *filters.QueryBuilder
+	if pagination != nil {
+		query = pagination.ToQueryBuilder()
 	}
-	dbPagination := mappers.MapPaginationToEntity(pagination)
 
-	dbRoles, err := s.claimStore.GetPaginatedClaimRoles(ctx, tenantID, claimID, dbPagination)
-	if err != nil {
-		diag.AddError("failed_to_get_claim_roles", "failed to get claim roles", "claim", map[string]interface{}{
-			"error": err.Error(),
-		})
+	dbRoles, getClaimRolesDiag := s.claimStore.GetClaimRolesByQuery(ctx, tenantID, claimID, query)
+	if getClaimRolesDiag.HasErrors() {
+		diag.Append(getClaimRolesDiag)
 		return nil, diag
 	}
 
-	response := api_models.PaginatedResponse[pkg_models.Role]{
-		Data:       mappers.MapRolesToDto(dbRoles.Items),
+	roles := mappers.MapRolesToDto(dbRoles.Items)
+
+	response := &api_models.PaginationResponse[pkg_models.Role]{
+		Data:       roles,
 		TotalCount: dbRoles.Total,
 		Pagination: api_models.Pagination{
 			Page:       dbRoles.Page,
@@ -397,7 +346,7 @@ func (s *ClaimService) GetClaimRoles(ctx *appctx.AppContext, tenantID string, cl
 		},
 	}
 
-	return &response, diag
+	return response, diag
 }
 
 func (s *ClaimService) AddRoleToClaim(ctx *appctx.AppContext, tenantID string, claimID string, roleID string) *diagnostics.Diagnostics {
@@ -418,11 +367,9 @@ func (s *ClaimService) AddRoleToClaim(ctx *appctx.AppContext, tenantID string, c
 		return diag
 	}
 
-	err := s.claimStore.AddClaimToRole(ctx, tenantID, claimID, roleID)
-	if err != nil {
-		diag.AddError("failed_to_add_role_to_claim", "failed to add role to claim", "claim", map[string]interface{}{
-			"error": err.Error(),
-		})
+	addClaimToRoleDiag := s.claimStore.AddClaimToRole(ctx, tenantID, claimID, roleID)
+	if addClaimToRoleDiag.HasErrors() {
+		diag.Append(addClaimToRoleDiag)
 		return diag
 	}
 
@@ -447,41 +394,34 @@ func (s *ClaimService) RemoveRoleFromClaim(ctx *appctx.AppContext, tenantID stri
 		return diag
 	}
 
-	err := s.claimStore.RemoveClaimFromRole(ctx, tenantID, claimID, roleID)
-	if err != nil {
-		diag.AddError("failed_to_remove_role_from_claim", "failed to remove role from claim", "claim", map[string]interface{}{
-			"error": err.Error(),
-		})
+	removeClaimFromRoleDiag := s.claimStore.RemoveClaimFromRole(ctx, tenantID, claimID, roleID)
+	if removeClaimFromRoleDiag.HasErrors() {
+		diag.Append(removeClaimFromRoleDiag)
 		return diag
 	}
 
 	return diag
 }
 
-func (s *ClaimService) GetClaimApiKeys(ctx *appctx.AppContext, tenantID string, claimID string, pagination *pkg_models.Pagination) (*api_models.PaginatedResponse[pkg_models.ApiKey], *diagnostics.Diagnostics) {
+func (s *ClaimService) GetClaimApiKeys(ctx *appctx.AppContext, tenantID string, claimID string, pagination *api_models.PaginationRequest) (*api_models.PaginationResponse[pkg_models.ApiKey], *diagnostics.Diagnostics) {
 	diag := diagnostics.New("get_claim_api_keys")
 	defer diag.Complete()
 
-	cfg := config.GetInstance().Get()
-
-	if pagination == nil {
-		pagination = &pkg_models.Pagination{
-			Page:     1,
-			PageSize: cfg.GetInt(config.PaginationDefaultPageSizeKey, config.DefaultPageSizeInt),
-		}
+	var query *filters.QueryBuilder
+	if pagination != nil {
+		query = pagination.ToQueryBuilder()
 	}
-	dbPagination := mappers.MapPaginationToEntity(pagination)
 
-	dbApiKeys, err := s.claimStore.GetPaginatedClaimApiKeys(ctx, tenantID, claimID, dbPagination)
-	if err != nil {
-		diag.AddError("failed_to_get_claim_api_keys", "failed to get claim api keys", "claim", map[string]interface{}{
-			"error": err.Error(),
-		})
+	dbApiKeys, getClaimApiKeysDiag := s.claimStore.GetClaimApiKeysByQuery(ctx, tenantID, claimID, query)
+	if getClaimApiKeysDiag.HasErrors() {
+		diag.Append(getClaimApiKeysDiag)
 		return nil, diag
 	}
 
-	response := api_models.PaginatedResponse[pkg_models.ApiKey]{
-		Data:       mappers.MapApiKeysToDto(dbApiKeys.Items),
+	apiKeys := mappers.MapApiKeysToDto(dbApiKeys.Items)
+
+	response := &api_models.PaginationResponse[pkg_models.ApiKey]{
+		Data:       apiKeys,
 		TotalCount: dbApiKeys.Total,
 		Pagination: api_models.Pagination{
 			Page:       dbApiKeys.Page,
@@ -490,7 +430,7 @@ func (s *ClaimService) GetClaimApiKeys(ctx *appctx.AppContext, tenantID string, 
 		},
 	}
 
-	return &response, diag
+	return response, diag
 }
 
 func (s *ClaimService) AddApiKeyToClaim(ctx *appctx.AppContext, tenantID string, claimID string, apiKeySlug string) *diagnostics.Diagnostics {
@@ -511,11 +451,9 @@ func (s *ClaimService) AddApiKeyToClaim(ctx *appctx.AppContext, tenantID string,
 		return diag
 	}
 
-	err := s.claimStore.AddClaimToApiKey(ctx, tenantID, claimID, apiKeySlug)
-	if err != nil {
-		diag.AddError("failed_to_add_api_key_to_claim", "failed to add api key to claim", "claim", map[string]interface{}{
-			"error": err.Error(),
-		})
+	addClaimToApiKeyDiag := s.claimStore.AddClaimToApiKey(ctx, tenantID, claimID, apiKeySlug)
+	if addClaimToApiKeyDiag.HasErrors() {
+		diag.Append(addClaimToApiKeyDiag)
 		return diag
 	}
 
@@ -540,11 +478,9 @@ func (s *ClaimService) RemoveApiKeyFromClaim(ctx *appctx.AppContext, tenantID st
 		return diag
 	}
 
-	err := s.claimStore.RemoveClaimFromApiKey(ctx, tenantID, claimID, apiKeySlug)
-	if err != nil {
-		diag.AddError("failed_to_remove_api_key_from_claim", "failed to remove api key from claim", "claim", map[string]interface{}{
-			"error": err.Error(),
-		})
+	removeClaimFromApiKeyDiag := s.claimStore.RemoveClaimFromApiKey(ctx, tenantID, claimID, apiKeySlug)
+	if removeClaimFromApiKeyDiag.HasErrors() {
+		diag.Append(removeClaimFromApiKeyDiag)
 		return diag
 	}
 

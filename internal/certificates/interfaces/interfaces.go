@@ -41,7 +41,9 @@ type CertificateServiceInterface interface {
 	GetX509Certificate(ctx *appctx.AppContext, tenantID string, slugOrId string) (X509Certificate, *diagnostics.Diagnostics)
 	GetRootCertificate(ctx *appctx.AppContext) (*pkg_models.Certificate, *diagnostics.Diagnostics)
 	GetIntermediateCertificate(ctx *appctx.AppContext, tenantId string, slug string) (*pkg_models.Certificate, *diagnostics.Diagnostics)
-	GetCertificates(ctx *appctx.AppContext, tenantID string, pagination *api_models.PaginationRequest) (*api_models.PaginatedResponse[pkg_models.Certificate], *diagnostics.Diagnostics)
+	GetTenantIntermediateCertificate(ctx *appctx.AppContext, tenantID string) (*pkg_models.Certificate, *diagnostics.Diagnostics)
+	GetCertificates(ctx *appctx.AppContext, tenantID string, pagination *api_models.PaginationRequest) (*api_models.PaginationResponse[pkg_models.Certificate], *diagnostics.Diagnostics)
+	GetCertificatesByType(ctx *appctx.AppContext, tenantID string, certType pkg_types.CertificateType, pagination *api_models.PaginationRequest) (*api_models.PaginationResponse[pkg_models.Certificate], *diagnostics.Diagnostics)
 	GetCertificateBy(ctx *appctx.AppContext, tenantID string, slugOrId string) (*pkg_models.Certificate, *diagnostics.Diagnostics)
 	CreateCertificate(ctx *appctx.AppContext, tenantID string, certType pkg_types.CertificateType, certificateConfig pkg_models.CertificateConfig) (*pkg_models.Certificate, *diagnostics.Diagnostics)
 	GetName() string

@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	activity_interfaces "github.com/cjlapao/locally-cli/internal/activity/interfaces"
+	activity_types "github.com/cjlapao/locally-cli/internal/activity/types"
 	api_types "github.com/cjlapao/locally-cli/internal/api/types"
 	"github.com/cjlapao/locally-cli/internal/appctx"
 	auth_interfaces "github.com/cjlapao/locally-cli/internal/auth/interfaces"
@@ -22,7 +24,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func NewAuthorizationPreMiddleware(authService auth_interfaces.AuthServiceInterface, route *api_types.Route) PreMiddleware {
+func NewAuthorizationPreMiddleware(authService auth_interfaces.AuthServiceInterface, activityService activity_interfaces.ActivityServiceInterface, route *api_types.Route) PreMiddleware {
 	return PreMiddlewareFunc(func(w http.ResponseWriter, r *http.Request) MiddlewareResult {
 		// Debug logging to see if auth middleware is being called
 		debugCtx := appctx.FromContext(r.Context())
@@ -65,7 +67,7 @@ func NewAuthorizationPreMiddleware(authService auth_interfaces.AuthServiceInterf
 				writeUnauthorizedError(w, r, "User token not allowed", "User token not allowed on this endpoint, you should use an API key instead")
 				return MiddlewareResult{Continue: false, Diagnostics: diag}
 			}
-			valid, err := validateBearerToken(debugCtx, r, authService, route, authHeader.Token)
+			valid, err := validateBearerToken(debugCtx, r, authService, activityService, route, authHeader.Token)
 			if err != nil {
 				writeUnauthorizedError(w, r, "Invalid token", err.Error())
 				return MiddlewareResult{Continue: false, Diagnostics: diag}
@@ -82,7 +84,7 @@ func NewAuthorizationPreMiddleware(authService auth_interfaces.AuthServiceInterf
 				writeUnauthorizedError(w, r, "User token not allowed", "User token not allowed on this endpoint, you should use a bearer token instead")
 				return MiddlewareResult{Continue: false, Diagnostics: diag}
 			}
-			valid, validateDiag := validateApiKey(debugCtx, r, tenantID, authService, route, authHeader.Token)
+			valid, validateDiag := validateApiKey(debugCtx, r, tenantID, authService, activityService, route, authHeader.Token)
 			if validateDiag != nil && validateDiag.HasErrors() {
 				diag.Append(validateDiag)
 				getLastError := validateDiag.Errors[0].Message
@@ -95,6 +97,22 @@ func NewAuthorizationPreMiddleware(authService auth_interfaces.AuthServiceInterf
 				return MiddlewareResult{Continue: false, Diagnostics: diag}
 			}
 			authService.UpdateApiKeyLastUsed(debugCtx, tenantID, authHeader.Token)
+			activityService.RecordSuccessActivity(debugCtx, "api_key_used", &activity_types.ActivityRecord{
+				TenantID:      tenantID,
+				ActorID:       authHeader.Token,
+				ActorName:     debugCtx.GetUsername(),
+				Module:        "api",
+				Service:       "auth_middleware",
+				Success:       true,
+				ActorType:     activity_types.ActorTypeUser,
+				ActivityType:  activity_types.ActivityTypeAudit,
+				ActivityLevel: activity_types.ActivityLevelInfo,
+				Data: &activity_types.ActivityData{
+					Metadata: map[string]interface{}{
+						"api_key": authHeader.Token,
+					},
+				},
+			})
 		}
 
 		return MiddlewareResult{Continue: true}
@@ -244,7 +262,7 @@ func extractAuthorizationHeaders(ctx *appctx.AppContext, r *http.Request) *api_t
 	return &response
 }
 
-func validateBearerToken(ctx *appctx.AppContext, r *http.Request, authService auth_interfaces.AuthServiceInterface, route *api_types.Route, authHeader string) (bool, error) {
+func validateBearerToken(ctx *appctx.AppContext, r *http.Request, authService auth_interfaces.AuthServiceInterface, activityService activity_interfaces.ActivityServiceInterface, route *api_types.Route, authHeader string) (bool, error) {
 	// Validate the token using the provided auth service
 	ctx.LogInfo("Auth middleware: Validating token")
 	claims, err := authService.ValidateToken(authHeader)
@@ -276,6 +294,20 @@ func validateBearerToken(ctx *appctx.AppContext, r *http.Request, authService au
 	// checking if this is just a superuser endpoint and we are not superuser
 	if route.SecurityRequirement.SecurityLevel == models.ApiKeySecurityLevelSuperUser &&
 		claims.SecurityLevel != models.SecurityLevelSuperUser {
+		activityService.RecordFailureActivity(ctx, activity_types.ActivityTypeAudit, activity_types.ActivityErrorData{
+			ErrorCode:    "UNAUTHORIZED",
+			ErrorMessage: "this endpoint is only available to superusers",
+			StatusCode:   401,
+		}, &activity_types.ActivityRecord{
+			TenantID:     claims.TenantID,
+			ActorID:      claims.UserID,
+			ActorName:    claims.Username,
+			Module:       "api",
+			Service:      "auth_middleware",
+			Success:      false,
+			ActorType:    activity_types.ActorTypeUser,
+			ActivityType: activity_types.ActivityTypeAudit,
+		})
 		return false, errors.New("this endpoint is only available to superusers")
 	}
 
@@ -285,9 +317,37 @@ func validateBearerToken(ctx *appctx.AppContext, r *http.Request, authService au
 	if route.SecurityRequirement.Claims != nil || route.SecurityRequirement.Roles != nil {
 		currentUser, currentUserDiag = authService.GetUserByID(ctx, claims.TenantID, claims.UserID)
 		if currentUserDiag.HasErrors() {
+			activityService.RecordFailureActivity(ctx, activity_types.ActivityTypeAudit, activity_types.ActivityErrorData{
+				ErrorCode:    "INTERNAL_SERVER_ERROR",
+				ErrorMessage: "failed to get user by id",
+				StatusCode:   500,
+			}, &activity_types.ActivityRecord{
+				TenantID:     claims.TenantID,
+				ActorID:      claims.UserID,
+				ActorName:    claims.Username,
+				Module:       "api",
+				Service:      "auth_middleware",
+				Success:      false,
+				ActorType:    activity_types.ActorTypeUser,
+				ActivityType: activity_types.ActivityTypeAudit,
+			})
 			return false, errors.New("failed to get user by id")
 		}
 		if currentUser == nil {
+			activityService.RecordFailureActivity(ctx, activity_types.ActivityTypeAudit, activity_types.ActivityErrorData{
+				ErrorCode:    "UNAUTHORIZED",
+				ErrorMessage: "user not found",
+				StatusCode:   401,
+			}, &activity_types.ActivityRecord{
+				TenantID:     claims.TenantID,
+				ActorID:      claims.UserID,
+				ActorName:    claims.Username,
+				Module:       "api",
+				Service:      "auth_middleware",
+				Success:      false,
+				ActorType:    activity_types.ActorTypeUser,
+				ActivityType: activity_types.ActivityTypeAudit,
+			})
 			return false, errors.New("user not found")
 		}
 	}
@@ -298,6 +358,20 @@ func validateBearerToken(ctx *appctx.AppContext, r *http.Request, authService au
 		for _, role := range route.SecurityRequirement.Roles.Items {
 			// if the user is nil, we will return an error and we will not continue
 			if !hasRole(currentUser, role.Name) {
+				activityService.RecordFailureActivity(ctx, activity_types.ActivityTypeAudit, activity_types.ActivityErrorData{
+					ErrorCode:    "UNAUTHORIZED",
+					ErrorMessage: "user does not have the required role",
+					StatusCode:   401,
+				}, &activity_types.ActivityRecord{
+					TenantID:     claims.TenantID,
+					ActorID:      claims.UserID,
+					ActorName:    claims.Username,
+					Module:       "api",
+					Service:      "auth_middleware",
+					Success:      false,
+					ActorType:    activity_types.ActorTypeUser,
+					ActivityType: activity_types.ActivityTypeAudit,
+				})
 				return false, errors.New("user does not have the required role")
 			}
 		}
@@ -311,6 +385,20 @@ func validateBearerToken(ctx *appctx.AppContext, r *http.Request, authService au
 		case api_types.SecurityRequirementRelationAnd:
 			for _, claim := range route.SecurityRequirement.Claims.Items {
 				if !userHasClaims(currentUser, claim) {
+					activityService.RecordFailureActivity(ctx, activity_types.ActivityTypeAudit, activity_types.ActivityErrorData{
+						ErrorCode:    "UNAUTHORIZED",
+						ErrorMessage: "user does not have the required claim",
+						StatusCode:   401,
+					}, &activity_types.ActivityRecord{
+						TenantID:     claims.TenantID,
+						ActorID:      claims.UserID,
+						ActorName:    claims.Username,
+						Module:       "api",
+						Service:      "auth_middleware",
+						Success:      false,
+						ActorType:    activity_types.ActorTypeUser,
+						ActivityType: activity_types.ActivityTypeAudit,
+					})
 					return false, errors.New("user does not have the required claim")
 				}
 			}
@@ -323,9 +411,37 @@ func validateBearerToken(ctx *appctx.AppContext, r *http.Request, authService au
 				}
 			}
 			if !hasAnyClaim {
+				activityService.RecordFailureActivity(ctx, activity_types.ActivityTypeAudit, activity_types.ActivityErrorData{
+					ErrorCode:    "UNAUTHORIZED",
+					ErrorMessage: "user does not have the required claim",
+					StatusCode:   401,
+				}, &activity_types.ActivityRecord{
+					TenantID:     claims.TenantID,
+					ActorID:      claims.UserID,
+					ActorName:    claims.Username,
+					Module:       "api",
+					Service:      "auth_middleware",
+					Success:      false,
+					ActorType:    activity_types.ActorTypeUser,
+					ActivityType: activity_types.ActivityTypeAudit,
+				})
 				return false, errors.New("user does not have the required claim")
 			}
 		default:
+			activityService.RecordFailureActivity(ctx, activity_types.ActivityTypeAudit, activity_types.ActivityErrorData{
+				ErrorCode:    "INTERNAL_SERVER_ERROR",
+				ErrorMessage: "invalid claim relation",
+				StatusCode:   500,
+			}, &activity_types.ActivityRecord{
+				TenantID:     claims.TenantID,
+				ActorID:      claims.UserID,
+				ActorName:    claims.Username,
+				Module:       "api",
+				Service:      "auth_middleware",
+				Success:      false,
+				ActorType:    activity_types.ActorTypeUser,
+				ActivityType: activity_types.ActivityTypeAudit,
+			})
 			return false, errors.New("invalid claim relation")
 		}
 	}
@@ -357,7 +473,7 @@ func validateBearerToken(ctx *appctx.AppContext, r *http.Request, authService au
 }
 
 // validateApiKey validates an API key header and sets context if valid
-func validateApiKey(ctx *appctx.AppContext, r *http.Request, tenantID string, authService auth_interfaces.AuthServiceInterface, route *api_types.Route, apiKey string) (bool, *diagnostics.Diagnostics) {
+func validateApiKey(ctx *appctx.AppContext, r *http.Request, tenantID string, authService auth_interfaces.AuthServiceInterface, activityService activity_interfaces.ActivityServiceInterface, route *api_types.Route, apiKey string) (bool, *diagnostics.Diagnostics) {
 	diag := diagnostics.New("validate_api_key")
 	defer diag.Complete()
 
@@ -365,10 +481,38 @@ func validateApiKey(ctx *appctx.AppContext, r *http.Request, tenantID string, au
 	apiKeyDto, validateDiag := authService.ValidateApiKey(ctx, tenantID, apiKey)
 	if validateDiag != nil && validateDiag.HasErrors() {
 		diag.Append(validateDiag)
+		activityService.RecordFailureActivity(ctx, activity_types.ActivityTypeAudit, activity_types.ActivityErrorData{
+			ErrorCode:    "INTERNAL_SERVER_ERROR",
+			ErrorMessage: "failed to validate api key",
+			StatusCode:   500,
+		}, &activity_types.ActivityRecord{
+			TenantID:     tenantID,
+			ActorID:      apiKey,
+			ActorName:    "api_key",
+			Module:       "api",
+			Service:      "auth_middleware",
+			Success:      false,
+			ActorType:    activity_types.ActorTypeUser,
+			ActivityType: activity_types.ActivityTypeAudit,
+		})
 		return false, diag
 	}
 	if apiKeyDto == nil {
 		diag.AddError("invalid_api_key", "Invalid API key", "api_key", nil)
+		activityService.RecordFailureActivity(ctx, activity_types.ActivityTypeAudit, activity_types.ActivityErrorData{
+			ErrorCode:    "INVALID_API_KEY",
+			ErrorMessage: "Invalid API key",
+			StatusCode:   401,
+		}, &activity_types.ActivityRecord{
+			TenantID:     tenantID,
+			ActorID:      apiKey,
+			ActorName:    "api_key",
+			Module:       "api",
+			Service:      "auth_middleware",
+			Success:      false,
+			ActorType:    activity_types.ActorTypeUser,
+			ActivityType: activity_types.ActivityTypeAudit,
+		})
 		return false, diag
 	}
 
@@ -376,6 +520,20 @@ func validateApiKey(ctx *appctx.AppContext, r *http.Request, tenantID string, au
 	headerTenant := r.Header.Get(config.TenantIDHeader)
 	if headerTenant != "" && headerTenant != apiKeyDto.TenantID {
 		diag.AddError("tenant_mismatch", "Tenant mismatch", "api_key", nil)
+		activityService.RecordFailureActivity(ctx, activity_types.ActivityTypeAudit, activity_types.ActivityErrorData{
+			ErrorCode:    "UNAUTHORIZED",
+			ErrorMessage: "Tenant mismatch",
+			StatusCode:   401,
+		}, &activity_types.ActivityRecord{
+			TenantID:     tenantID,
+			ActorID:      apiKey,
+			ActorName:    "api_key",
+			Module:       "api",
+			Service:      "auth_middleware",
+			Success:      false,
+			ActorType:    activity_types.ActorTypeUser,
+			ActivityType: activity_types.ActivityTypeAudit,
+		})
 		return false, diag
 	}
 
@@ -388,6 +546,20 @@ func validateApiKey(ctx *appctx.AppContext, r *http.Request, tenantID string, au
 			for _, claim := range route.SecurityRequirement.Claims.Items {
 				if !hasClaims(apiKeyDto.Claims, claim) {
 					diag.AddError("api_key_does_not_have_required_claim", "API key does not have the required claim", "api_key", nil)
+					activityService.RecordFailureActivity(ctx, activity_types.ActivityTypeAudit, activity_types.ActivityErrorData{
+						ErrorCode:    "UNAUTHORIZED",
+						ErrorMessage: "API key does not have the required claim",
+						StatusCode:   401,
+					}, &activity_types.ActivityRecord{
+						TenantID:     tenantID,
+						ActorID:      apiKey,
+						ActorName:    "api_key",
+						Module:       "api",
+						Service:      "auth_middleware",
+						Success:      false,
+						ActorType:    activity_types.ActorTypeUser,
+						ActivityType: activity_types.ActivityTypeAudit,
+					})
 					return false, diag
 				}
 			}
@@ -401,10 +573,38 @@ func validateApiKey(ctx *appctx.AppContext, r *http.Request, tenantID string, au
 			}
 			if !hasAnyClaim {
 				diag.AddError("api_key_does_not_have_required_claim", "API key does not have the required claim", "api_key", nil)
+				activityService.RecordFailureActivity(ctx, activity_types.ActivityTypeAudit, activity_types.ActivityErrorData{
+					ErrorCode:    "UNAUTHORIZED",
+					ErrorMessage: "API key does not have the required claim",
+					StatusCode:   401,
+				}, &activity_types.ActivityRecord{
+					TenantID:     tenantID,
+					ActorID:      apiKey,
+					ActorName:    "api_key",
+					Module:       "api",
+					Service:      "auth_middleware",
+					Success:      false,
+					ActorType:    activity_types.ActorTypeUser,
+					ActivityType: activity_types.ActivityTypeAudit,
+				})
 				return false, diag
 			}
 		default:
 			diag.AddError("invalid_claim_relation", "Invalid claim relation", "api_key", nil)
+			activityService.RecordFailureActivity(ctx, activity_types.ActivityTypeAudit, activity_types.ActivityErrorData{
+				ErrorCode:    "INTERNAL_SERVER_ERROR",
+				ErrorMessage: "Invalid claim relation",
+				StatusCode:   500,
+			}, &activity_types.ActivityRecord{
+				TenantID:     tenantID,
+				ActorID:      apiKey,
+				ActorName:    "api_key",
+				Module:       "api",
+				Service:      "auth_middleware",
+				Success:      false,
+				ActorType:    activity_types.ActorTypeUser,
+				ActivityType: activity_types.ActivityTypeAudit,
+			})
 			return false, diag
 		}
 	}

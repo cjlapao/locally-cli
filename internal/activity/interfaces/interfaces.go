@@ -5,14 +5,13 @@ import (
 	"github.com/cjlapao/locally-cli/internal/activity/types"
 	api_models "github.com/cjlapao/locally-cli/internal/api/models"
 	"github.com/cjlapao/locally-cli/internal/appctx"
-	"github.com/cjlapao/locally-cli/internal/database/filters"
 	"github.com/cjlapao/locally-cli/pkg/diagnostics"
 	pkg_models "github.com/cjlapao/locally-cli/pkg/models"
 )
 
 type ActivityServiceInterface interface {
 	GetName() string
-	GetActivities(ctx *appctx.AppContext, tenantID string, filter *filters.Filter, pagination *api_models.Pagination) (*api_models.PaginatedResponse[pkg_models.Activity], *diagnostics.Diagnostics)
+	GetActivities(ctx *appctx.AppContext, tenantID string, pagination *api_models.PaginationRequest) (*api_models.PaginationResponse[pkg_models.Activity], *diagnostics.Diagnostics)
 	GetActivity(ctx *appctx.AppContext, tenantID string, activityID string) (*pkg_models.Activity, *diagnostics.Diagnostics)
 	CreateActivity(ctx *appctx.AppContext, tenantID string, activity *pkg_models.CreateActivityRequest) (*pkg_models.Activity, *diagnostics.Diagnostics)
 	UpdateActivity(ctx *appctx.AppContext, tenantID string, activityID string, activity *pkg_models.UpdateActivityRequest) (*pkg_models.Activity, *diagnostics.Diagnostics)

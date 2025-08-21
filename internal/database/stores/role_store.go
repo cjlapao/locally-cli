@@ -25,22 +25,21 @@ var (
 )
 
 type RoleDataStoreInterface interface {
-	GetRoles(ctx *appctx.AppContext, tenantID string) ([]entities.Role, error)
-	GetRolesByFilter(ctx *appctx.AppContext, tenantID string, filterObj *filters.Filter) (*filters.FilterResponse[entities.Role], error)
-	GetRoleBySlugOrID(ctx *appctx.AppContext, tenantID string, slugOrID string) (*entities.Role, error)
-	GetRoleUsers(ctx *appctx.AppContext, tenantID string, roleID string) ([]entities.User, error)
-	GetRoleUsersByFilter(ctx *appctx.AppContext, tenantID string, filterObj *filters.Filter) (*filters.FilterResponse[entities.User], error)
-	GetPaginatedRoleUsers(ctx *appctx.AppContext, tenantID string, roleID string, pagination *filters.Pagination) (*filters.PaginationResponse[entities.User], error)
-	CreateRole(ctx *appctx.AppContext, tenantID string, role *entities.Role) (*entities.Role, error)
-	UpdateRole(ctx *appctx.AppContext, tenantID string, role *entities.Role) error
-	DeleteRole(ctx *appctx.AppContext, tenantID string, id string) error
-	GetRoleClaims(ctx *appctx.AppContext, tenantID string, roleID string) ([]entities.Claim, error)
-	GetPaginatedRoleClaims(ctx *appctx.AppContext, tenantID string, roleID string, pagination *filters.Pagination) (*filters.PaginationResponse[entities.Claim], error)
-	GetUserRoles(ctx *appctx.AppContext, tenantID string, userID string) ([]entities.Role, error)
-	AddUserToRole(ctx *appctx.AppContext, tenantID string, userID string, roleIdOrSlug string) error
-	RemoveUserFromRole(ctx *appctx.AppContext, tenantID string, userID string, roleIdOrSlug string) error
-	AddClaimToRole(ctx *appctx.AppContext, tenantID string, roleID string, claimID string) error
-	RemoveClaimFromRole(ctx *appctx.AppContext, tenantID string, roleID string, claimID string) error
+	GetRoles(ctx *appctx.AppContext, tenantID string) ([]entities.Role, *diagnostics.Diagnostics)
+	GetRolesByQuery(ctx *appctx.AppContext, tenantID string, queryObj *filters.QueryBuilder) (*filters.QueryBuilderResponse[entities.Role], *diagnostics.Diagnostics)
+	GetRoleBySlugOrID(ctx *appctx.AppContext, tenantID string, slugOrID string) (*entities.Role, *diagnostics.Diagnostics)
+	GetRoleUsers(ctx *appctx.AppContext, tenantID string, roleID string) ([]entities.User, *diagnostics.Diagnostics)
+	GetRoleUsersByQuery(ctx *appctx.AppContext, tenantID string, roleID string, queryObj *filters.QueryBuilder) (*filters.QueryBuilderResponse[entities.User], *diagnostics.Diagnostics)
+	CreateRole(ctx *appctx.AppContext, tenantID string, role *entities.Role) (*entities.Role, *diagnostics.Diagnostics)
+	UpdateRole(ctx *appctx.AppContext, tenantID string, role *entities.Role) *diagnostics.Diagnostics
+	DeleteRole(ctx *appctx.AppContext, tenantID string, id string) *diagnostics.Diagnostics
+	GetRoleClaims(ctx *appctx.AppContext, tenantID string, roleID string) ([]entities.Claim, *diagnostics.Diagnostics)
+	GetRoleClaimsByQuery(ctx *appctx.AppContext, tenantID string, roleID string, queryObj *filters.QueryBuilder) (*filters.QueryBuilderResponse[entities.Claim], *diagnostics.Diagnostics)
+	GetUserRoles(ctx *appctx.AppContext, tenantID string, userID string) ([]entities.Role, *diagnostics.Diagnostics)
+	AddUserToRole(ctx *appctx.AppContext, tenantID string, userID string, roleIdOrSlug string) *diagnostics.Diagnostics
+	RemoveUserFromRole(ctx *appctx.AppContext, tenantID string, userID string, roleIdOrSlug string) *diagnostics.Diagnostics
+	AddClaimToRole(ctx *appctx.AppContext, tenantID string, roleID string, claimID string) *diagnostics.Diagnostics
+	RemoveClaimFromRole(ctx *appctx.AppContext, tenantID string, roleID string, claimID string) *diagnostics.Diagnostics
 }
 
 type RoleDataStore struct {
@@ -87,136 +86,223 @@ func (s *RoleDataStore) Migrate() *diagnostics.Diagnostics {
 	diag := diagnostics.New("migrate_role_data_store")
 
 	if err := s.GetDB().AutoMigrate(&entities.RoleClaims{}); err != nil {
-		diag.AddError("failed_to_migrate_role_claim_table", "failed to migrate role claim table", "role_data_store", nil)
+		diag.AddError("failed_to_migrate_role_claim_table", fmt.Sprintf("failed to migrate role claim table: %v", err), "role_data_store", nil)
 		return diag
 	}
 
 	if err := s.GetDB().Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_role_claims_unique ON role_claims(role_id, claim_id);").Error; err != nil {
-		diag.AddError("failed_to_create_unique_index_on_role_claims", "failed to create unique index on role claims", "role_data_store", nil)
+		diag.AddError("failed_to_create_unique_index_on_role_claims", fmt.Sprintf("failed to create unique index on role claims: %v", err), "role_data_store", nil)
 		return diag
 	}
 
 	if err := s.GetDB().AutoMigrate(&entities.Role{}); err != nil {
-		diag.AddError("failed_to_migrate_role_table", "failed to migrate role table", "role_data_store", nil)
+		diag.AddError("failed_to_migrate_role_table", fmt.Sprintf("failed to migrate role table: %v", err), "role_data_store", nil)
 		return diag
 	}
 
 	return diag
 }
 
-func (s *RoleDataStore) GetRoles(ctx *appctx.AppContext, tenantID string) ([]entities.Role, error) {
+func (s *RoleDataStore) GetRoles(ctx *appctx.AppContext, tenantID string) ([]entities.Role, *diagnostics.Diagnostics) {
+	diag := diagnostics.New("store_get_roles")
+	if tenantID == "" {
+		diag.AddError("tenant_id_cannot_be_empty", "tenant ID cannot be empty", "role_data_store")
+		return nil, diag
+	}
+
 	var roles []entities.Role
 	result := s.GetDB().
-		Preload("Claims").
+		Preload("Claims", func(db *gorm.DB) *gorm.DB {
+			return db.Order("claims.created_at DESC")
+		}).
 		Where("tenant_id = ?", tenantID).
 		Find(&roles)
 	if result.Error != nil {
-		return nil, fmt.Errorf("failed to get roles: %w", result.Error)
+		diag.AddError("failed_to_get_roles", fmt.Sprintf("failed to get roles: %v", result.Error), "role_data_store", map[string]interface{}{
+			"tenant_id": tenantID,
+		})
+		return nil, diag
 	}
-	return roles, nil
+	return roles, diag
 }
 
-func (s *RoleDataStore) GetRolesByFilter(ctx *appctx.AppContext, tenantID string, filterObj *filters.Filter) (*filters.FilterResponse[entities.Role], error) {
-	return utils.PaginatedFilteredQueryWithPreload(s.GetDB(), tenantID, filterObj, entities.Role{}, "Claims")
+func (s *RoleDataStore) GetRolesByQuery(ctx *appctx.AppContext, tenantID string, queryBuilder *filters.QueryBuilder) (*filters.QueryBuilderResponse[entities.Role], *diagnostics.Diagnostics) {
+	diag := diagnostics.New("store_get_roles_by_query")
+	if tenantID == "" {
+		diag.AddError("tenant_id_cannot_be_empty", "tenant ID cannot be empty", "role_data_store")
+		return nil, diag
+	}
+
+	if queryBuilder == nil {
+		queryBuilder = filters.NewQueryBuilder("")
+	}
+
+	db := s.GetDB()
+	db = db.Preload("Claims", func(db *gorm.DB) *gorm.DB {
+		return db.Order("claims.created_at DESC")
+	})
+
+	result, err := utils.QueryDatabase[entities.Role](db, tenantID, queryBuilder)
+	if err != nil {
+		diag.AddError("failed_to_get_roles", fmt.Sprintf("failed to get roles: %v", err), "role_data_store", map[string]interface{}{
+			"tenant_id": tenantID,
+		})
+		return nil, diag
+	}
+	return result, diag
 }
 
-func (s *RoleDataStore) GetRoleBySlugOrID(ctx *appctx.AppContext, tenantID string, slugOrID string) (*entities.Role, error) {
+func (s *RoleDataStore) GetRoleBySlugOrID(ctx *appctx.AppContext, tenantID string, slugOrID string) (*entities.Role, *diagnostics.Diagnostics) {
+	diag := diagnostics.New("store_get_role_by_slug_or_id")
+	if tenantID == "" {
+		diag.AddError("tenant_id_cannot_be_empty", "tenant ID cannot be empty", "role_data_store")
+		return nil, diag
+	}
+
 	var role entities.Role
-	result := s.GetDB().
-		Preload("Claims").
+	db := s.GetDB().
+		Preload("Claims", func(db *gorm.DB) *gorm.DB {
+			return db.Order("claims.created_at DESC")
+		}).
 		Where("tenant_id = ?", tenantID).
 		First(&role, "(slug = ? OR id = ?)", slugOrID, slugOrID)
-	if result.Error != nil {
-		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			return nil, nil
+	if db.Error != nil {
+		if errors.Is(db.Error, gorm.ErrRecordNotFound) {
+			return nil, diag
 		}
-		return nil, fmt.Errorf("failed to get role: %w", result.Error)
+		diag.AddError("failed_to_get_role", fmt.Sprintf("failed to get role: %v", db.Error), "role_data_store", map[string]interface{}{
+			"role_id": slugOrID,
+		})
+		return nil, diag
 	}
-	return &role, nil
+
+	return &role, diag
 }
 
-func (s *RoleDataStore) GetPaginatedRoleUsers(ctx *appctx.AppContext, tenantID string, roleID string, pagination *filters.Pagination) (*filters.PaginationResponse[entities.User], error) {
-	role, err := s.GetRoleBySlugOrID(ctx, tenantID, roleID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get role: %w", err)
+func (s *RoleDataStore) GetRoleUsersByQuery(ctx *appctx.AppContext, tenantID string, roleID string, queryBuilder *filters.QueryBuilder) (*filters.QueryBuilderResponse[entities.User], *diagnostics.Diagnostics) {
+	diag := diagnostics.New("store_get_role_users_by_query")
+	role, getRoleDiag := s.GetRoleBySlugOrID(ctx, tenantID, roleID)
+	if getRoleDiag.HasErrors() {
+		diag.Append(getRoleDiag)
+		return nil, diag
 	}
 	if role == nil {
-		return nil, fmt.Errorf("role not found")
-	}
-	query := s.GetDB().
-		Preload("Roles").
-		Preload("Claims").
-		Joins("JOIN user_roles ON users.id = user_roles.user_id").
-		Where("user_roles.role_id = ?", role.ID)
-	result, err := utils.PaginatedQuery(query, tenantID, pagination, entities.User{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get paginated role users: %w", err)
+		diag.AddError("role_not_found", "role not found", "role_data_store", map[string]interface{}{
+			"role_id": roleID,
+		})
+		return nil, diag
 	}
 
-	return result, nil
+	db := s.GetDB().
+		Preload("Roles", func(db *gorm.DB) *gorm.DB {
+			return db.Order("roles.created_at DESC")
+		}).
+		Preload("Claims", func(db *gorm.DB) *gorm.DB {
+			return db.Order("claims.created_at DESC")
+		}).
+		Joins("JOIN user_roles ON users.id = user_roles.user_id").
+		Where("user_roles.role_id = ?", role.ID)
+	result, err := utils.QueryDatabase[entities.User](db, tenantID, queryBuilder)
+	if err != nil {
+		diag.AddError("failed_to_get_role_users", fmt.Sprintf("failed to get role users: %v", err), "role_data_store", map[string]interface{}{
+			"role_id": roleID,
+		})
+		return nil, diag
+	}
+
+	return result, diag
 }
 
-func (s *RoleDataStore) GetRoleUsers(ctx *appctx.AppContext, tenantID string, roleID string) ([]entities.User, error) {
-	var users []entities.User
-	role, err := s.GetRoleBySlugOrID(ctx, tenantID, roleID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get role: %w", err)
+func (s *RoleDataStore) GetRoleUsers(ctx *appctx.AppContext, tenantID string, roleID string) ([]entities.User, *diagnostics.Diagnostics) {
+	diag := diagnostics.New("store_get_role_users")
+	role, getRoleDiag := s.GetRoleBySlugOrID(ctx, tenantID, roleID)
+	if getRoleDiag.HasErrors() {
+		diag.Append(getRoleDiag)
+		return nil, diag
 	}
 	if role == nil {
-		return nil, fmt.Errorf("role not found")
+		diag.AddError("role_not_found", "role not found", "role_data_store", map[string]interface{}{
+			"role_id": roleID,
+		})
+		return nil, diag
 	}
-	query := s.GetDB().
-		Preload("Roles").
-		Preload("Claims").
+
+	db := s.GetDB().
+		Preload("Roles", func(db *gorm.DB) *gorm.DB {
+			return db.Order("roles.created_at DESC")
+		}).
+		Preload("Claims", func(db *gorm.DB) *gorm.DB {
+			return db.Order("claims.created_at DESC")
+		}).
 		Joins("JOIN user_roles ON users.id = user_roles.user_id").
 		Where("user_roles.role_id = ?", role.ID)
+
 	if tenantID != "" {
-		query = query.Where("users.tenant_id = ?", tenantID)
+		db = db.Where("users.tenant_id = ?", tenantID)
 	}
-	result := query.Find(&users)
+
+	var users []entities.User
+	result := db.Find(&users)
 	if result.Error != nil {
-		return nil, fmt.Errorf("failed to get role users: %w", result.Error)
+		diag.AddError("failed_to_get_role_users", fmt.Sprintf("failed to get role users: %v", result.Error), "role_data_store", map[string]interface{}{
+			"role_id": roleID,
+		})
+		return nil, diag
 	}
-	return users, nil
+
+	return users, diag
 }
 
-func (s *RoleDataStore) GetRoleUsersByFilter(ctx *appctx.AppContext, tenantID string, filterObj *filters.Filter) (*filters.FilterResponse[entities.User], error) {
-	return utils.PaginatedFilteredQueryWithPreload(s.GetDB(), tenantID, filterObj, entities.User{}, "Roles", "Claims")
-}
-
-func (s *RoleDataStore) GetRoleClaims(ctx *appctx.AppContext, tenantID string, roleID string) ([]entities.Claim, error) {
+func (s *RoleDataStore) GetRoleClaims(ctx *appctx.AppContext, tenantID string, roleID string) ([]entities.Claim, *diagnostics.Diagnostics) {
+	diag := diagnostics.New("store_get_role_claims")
 	var role entities.Role
-	result := s.GetDB().
-		Preload("Claims").
+	db := s.GetDB().
+		Preload("Claims", func(db *gorm.DB) *gorm.DB {
+			return db.Order("claims.created_at DESC")
+		}).
 		Where("tenant_id = ?", tenantID).
 		Where("id = ?", roleID).
 		Find(&role)
-	if result.Error != nil {
-		return nil, fmt.Errorf("failed to get role claims: %w", result.Error)
+	if db.Error != nil {
+		diag.AddError("failed_to_get_role_claims", fmt.Sprintf("failed to get role claims: %v", db.Error), "role_data_store", map[string]interface{}{
+			"role_id": roleID,
+		})
+		return nil, diag
 	}
-	return role.Claims, nil
+	return role.Claims, diag
 }
 
-func (s *RoleDataStore) GetPaginatedRoleClaims(ctx *appctx.AppContext, tenantID string, roleID string, pagination *filters.Pagination) (*filters.PaginationResponse[entities.Claim], error) {
-	role, err := s.GetRoleBySlugOrID(ctx, tenantID, roleID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get role: %w", err)
+func (s *RoleDataStore) GetRoleClaimsByQuery(ctx *appctx.AppContext, tenantID string, roleID string, queryBuilder *filters.QueryBuilder) (*filters.QueryBuilderResponse[entities.Claim], *diagnostics.Diagnostics) {
+	diag := diagnostics.New("store_get_role_claims_by_query")
+	role, getRoleDiag := s.GetRoleBySlugOrID(ctx, tenantID, roleID)
+	if getRoleDiag.HasErrors() {
+		diag.Append(getRoleDiag)
+		return nil, diag
 	}
 	if role == nil {
-		return nil, fmt.Errorf("role not found")
+		diag.AddError("role_not_found", "role not found", "role_data_store", map[string]interface{}{
+			"role_id": roleID,
+		})
+		return nil, diag
 	}
-	query := s.GetDB().
-		Preload("Claims").
+	db := s.GetDB().
+		Preload("Claims", func(db *gorm.DB) *gorm.DB {
+			return db.Order("claims.created_at DESC")
+		}).
 		Joins("JOIN role_claims ON claims.id = role_claims.claim_id").
 		Where("role_claims.role_id = ?", role.ID)
-	result, err := utils.PaginatedQuery(query, tenantID, pagination, entities.Claim{})
+	result, err := utils.QueryDatabase[entities.Claim](db, tenantID, queryBuilder)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get paginated role claims: %w", err)
+		diag.AddError("failed_to_get_role_claims", fmt.Sprintf("failed to get role claims: %v", err), "role_data_store", map[string]interface{}{
+			"role_id": roleID,
+		})
+		return nil, diag
 	}
-	return result, nil
+	return result, diag
 }
 
-func (s *RoleDataStore) CreateRole(ctx *appctx.AppContext, tenantID string, role *entities.Role) (*entities.Role, error) {
+func (s *RoleDataStore) CreateRole(ctx *appctx.AppContext, tenantID string, role *entities.Role) (*entities.Role, *diagnostics.Diagnostics) {
+	diag := diagnostics.New("store_create_role")
 	role.ID = uuid.New().String()
 	role.CreatedAt = time.Now()
 	role.UpdatedAt = time.Now()
@@ -231,7 +317,10 @@ func (s *RoleDataStore) CreateRole(ctx *appctx.AppContext, tenantID string, role
 
 	result := s.GetDB().Create(role)
 	if result.Error != nil {
-		return nil, fmt.Errorf("failed to create role: %w", result.Error)
+		diag.AddError("failed_to_create_role", fmt.Sprintf("failed to create role: %v", result.Error), "role_data_store", map[string]interface{}{
+			"role": role,
+		})
+		return nil, diag
 	}
 
 	// Associate claims if any were provided
@@ -241,7 +330,10 @@ func (s *RoleDataStore) CreateRole(ctx *appctx.AppContext, tenantID string, role
 		for _, claim := range claimsToAssociate {
 			var dbClaim entities.Claim
 			if result := s.GetDB().Where("id = ?", claim.ID).First(&dbClaim); result.Error != nil {
-				return nil, fmt.Errorf("failed to get claim with id %s: %w", claim.ID, result.Error)
+				diag.AddError("failed_to_get_claim", fmt.Sprintf("failed to get claim with id %s: %v", claim.ID, result.Error), "role_data_store", map[string]interface{}{
+					"claim_id": claim.ID,
+				})
+				return nil, diag
 			}
 			dbClaims = append(dbClaims, dbClaim)
 		}
@@ -249,82 +341,124 @@ func (s *RoleDataStore) CreateRole(ctx *appctx.AppContext, tenantID string, role
 		// Associate the claims with the role using Replace to avoid duplicates
 		// First, clear any existing associations
 		if err := s.GetDB().Model(role).Association("Claims").Clear(); err != nil {
-			return nil, fmt.Errorf("failed to clear existing claims associations: %w", err)
+			diag.AddError("failed_to_clear_existing_claims_associations", fmt.Sprintf("failed to clear existing claims associations: %v", err), "role_data_store", map[string]interface{}{
+				"role_id": role.ID,
+			})
+			return nil, diag
 		}
 
 		// Then add the new associations
 		if err := s.GetDB().Model(role).Association("Claims").Append(dbClaims); err != nil {
-			return nil, fmt.Errorf("failed to associate claims with role: %w", err)
+			diag.AddError("failed_to_associate_claims_with_role", fmt.Sprintf("failed to associate claims with role: %v", err), "role_data_store", map[string]interface{}{
+				"role_id": role.ID,
+			})
+			return nil, diag
 		}
 	}
 
-	return role, nil
+	return role, diag
 }
 
-func (s *RoleDataStore) UpdateRole(ctx *appctx.AppContext, tenantID string, role *entities.Role) error {
+func (s *RoleDataStore) UpdateRole(ctx *appctx.AppContext, tenantID string, role *entities.Role) *diagnostics.Diagnostics {
+	diag := diagnostics.New("store_update_role")
 	role.UpdatedAt = time.Now()
 	if role.Slug != "" {
 		role.Slug = pkg_utils.Slugify(role.Slug)
 	}
 	// check if the role exists in the database
-	existingRole, err := s.GetRoleBySlugOrID(ctx, tenantID, role.Slug)
-	if err != nil {
-		return fmt.Errorf("failed to get role: %w", err)
+	existingRole, getRoleDiag := s.GetRoleBySlugOrID(ctx, tenantID, role.Slug)
+	if getRoleDiag.HasErrors() {
+		diag.Append(getRoleDiag)
+		return diag
 	}
 	if existingRole == nil {
-		return fmt.Errorf("role not found")
+		diag.AddError("role_not_found", "role not found", "role_data_store", map[string]interface{}{
+			"role_id": role.ID,
+		})
+		return diag
 	}
 
 	// using the partial update map to update the role
 	updates := utils.PartialUpdateMap(existingRole, role, "updated_at", "slug")
 	if err := s.GetDB().Model(&entities.Role{}).Where("id = ?", role.ID).Updates(updates).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		return err
+		diag.AddError("failed_to_update_role", fmt.Sprintf("failed to update role: %v", err), "role_data_store", map[string]interface{}{
+			"role_id": role.ID,
+		})
+		return diag
 	}
 
-	return nil
+	return diag
 }
 
-func (s *RoleDataStore) DeleteRole(ctx *appctx.AppContext, tenantID string, id string) error {
-	return s.GetDB().Where("tenant_id = ?", tenantID).Delete(&entities.Role{}, "id = ?", id).Error
+func (s *RoleDataStore) DeleteRole(ctx *appctx.AppContext, tenantID string, id string) *diagnostics.Diagnostics {
+	diag := diagnostics.New("store_delete_role")
+	result := s.GetDB().Where("tenant_id = ?", tenantID).Delete(&entities.Role{}, "id = ?", id)
+	if result.Error != nil {
+		diag.AddError("failed_to_delete_role", fmt.Sprintf("failed to delete role: %v", result.Error), "role_data_store", map[string]interface{}{
+			"role_id": id,
+		})
+		return diag
+	}
+	return diag
 }
 
-func (s *RoleDataStore) GetUserRoles(ctx *appctx.AppContext, tenantID string, userID string) ([]entities.Role, error) {
+func (s *RoleDataStore) GetUserRoles(ctx *appctx.AppContext, tenantID string, userID string) ([]entities.Role, *diagnostics.Diagnostics) {
+	diag := diagnostics.New("store_get_user_roles")
 	var user entities.User
 	result := s.GetDB().
-		Preload("Roles").
+		Preload("Roles", func(db *gorm.DB) *gorm.DB {
+			return db.Preload("Claims", func(db *gorm.DB) *gorm.DB {
+				return db.Order("claims.created_at DESC")
+			}).Order("roles.created_at DESC")
+		}).
 		Where("users.id = ?", userID).
 		Find(&user)
 	if result.Error != nil {
-		return nil, fmt.Errorf("failed to get user roles: %w", result.Error)
+		diag.AddError("failed_to_get_user_roles", fmt.Sprintf("failed to get user roles: %v", result.Error), "role_data_store", map[string]interface{}{
+			"user_id": userID,
+		})
+		return nil, diag
 	}
 	if user.ID == "" {
-		return nil, fmt.Errorf("user not found")
+		diag.AddError("user_not_found", "user not found", "role_data_store", map[string]interface{}{
+			"user_id": userID,
+		})
+		return nil, diag
 	}
 
-	return user.Roles, nil
+	return user.Roles, diag
 }
 
-func (s *RoleDataStore) AddUserToRole(ctx *appctx.AppContext, tenantID string, userID string, roleIdOrSlug string) error {
+func (s *RoleDataStore) AddUserToRole(ctx *appctx.AppContext, tenantID string, userID string, roleIdOrSlug string) *diagnostics.Diagnostics {
+	diag := diagnostics.New("store_add_user_to_role")
 	var user entities.User
 	result := s.GetDB().
 		Where("id = ? AND tenant_id = ?", userID, tenantID).
 		First(&user)
 	if result.Error != nil {
-		return fmt.Errorf("failed to get user: %w", result.Error)
+		diag.AddError("failed_to_get_user", fmt.Sprintf("failed to get user: %v", result.Error), "role_data_store", map[string]interface{}{
+			"user_id": userID,
+		})
+		return diag
 	}
 	if user.ID == "" {
-		return fmt.Errorf("user not found")
+		diag.AddError("user_not_found", "user not found", "role_data_store", map[string]interface{}{
+			"user_id": userID,
+		})
+		return diag
 	}
 
 	// check if the roles exist
-	existingRole, err := s.GetRoleBySlugOrID(ctx, tenantID, roleIdOrSlug)
-	if err != nil {
-		if !errors.Is(err, gorm.ErrRecordNotFound) {
-			return fmt.Errorf("failed to get role: %w", err)
-		}
+	existingRole, getRoleDiag := s.GetRoleBySlugOrID(ctx, tenantID, roleIdOrSlug)
+	if getRoleDiag.HasErrors() {
+		diag.Append(getRoleDiag)
+		return diag
 	}
-	if existingRole.ID == "" {
-		return fmt.Errorf("role not found")
+	if existingRole == nil {
+		diag.AddError("role_not_found", "role not found", "role_data_store", map[string]interface{}{
+			"role_id": roleIdOrSlug,
+		})
+		return diag
 	}
 
 	// check if the user is already in the role
@@ -332,11 +466,19 @@ func (s *RoleDataStore) AddUserToRole(ctx *appctx.AppContext, tenantID string, u
 	result = s.GetDB().Where("user_id = ? AND role_id = ?", user.ID, existingRole.ID).First(&userRole)
 	if result.Error != nil {
 		if !errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			return fmt.Errorf("failed to get user role: %w", result.Error)
+			diag.AddError("failed_to_get_user_role", fmt.Sprintf("failed to get user role: %v", result.Error), "role_data_store", map[string]interface{}{
+				"user_id": userID,
+				"role_id": existingRole.ID,
+			})
+			return diag
 		}
 	}
 	if userRole.RoleID != "" {
-		return fmt.Errorf("user already in role")
+		diag.AddError("user_already_in_role", "user already in role", "role_data_store", map[string]interface{}{
+			"user_id": userID,
+			"role_id": existingRole.ID,
+		})
+		return diag
 	}
 
 	// add the role to the user
@@ -344,73 +486,113 @@ func (s *RoleDataStore) AddUserToRole(ctx *appctx.AppContext, tenantID string, u
 	userRole.RoleID = existingRole.ID
 	result = s.GetDB().Create(&userRole)
 	if result.Error != nil {
-		return fmt.Errorf("failed to add user to role: %w", result.Error)
+		diag.AddError("failed_to_add_user_to_role", fmt.Sprintf("failed to add user to role: %v", result.Error), "role_data_store", map[string]interface{}{
+			"user_id": userID,
+			"role_id": existingRole.ID,
+		})
+		return diag
 	}
 
-	return nil
+	return diag
 }
 
-func (s *RoleDataStore) RemoveUserFromRole(ctx *appctx.AppContext, tenantID string, userID string, roleIdOrSlug string) error {
+func (s *RoleDataStore) RemoveUserFromRole(ctx *appctx.AppContext, tenantID string, userID string, roleIdOrSlug string) *diagnostics.Diagnostics {
+	diag := diagnostics.New("store_remove_user_from_role")
 	var user entities.User
 	result := s.GetDB().
 		Preload("Roles").
 		Where("users.id = ?", userID).
 		Find(&user)
 	if result.Error != nil {
-		return fmt.Errorf("failed to get user: %w", result.Error)
+		diag.AddError("failed_to_get_user", fmt.Sprintf("failed to get user: %v", result.Error), "role_data_store", map[string]interface{}{
+			"user_id": userID,
+		})
+		return diag
 	}
 	if user.ID == "" {
-		return fmt.Errorf("user not found")
+		diag.AddError("user_not_found", "user not found", "role_data_store", map[string]interface{}{
+			"user_id": userID,
+		})
+		return diag
 	}
 
 	// check if the role exists
-	role, err := s.GetRoleBySlugOrID(ctx, tenantID, roleIdOrSlug)
-	if err != nil {
-		return fmt.Errorf("failed to get role: %w", err)
+	role, getRoleDiag := s.GetRoleBySlugOrID(ctx, tenantID, roleIdOrSlug)
+	if getRoleDiag.HasErrors() {
+		diag.Append(getRoleDiag)
+		return diag
 	}
 	if role == nil {
-		return fmt.Errorf("role not found")
+		diag.AddError("role_not_found", "role not found", "role_data_store", map[string]interface{}{
+			"role_id": roleIdOrSlug,
+		})
+		return diag
 	}
 
 	// remove the role from the user
 	var userRole entities.UserRoles
 	result = s.GetDB().Where("user_id = ? AND role_id = ?", user.ID, role.ID).First(&userRole)
 	if result.Error != nil {
-		return fmt.Errorf("failed to get user role: %w", result.Error)
+		diag.AddError("failed_to_get_user_role", fmt.Sprintf("failed to get user role: %v", result.Error), "role_data_store", map[string]interface{}{
+			"user_id": userID,
+			"role_id": role.ID,
+		})
+		return diag
 	}
 
 	if userRole.RoleID == "" {
-		return fmt.Errorf("user role not found")
+		diag.AddError("user_role_not_found", "user role not found", "role_data_store", map[string]interface{}{
+			"user_id": userID,
+			"role_id": role.ID,
+		})
+		return diag
 	}
 
 	result = s.GetDB().Where("user_id = ? AND role_id = ?", user.ID, role.ID).Delete(&userRole)
 	if result.Error != nil {
-		return fmt.Errorf("failed to remove user from role: %w", result.Error)
+		diag.AddError("failed_to_remove_user_from_role", fmt.Sprintf("failed to remove user from role: %v", result.Error), "role_data_store", map[string]interface{}{
+			"user_id": userID,
+			"role_id": role.ID,
+		})
+		return diag
 	}
 
-	return nil
+	return diag
 }
 
-func (s *RoleDataStore) AddClaimToRole(ctx *appctx.AppContext, tenantID string, roleID string, claimID string) error {
+func (s *RoleDataStore) AddClaimToRole(ctx *appctx.AppContext, tenantID string, roleID string, claimID string) *diagnostics.Diagnostics {
+	diag := diagnostics.New("store_add_claim_to_role")
 	var role entities.Role
 	result := s.GetDB().
 		Where("id = ? AND tenant_id = ?", roleID, tenantID).
 		First(&role)
 	if result.Error != nil {
-		return fmt.Errorf("failed to get role: %w", result.Error)
+		diag.AddError("failed_to_get_role", fmt.Sprintf("failed to get role: %v", result.Error), "role_data_store", map[string]interface{}{
+			"role_id": roleID,
+		})
+		return diag
 	}
 	if role.ID == "" {
-		return fmt.Errorf("role not found")
+		diag.AddError("role_not_found", "role not found", "role_data_store", map[string]interface{}{
+			"role_id": roleID,
+		})
+		return diag
 	}
 
 	// check if the claim exists
 	var claim entities.Claim
 	result = s.GetDB().Where("id = ?", claimID).First(&claim)
 	if result.Error != nil {
-		return fmt.Errorf("failed to get claim: %w", result.Error)
+		diag.AddError("failed_to_get_claim", fmt.Sprintf("failed to get claim: %v", result.Error), "role_data_store", map[string]interface{}{
+			"claim_id": claimID,
+		})
+		return diag
 	}
 	if claim.ID == "" {
-		return fmt.Errorf("claim not found")
+		diag.AddError("claim_not_found", "claim not found", "role_data_store", map[string]interface{}{
+			"claim_id": claimID,
+		})
+		return diag
 	}
 
 	// check if the claim is already in the role
@@ -418,11 +600,19 @@ func (s *RoleDataStore) AddClaimToRole(ctx *appctx.AppContext, tenantID string, 
 	result = s.GetDB().Where("role_id = ? AND claim_id = ?", role.ID, claim.ID).First(&roleClaim)
 	if result.Error != nil {
 		if !errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			return fmt.Errorf("failed to get role claim: %w", result.Error)
+			diag.AddError("failed_to_get_role_claim", fmt.Sprintf("failed to get role claim: %v", result.Error), "role_data_store", map[string]interface{}{
+				"role_id":  roleID,
+				"claim_id": claimID,
+			})
+			return diag
 		}
 	}
 	if roleClaim.RoleID != "" {
-		return fmt.Errorf("claim already in role")
+		diag.AddError("claim_already_in_role", "claim already in role", "role_data_store", map[string]interface{}{
+			"role_id":  roleID,
+			"claim_id": claimID,
+		})
+		return diag
 	}
 
 	// add the claim to the role
@@ -430,46 +620,71 @@ func (s *RoleDataStore) AddClaimToRole(ctx *appctx.AppContext, tenantID string, 
 	roleClaim.ClaimID = claim.ID
 	result = s.GetDB().Create(&roleClaim)
 	if result.Error != nil {
-		return fmt.Errorf("failed to add claim to role: %w", result.Error)
+		diag.AddError("failed_to_add_claim_to_role", fmt.Sprintf("failed to add claim to role: %v", result.Error), "role_data_store", map[string]interface{}{
+			"role_id":  roleID,
+			"claim_id": claimID,
+		})
+		return diag
 	}
 
-	return nil
+	return diag
 }
 
-func (s *RoleDataStore) RemoveClaimFromRole(ctx *appctx.AppContext, tenantID string, roleID string, claimID string) error {
+func (s *RoleDataStore) RemoveClaimFromRole(ctx *appctx.AppContext, tenantID string, roleID string, claimID string) *diagnostics.Diagnostics {
+	diag := diagnostics.New("store_remove_claim_from_role")
 	var role entities.Role
 	result := s.GetDB().
 		Where("id = ? AND tenant_id = ?", roleID, tenantID).
 		First(&role)
 	if result.Error != nil {
-		return fmt.Errorf("failed to get role: %w", result.Error)
+		diag.AddError("failed_to_get_role", fmt.Sprintf("failed to get role: %v", result.Error), "role_data_store", map[string]interface{}{
+			"role_id": roleID,
+		})
+		return diag
 	}
 	if role.ID == "" {
-		return fmt.Errorf("role not found")
+		diag.AddError("role_not_found", "role not found", "role_data_store", map[string]interface{}{
+			"role_id": roleID,
+		})
+		return diag
 	}
 
 	// check if the claim exists
 	var claim entities.Claim
 	result = s.GetDB().Where("id = ?", claimID).First(&claim)
 	if result.Error != nil {
-		return fmt.Errorf("failed to get claim: %w", result.Error)
+		diag.AddError("failed_to_get_claim", fmt.Sprintf("failed to get claim: %v", result.Error), "role_data_store", map[string]interface{}{
+			"claim_id": claimID,
+		})
+		return diag
 	}
 	if claim.ID == "" {
-		return fmt.Errorf("claim not found")
+		diag.AddError("claim_not_found", "claim not found", "role_data_store", map[string]interface{}{
+			"claim_id": claimID,
+		})
+		return diag
 	}
 
 	// check if the claim is in the role
 	var roleClaim entities.RoleClaims
 	result = s.GetDB().Where("role_id = ? AND claim_id = ?", role.ID, claim.ID).First(&roleClaim)
 	if result.Error != nil {
-		return fmt.Errorf("failed to get role claim: %w", result.Error)
+		diag.AddError("failed_to_get_role_claim", fmt.Sprintf("failed to get role claim: %v", result.Error), "role_data_store", map[string]interface{}{
+			"role_id":  roleID,
+			"claim_id": claimID,
+		})
+		return diag
 	}
 
 	// remove the claim from the role
 	result = s.GetDB().Where("role_id = ? AND claim_id = ?", role.ID, claim.ID).Delete(&roleClaim)
 	if result.Error != nil {
-		return fmt.Errorf("failed to remove claim from role: %w", result.Error)
+		diag.AddError("failed_to_remove_claim_from_role", fmt.Sprintf("failed to remove claim from role: %v", result.Error), "role_data_store", map[string]interface{}{
+			"role_id":  roleID,
+			"claim_id": claimID,
+		})
+		return diag
 	}
 
-	return nil
+	return diag
 }

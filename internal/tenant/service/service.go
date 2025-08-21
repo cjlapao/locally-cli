@@ -2,7 +2,6 @@
 package service
 
 import (
-	"errors"
 	"sync"
 
 	api_models "github.com/cjlapao/locally-cli/internal/api/models"
@@ -24,7 +23,6 @@ import (
 	"github.com/cjlapao/locally-cli/pkg/models"
 	pkg_types "github.com/cjlapao/locally-cli/pkg/types"
 	"github.com/cjlapao/locally-cli/pkg/utils"
-	"gorm.io/gorm"
 )
 
 var (
@@ -94,29 +92,31 @@ func (s *TenantService) GetName() string {
 	return "tenant"
 }
 
-func (s *TenantService) GetTenantsByFilter(ctx *appctx.AppContext, filter *filters.Filter) (*api_models.PaginatedResponse[models.Tenant], *diagnostics.Diagnostics) {
+func (s *TenantService) GetTenants(ctx *appctx.AppContext, pagination *api_models.PaginationRequest) (*api_models.PaginationResponse[models.Tenant], *diagnostics.Diagnostics) {
 	diag := diagnostics.New("get_tenants")
 	defer diag.Complete()
 
-	dbTenants, err := s.tenantStore.GetTenantsByFilter(ctx, filter)
-	if err != nil {
-		diag.AddError("failed_to_get_tenants", "failed to get tenants", "tenant", map[string]interface{}{
-			"error": err.Error(),
-		})
-		return nil, diag
+	var query *filters.QueryBuilder
+	if pagination != nil {
+		query = pagination.ToQueryBuilder()
+	}
+
+	dbTenants, getTenantsDiag := s.tenantStore.GetTenantsByQuery(ctx, query)
+	if getTenantsDiag.HasErrors() {
+		diag.Append(getTenantsDiag)
+		return nil, getTenantsDiag
 	}
 
 	tenants := mappers.MapTenantsToDto(dbTenants.Items)
-	pagination := api_models.Pagination{
-		Page:       dbTenants.Page,
-		PageSize:   dbTenants.PageSize,
-		TotalPages: dbTenants.TotalPages,
-	}
 
-	response := api_models.PaginatedResponse[models.Tenant]{
+	response := api_models.PaginationResponse[models.Tenant]{
 		Data:       tenants,
 		TotalCount: dbTenants.Total,
-		Pagination: pagination,
+		Pagination: api_models.Pagination{
+			Page:       dbTenants.Page,
+			PageSize:   dbTenants.PageSize,
+			TotalPages: dbTenants.TotalPages,
+		},
 	}
 
 	return &response, diag
@@ -126,20 +126,16 @@ func (s *TenantService) GetTenantByIDOrSlug(ctx *appctx.AppContext, idOrSlug str
 	diag := diagnostics.New("get_tenant_by_id")
 	defer diag.Complete()
 
-	dbTenant, err := s.tenantStore.GetTenantByIdOrSlug(ctx, idOrSlug)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			ctx.Log().WithField("id_or_slug", idOrSlug).Infof("Tenant with id or slug %v not found", idOrSlug)
-			return nil, diag
-		}
-		diag.AddError("failed_to_get_tenant_by_id_or_slug", "failed to get tenant by id or slug", "tenant", map[string]interface{}{
-			"error": err.Error(),
-		})
+	dbTenant, getTenantDiag := s.tenantStore.GetTenantByIdOrSlug(ctx, idOrSlug)
+	if getTenantDiag.HasErrors() {
+		diag.Append(getTenantDiag)
+		return nil, getTenantDiag
+	}
+	if dbTenant == nil {
 		return nil, diag
 	}
 
 	tenant := mappers.MapTenantToDto(dbTenant)
-
 	return tenant, diag
 }
 
@@ -165,11 +161,9 @@ func (s *TenantService) CreateTenant(ctx *appctx.AppContext, request *tenant_mod
 	tenant.Slug = utils.Slugify(tenant.Name)
 	dbTenant := mappers.MapTenantToEntity(tenant)
 
-	createdTenant, err := s.tenantStore.CreateTenant(ctx, dbTenant)
-	if err != nil {
-		diag.AddError("failed_to_create_tenant", "failed to create tenant", "tenant", map[string]interface{}{
-			"error": err.Error(),
-		})
+	createdTenant, createDiag := s.tenantStore.CreateTenant(ctx, dbTenant)
+	if createDiag.HasErrors() {
+		diag.Append(createDiag)
 		return nil, diag
 	}
 
@@ -217,11 +211,11 @@ func (s *TenantService) CreateTenant(ctx *appctx.AppContext, request *tenant_mod
 			Password: request.AdminPassword,
 			Name:     request.AdminName,
 		}
-		adminRole, err := s.systemService.GetRoleBySecurityLevel(models.SecurityLevelAdmin)
-		if err != nil {
-			diag.AddError("failed_to_get_admin_role", "failed to get admin role", "tenant", map[string]interface{}{
-				"error": err.Error(),
-			})
+		adminRole, getRoleDiag := s.systemService.GetRoleBySecurityLevel(models.SecurityLevelAdmin)
+		if getRoleDiag.HasErrors() {
+			diag.Append(getRoleDiag)
+			// reverting the tenant creation
+			s.tenantStore.DeleteTenant(ctx, createdTenant.ID)
 			return nil, diag
 		}
 
@@ -235,11 +229,12 @@ func (s *TenantService) CreateTenant(ctx *appctx.AppContext, request *tenant_mod
 
 		// Updating tenant owner id
 		createdTenant.OwnerID = createdAdminUser.ID
-		err = s.tenantStore.UpdateTenant(ctx, createdTenant)
-		if err != nil {
-			diag.AddError("failed_to_update_tenant_owner_id", "failed to update tenant owner id", "tenant", map[string]interface{}{
-				"error": err.Error(),
-			})
+		updateDiag := s.tenantStore.UpdateTenant(ctx, createdTenant)
+		if updateDiag.HasErrors() {
+			diag.Append(updateDiag)
+			// reverting the tenant creation
+			s.tenantStore.DeleteTenant(ctx, createdTenant.ID)
+			return nil, diag
 		}
 	}
 
@@ -251,9 +246,9 @@ func (s *TenantService) CreateTenant(ctx *appctx.AppContext, request *tenant_mod
 	}
 	certConfig := *intermediateCert.GetConfiguration()
 
-	_, createDiag := s.certificateService.CreateCertificate(ctx, createdTenant.ID, pkg_types.CertificateTypeIntermediate, certConfig)
-	if createDiag.HasErrors() {
-		diag.Append(createDiag)
+	_, createCertDiag := s.certificateService.CreateCertificate(ctx, createdTenant.ID, pkg_types.CertificateTypeIntermediate, certConfig)
+	if createCertDiag.HasErrors() {
+		diag.Append(createCertDiag)
 		// reverting the tenant creation
 		s.tenantStore.DeleteTenant(ctx, createdTenant.ID)
 		return nil, diag
@@ -277,11 +272,9 @@ func (s *TenantService) UpdateTenant(ctx *appctx.AppContext, tenantRequest *tena
 
 	dbTenant := mappers.MapTenantToEntity(&tenant)
 
-	err := s.tenantStore.UpdateTenant(ctx, dbTenant)
-	if err != nil {
-		diag.AddError("failed_to_update_tenant", "failed to update tenant", "tenant", map[string]interface{}{
-			"error": err.Error(),
-		})
+	updateDiag := s.tenantStore.UpdateTenant(ctx, dbTenant)
+	if updateDiag.HasErrors() {
+		diag.Append(updateDiag)
 		return nil, diag
 	}
 
@@ -292,19 +285,15 @@ func (s *TenantService) DeleteTenant(ctx *appctx.AppContext, idOrSlug string) *d
 	diag := diagnostics.New("delete_tenant")
 	defer diag.Complete()
 
-	dbTenant, err := s.tenantStore.GetTenantByIdOrSlug(ctx, idOrSlug)
-	if err != nil {
-		diag.AddError("failed_to_delete_tenant", "failed to delete tenant", "tenant", map[string]interface{}{
-			"error": err.Error(),
-		})
+	dbTenant, getTenantDiag := s.tenantStore.GetTenantByIdOrSlug(ctx, idOrSlug)
+	if getTenantDiag.HasErrors() {
+		diag.Append(getTenantDiag)
 		return diag
 	}
 
-	err = s.tenantStore.DeleteTenant(ctx, dbTenant.ID)
-	if err != nil {
-		diag.AddError("failed_to_delete_tenant", "failed to delete tenant", "tenant", map[string]interface{}{
-			"error": err.Error(),
-		})
+	deleteDiag := s.tenantStore.DeleteTenant(ctx, dbTenant.ID)
+	if deleteDiag.HasErrors() {
+		diag.Append(deleteDiag)
 		return diag
 	}
 

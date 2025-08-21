@@ -11,6 +11,9 @@ import (
 	"math/big"
 
 	"software.sslmate.com/src/go-pkcs12"
+
+	activity_types "github.com/cjlapao/locally-cli/internal/activity/types"
+	"github.com/cjlapao/locally-cli/internal/appctx"
 )
 
 func generateCertificate(template, parent *x509.Certificate, publicKey *rsa.PublicKey, privateKey *rsa.PrivateKey) (*x509.Certificate, []byte) {
@@ -89,4 +92,34 @@ func generatePfx(certificate *x509.Certificate, privateKey *rsa.PrivateKey, pass
 	}
 
 	return pfxBytes, nil
+}
+
+func createInfoActivityRecord(ctx *appctx.AppContext, message string, metadata map[string]interface{}) *activity_types.ActivityRecord {
+	return createActivityRecord(ctx, activity_types.ActivityTypeInfo, activity_types.ActivityLevelInfo, message, metadata)
+}
+
+func createWarningActivityRecord(ctx *appctx.AppContext, message string, metadata map[string]interface{}) *activity_types.ActivityRecord {
+	return createActivityRecord(ctx, activity_types.ActivityTypeWarning, activity_types.ActivityLevelWarning, message, metadata)
+}
+
+func createErrorActivityRecord(ctx *appctx.AppContext, message string, metadata map[string]interface{}) *activity_types.ActivityRecord {
+	return createActivityRecord(ctx, activity_types.ActivityTypeError, activity_types.ActivityLevelError, message, metadata)
+}
+
+func createActivityRecord(ctx *appctx.AppContext, activityType activity_types.ActivityType, activityLevel activity_types.ActivityLevel, message string, metadata map[string]interface{}) *activity_types.ActivityRecord {
+	return &activity_types.ActivityRecord{
+		TenantID:      ctx.GetTenantID(),
+		ActorID:       ctx.GetUserID(),
+		ActorName:     ctx.GetUsername(),
+		Module:        CertificateModuleKey,
+		Message:       message,
+		Service:       "certificates",
+		Success:       true,
+		ActorType:     activity_types.ActorTypeUser,
+		ActivityType:  activityType,
+		ActivityLevel: activityLevel,
+		Data: &activity_types.ActivityData{
+			Metadata: metadata,
+		},
+	}
 }

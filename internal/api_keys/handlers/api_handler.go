@@ -122,16 +122,8 @@ func (h *ApiKeysApiHandler) Routes() []api_types.Route {
 
 func (h *ApiKeysApiHandler) HandleGetApiKeys(w http.ResponseWriter, r *http.Request) {
 	ctx := appctx.FromContext(r.Context())
-	filter, err := utils.GetFilterFromRequest(r)
-	if err != nil {
-		api.WriteError(w, r, http.StatusBadRequest, "Invalid filter", "Invalid filter", err.Error())
-		return
-	}
-	page, pageSize := utils.GetPaginationFromRequest(r)
-	pagination := &api_models.Pagination{
-		Page:     page,
-		PageSize: pageSize,
-	}
+
+	pagination := utils.ParseQueryRequest(r)
 
 	tenantID := ctx.GetTenantID()
 	if tenantID == "" {
@@ -139,18 +131,6 @@ func (h *ApiKeysApiHandler) HandleGetApiKeys(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// if a filter is provided, return filtered api keys
-	if filter != nil {
-		apiKeys, diag := h.apiKeysService.GetFilteredApiKeys(ctx, tenantID, filter)
-		if diag.HasErrors() {
-			api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, "failed_to_get_api_keys", "Failed to get API keys", diag)
-			return
-		}
-		api.WriteObjectResponse(w, r, apiKeys)
-		return
-	}
-
-	// if no filter is provided, return all api keys
 	apiKeys, diag := h.apiKeysService.GetApiKeys(ctx, tenantID, pagination)
 	if diag.HasErrors() {
 		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, "failed_to_get_api_keys", "Failed to get API keys", diag)

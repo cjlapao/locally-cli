@@ -81,17 +81,16 @@ func (h *APIHandler) Routes() []api_types.Route {
 // HandleGetTenants handles the request to get all tenants
 func (h *APIHandler) HandleGetTenants(w http.ResponseWriter, r *http.Request) {
 	ctx := appctx.FromContext(r.Context())
-	filter, err := utils.GetFilterFromRequest(r)
-	if err != nil {
-		api.WriteError(w, r, http.StatusBadRequest, "Invalid filter", "Invalid filter", err.Error())
-		return
-	}
-	tenants, diag := h.tenantService.GetTenantsByFilter(ctx, filter)
+
+	pagination := utils.ParseQueryRequest(r)
+
+	tenants, diag := h.tenantService.GetTenants(ctx, pagination)
 	if diag.HasErrors() {
 		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, "Failed to get tenants", "Failed to get tenants", diag)
 		return
 	}
-	api.WritePaginatedResponse(w, r, tenants.Data, tenants.Pagination, tenants.TotalCount)
+
+	api.WriteObjectResponse(w, r, tenants)
 }
 
 // HandleGetTenant handles the request to get a tenant by ID

@@ -2,6 +2,7 @@ package stores
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -24,12 +25,12 @@ var (
 )
 
 type TenantDataStoreInterface interface {
-	GetTenantByIdOrSlug(ctx *appctx.AppContext, idOrSlug string) (*entities.Tenant, error)
-	GetTenants(ctx *appctx.AppContext) ([]entities.Tenant, error)
-	GetTenantsByFilter(ctx *appctx.AppContext, filterObj *filters.Filter) (*filters.FilterResponse[entities.Tenant], error)
-	CreateTenant(ctx *appctx.AppContext, tenant *entities.Tenant) (*entities.Tenant, error)
-	UpdateTenant(ctx *appctx.AppContext, tenant *entities.Tenant) error
-	DeleteTenant(ctx *appctx.AppContext, id string) error
+	GetTenantByIdOrSlug(ctx *appctx.AppContext, idOrSlug string) (*entities.Tenant, *diagnostics.Diagnostics)
+	GetTenants(ctx *appctx.AppContext) ([]entities.Tenant, *diagnostics.Diagnostics)
+	GetTenantsByQuery(ctx *appctx.AppContext, queryBuilder *filters.QueryBuilder) (*filters.QueryBuilderResponse[entities.Tenant], *diagnostics.Diagnostics)
+	CreateTenant(ctx *appctx.AppContext, tenant *entities.Tenant) (*entities.Tenant, *diagnostics.Diagnostics)
+	UpdateTenant(ctx *appctx.AppContext, tenant *entities.Tenant) *diagnostics.Diagnostics
+	DeleteTenant(ctx *appctx.AppContext, id string) *diagnostics.Diagnostics
 	Migrate() *diagnostics.Diagnostics
 }
 
@@ -83,46 +84,41 @@ func (s *TenantDataStore) Migrate() *diagnostics.Diagnostics {
 	return diag
 }
 
-func (s *TenantDataStore) GetTenantBySlug(ctx *appctx.AppContext, slug string) (*entities.Tenant, error) {
-	var tenant entities.Tenant
-	if err := s.GetDB().Where("slug = ?", slug).First(&tenant).Error; err != nil {
-		return nil, err
-	}
-	return &tenant, nil
-}
-
-func (s *TenantDataStore) GetTenantByID(ctx *appctx.AppContext, idOrSlug string) (*entities.Tenant, error) {
+func (s *TenantDataStore) GetTenantByIdOrSlug(ctx *appctx.AppContext, idOrSlug string) (*entities.Tenant, *diagnostics.Diagnostics) {
+	diag := diagnostics.New("store_get_tenant_by_id_or_slug")
 	var tenant entities.Tenant
 	if err := s.GetDB().Where("id = ? OR slug = ?", idOrSlug, idOrSlug).First(&tenant).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, gorm.ErrRecordNotFound
+			return nil, diag
 		}
-		return nil, err
+		diag.AddError("failed_to_get_tenant", fmt.Sprintf("failed to get tenant: %v", err), "tenant_data_store", nil)
+		return nil, diag
 	}
-	return &tenant, nil
+	return &tenant, diag
 }
 
-func (s *TenantDataStore) GetTenantByIdOrSlug(ctx *appctx.AppContext, idOrSlug string) (*entities.Tenant, error) {
-	var tenant entities.Tenant
-	if err := s.GetDB().Where("id = ? OR slug = ?", idOrSlug, idOrSlug).First(&tenant).Error; err != nil {
-		return nil, err
-	}
-	return &tenant, nil
-}
-
-func (s *TenantDataStore) GetTenants(ctx *appctx.AppContext) ([]entities.Tenant, error) {
+func (s *TenantDataStore) GetTenants(ctx *appctx.AppContext) ([]entities.Tenant, *diagnostics.Diagnostics) {
+	diag := diagnostics.New("store_get_tenants")
 	var tenants []entities.Tenant
 	if err := s.GetDB().Find(&tenants).Error; err != nil {
-		return nil, err
+		diag.AddError("failed_to_get_tenants", fmt.Sprintf("failed to get tenants: %v", err), "tenant_data_store", nil)
+		return nil, diag
 	}
-	return tenants, nil
+	return tenants, diag
 }
 
-func (s *TenantDataStore) GetTenantsByFilter(ctx *appctx.AppContext, filterObj *filters.Filter) (*filters.FilterResponse[entities.Tenant], error) {
-	return utils.PaginatedFilteredQuery(s.GetDB(), "", filterObj, entities.Tenant{})
+func (s *TenantDataStore) GetTenantsByQuery(ctx *appctx.AppContext, queryBuilder *filters.QueryBuilder) (*filters.QueryBuilderResponse[entities.Tenant], *diagnostics.Diagnostics) {
+	diag := diagnostics.New("store_get_tenants_by_query")
+	result, err := utils.QueryDatabase[entities.Tenant](s.GetDB(), "", queryBuilder)
+	if err != nil {
+		diag.AddError("failed_to_get_tenants", fmt.Sprintf("failed to get tenants: %v", err), "tenant_data_store", nil)
+		return nil, diag
+	}
+	return result, diag
 }
 
-func (s *TenantDataStore) CreateTenant(ctx *appctx.AppContext, tenant *entities.Tenant) (*entities.Tenant, error) {
+func (s *TenantDataStore) CreateTenant(ctx *appctx.AppContext, tenant *entities.Tenant) (*entities.Tenant, *diagnostics.Diagnostics) {
+	diag := diagnostics.New("store_create_tenant")
 	if tenant.ID == "" {
 		tenant.ID = uuid.New().String()
 	}
@@ -130,16 +126,19 @@ func (s *TenantDataStore) CreateTenant(ctx *appctx.AppContext, tenant *entities.
 	tenant.CreatedAt = time.Now()
 	tenant.UpdatedAt = time.Now()
 	if err := s.GetDB().Create(tenant).Error; err != nil {
-		return nil, err
+		diag.AddError("failed_to_create_tenant", fmt.Sprintf("failed to create tenant: %v", err), "tenant_data_store", nil)
+		return nil, diag
 	}
-	return tenant, nil
+	return tenant, diag
 }
 
-func (s *TenantDataStore) UpdateTenant(ctx *appctx.AppContext, tenant *entities.Tenant) error {
+func (s *TenantDataStore) UpdateTenant(ctx *appctx.AppContext, tenant *entities.Tenant) *diagnostics.Diagnostics {
+	diag := diagnostics.New("store_update_tenant")
 	// Get the original tenant from the database
-	originalTenant, err := s.GetTenantByID(ctx, tenant.ID)
+	originalTenant, err := s.GetTenantByIdOrSlug(ctx, tenant.ID)
 	if err != nil {
-		return err
+		diag.Append(err)
+		return diag
 	}
 	if tenant.Name != "" {
 		tenant.Slug = pkg_utils.Slugify(tenant.Name)
@@ -148,29 +147,33 @@ func (s *TenantDataStore) UpdateTenant(ctx *appctx.AppContext, tenant *entities.
 	// Generate partial update map by comparing original with updated
 	updates := utils.PartialUpdateMap(originalTenant, tenant, "updated_at", "slug")
 	if err := s.GetDB().Model(&entities.Tenant{}).Where("id = ?", tenant.ID).Updates(updates).Error; err != nil {
-		return err
+		diag.AddError("failed_to_update_tenant", fmt.Sprintf("failed to update tenant: %v", err), "tenant_data_store", nil)
+		return diag
 	}
-	return nil
+	return diag
 }
 
-func (s *TenantDataStore) DeleteTenant(ctx *appctx.AppContext, id string) error {
+func (s *TenantDataStore) DeleteTenant(ctx *appctx.AppContext, id string) *diagnostics.Diagnostics {
+	diag := diagnostics.New("store_delete_tenant")
 	// deleting all claims for the tenant
 	if err := s.GetDB().Delete(&entities.Claim{}, "tenant_id = ?", id).Error; err != nil {
-		return err
+		diag.AddError("failed_to_delete_claims", fmt.Sprintf("failed to delete claims: %v", err), "tenant_data_store", nil)
+		return diag
 	}
 	// deleting all roles for the tenant
 	if err := s.GetDB().Delete(&entities.Role{}, "tenant_id = ?", id).Error; err != nil {
-		return err
+		diag.AddError("failed_to_delete_roles", fmt.Sprintf("failed to delete roles: %v", err), "tenant_data_store", nil)
+		return diag
 	}
 	// deleting all users for the tenant
 	if err := s.GetDB().Delete(&entities.User{}, "tenant_id = ?", id).Error; err != nil {
-		return err
+		diag.AddError("failed_to_delete_users", fmt.Sprintf("failed to delete users: %v", err), "tenant_data_store", nil)
+		return diag
 	}
+
 	if err := s.GetDB().Delete(&entities.Tenant{}, "id = ?", id).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil
-		}
-		return err
+		diag.AddError("failed_to_delete_tenant", fmt.Sprintf("failed to delete tenant: %v", err), "tenant_data_store", nil)
+		return diag
 	}
-	return nil
+	return diag
 }

@@ -70,29 +70,31 @@ func (s *UserService) GetName() string {
 	return "user"
 }
 
-func (s *UserService) GetUsersByFilter(ctx *appctx.AppContext, tenantID string, filter *filters.Filter) (*api_models.PaginatedResponse[pkg_models.User], *diagnostics.Diagnostics) {
+func (s *UserService) GetUsers(ctx *appctx.AppContext, tenantID string, pagination *api_models.PaginationRequest) (*api_models.PaginationResponse[pkg_models.User], *diagnostics.Diagnostics) {
 	diag := diagnostics.New("get_users")
 	defer diag.Complete()
 
-	dbUsers, err := s.userStore.GetUsersByFilter(ctx, tenantID, filter)
-	if err != nil {
-		diag.AddError("failed_to_get_users", "failed to get users", "user", map[string]interface{}{
-			"error": err.Error(),
-		})
+	var query *filters.QueryBuilder
+	if pagination != nil {
+		query = pagination.ToQueryBuilder()
+	}
+
+	dbUsers, getUsersDiag := s.userStore.GetUsersByQuery(ctx, tenantID, query)
+	if getUsersDiag.HasErrors() {
+		diag.Append(getUsersDiag)
 		return nil, diag
 	}
 
 	users := mappers.MapUsersToDto(dbUsers.Items)
-	pagination := api_models.Pagination{
-		Page:       dbUsers.Page,
-		PageSize:   dbUsers.PageSize,
-		TotalPages: dbUsers.TotalPages,
-	}
 
-	response := api_models.PaginatedResponse[pkg_models.User]{
+	response := api_models.PaginationResponse[pkg_models.User]{
 		Data:       users,
 		TotalCount: dbUsers.Total,
-		Pagination: pagination,
+		Pagination: api_models.Pagination{
+			Page:       dbUsers.Page,
+			PageSize:   dbUsers.PageSize,
+			TotalPages: dbUsers.TotalPages,
+		},
 	}
 
 	return &response, diag
@@ -102,11 +104,9 @@ func (s *UserService) GetUserByID(ctx *appctx.AppContext, tenantID string, id st
 	diag := diagnostics.New("get_user_by_id")
 	defer diag.Complete()
 
-	user, err := s.userStore.GetUserByID(ctx, tenantID, id)
-	if err != nil {
-		diag.AddError("failed_to_get_user_by_id", "failed to get user by id", "user", map[string]interface{}{
-			"error": err.Error(),
-		})
+	user, getUserDiag := s.userStore.GetUserByID(ctx, tenantID, id)
+	if getUserDiag.HasErrors() {
+		diag.Append(getUserDiag)
 		return nil, diag
 	}
 
@@ -117,11 +117,9 @@ func (s *UserService) GetUserByUsername(ctx *appctx.AppContext, tenantID string,
 	diag := diagnostics.New("get_user_by_username")
 	defer diag.Complete()
 
-	user, err := s.userStore.GetUserByUsername(ctx, tenantID, username)
-	if err != nil {
-		diag.AddError("failed_to_get_user_by_username", "failed to get user by username", "user", map[string]interface{}{
-			"error": err.Error(),
-		})
+	user, getUserDiag := s.userStore.GetUserByUsername(ctx, tenantID, username)
+	if getUserDiag.HasErrors() {
+		diag.Append(getUserDiag)
 		return nil, diag
 	}
 
@@ -149,11 +147,10 @@ func (s *UserService) CreateUser(ctx *appctx.AppContext, tenantID string, role s
 
 	roleModel := mappers.MapRoleToEntity(roleEntity)
 	// checking if the user already exists
-	existingUser, err := s.userStore.GetUserByUsername(ctx, tenantID, userEntity.Username)
-	if err != nil {
-		diag.AddError("failed_to_get_user", "failed to get user", "user", map[string]interface{}{
-			"error": err.Error(),
-		})
+	existingUser, getUserDiag := s.userStore.GetUserByUsername(ctx, tenantID, userEntity.Username)
+	if getUserDiag.HasErrors() {
+		diag.Append(getUserDiag)
+		return nil, diag
 	}
 	if existingUser != nil {
 		diag.AddError("user_already_exists", "user already exists", "user", map[string]interface{}{
@@ -176,11 +173,9 @@ func (s *UserService) CreateUser(ctx *appctx.AppContext, tenantID string, role s
 	userEntity.Roles = []entities.Role{*roleModel}
 	userEntity.Claims = claims
 
-	userEntity, err = s.userStore.CreateUser(ctx, tenantID, userEntity)
-	if err != nil {
-		diag.AddError("failed_to_create_user", "failed to create user", "user", map[string]interface{}{
-			"error": err.Error(),
-		})
+	userEntity, createUserDiag := s.userStore.CreateUser(ctx, tenantID, userEntity)
+	if createUserDiag.HasErrors() {
+		diag.Append(createUserDiag)
 		return nil, diag
 	}
 
@@ -199,11 +194,9 @@ func (s *UserService) UpdateUser(ctx *appctx.AppContext, tenantID string, userId
 
 	userEntity := MapUpdateUserRequestToEntity(request)
 	userEntity.ID = userId
-	err := s.userStore.UpdateUser(ctx, tenantID, userEntity)
-	if err != nil {
-		diag.AddError("failed_to_update_user", "failed to update user", "user", map[string]interface{}{
-			"error": err.Error(),
-		})
+	updateUserDiag := s.userStore.UpdateUser(ctx, tenantID, userEntity)
+	if updateUserDiag.HasErrors() {
+		diag.Append(updateUserDiag)
 		return nil, diag
 	}
 
@@ -220,11 +213,9 @@ func (s *UserService) DeleteUser(ctx *appctx.AppContext, tenantID string, id str
 	diag := diagnostics.New("delete_user")
 	defer diag.Complete()
 
-	err := s.userStore.DeleteUser(ctx, tenantID, id)
-	if err != nil {
-		diag.AddError("failed_to_delete_user", "failed to delete user", "user", map[string]interface{}{
-			"error": err.Error(),
-		})
+	deleteUserDiag := s.userStore.DeleteUser(ctx, tenantID, id)
+	if deleteUserDiag.HasErrors() {
+		diag.Append(deleteUserDiag)
 		return diag
 	}
 
@@ -235,41 +226,52 @@ func (s *UserService) UpdateUserPassword(ctx *appctx.AppContext, tenantID string
 	diag := diagnostics.New("update_user_password")
 	defer diag.Complete()
 
-	err := s.userStore.UpdateUserPassword(ctx, tenantID, id, request.Password)
-	if err != nil {
-		diag.AddError("failed_to_update_user_password", "failed to update user password", "user", map[string]interface{}{
-			"error": err.Error(),
-		})
+	updateUserPasswordDiag := s.userStore.UpdateUserPassword(ctx, tenantID, id, request.Password)
+	if updateUserPasswordDiag.HasErrors() {
+		diag.Append(updateUserPasswordDiag)
 		return diag
 	}
 
 	return diag
 }
 
-func (s *UserService) GetUserClaims(ctx *appctx.AppContext, tenantID string, userID string) ([]pkg_models.Claim, *diagnostics.Diagnostics) {
+func (s *UserService) GetUserClaims(ctx *appctx.AppContext, tenantID string, userID string, pagination *api_models.PaginationRequest) (*api_models.PaginationResponse[pkg_models.Claim], *diagnostics.Diagnostics) {
 	diag := diagnostics.New("get_user_claims")
 	defer diag.Complete()
 
-	claims, err := s.userStore.GetUserClaims(ctx, tenantID, userID)
-	if err != nil {
-		diag.AddError("failed_to_get_user_claims", "failed to get user claims", "user", map[string]interface{}{
-			"error": err.Error(),
-		})
+	var query *filters.QueryBuilder
+	if pagination != nil {
+		query = pagination.ToQueryBuilder()
+	}
+
+	claimsQuery, getUserClaimsDiag := s.userStore.GetUserClaimsByQuery(ctx, tenantID, userID, query)
+	if getUserClaimsDiag.HasErrors() {
+		diag.Append(getUserClaimsDiag)
 		return nil, diag
 	}
 
-	return mappers.MapClaimsToDto(claims), diag
+	claims := mappers.MapClaimsToDto(claimsQuery.Items)
+
+	result := api_models.PaginationResponse[pkg_models.Claim]{
+		Data:       claims,
+		TotalCount: claimsQuery.Total,
+		Pagination: api_models.Pagination{
+			Page:       claimsQuery.Page,
+			PageSize:   claimsQuery.PageSize,
+			TotalPages: claimsQuery.TotalPages,
+		},
+	}
+
+	return &result, diag
 }
 
 func (s *UserService) AddClaimToUser(ctx *appctx.AppContext, tenantID string, userID string, claimIdOrSlug string) *diagnostics.Diagnostics {
 	diag := diagnostics.New("add_claim_to_user")
 	defer diag.Complete()
 
-	user, err := s.userStore.GetUserByID(ctx, tenantID, userID)
-	if err != nil {
-		diag.AddError("failed_to_get_user", "failed to get user", "user", map[string]interface{}{
-			"error": err.Error(),
-		})
+	user, getUserDiag := s.userStore.GetUserByID(ctx, tenantID, userID)
+	if getUserDiag.HasErrors() {
+		diag.Append(getUserDiag)
 		return diag
 	}
 	if user == nil {
@@ -304,11 +306,9 @@ func (s *UserService) RemoveClaimFromUser(ctx *appctx.AppContext, tenantID strin
 	diag := diagnostics.New("remove_claim_from_user")
 	defer diag.Complete()
 
-	user, err := s.userStore.GetUserByID(ctx, tenantID, userID)
-	if err != nil {
-		diag.AddError("failed_to_get_user", "failed to get user", "user", map[string]interface{}{
-			"error": err.Error(),
-		})
+	user, getUserDiag := s.userStore.GetUserByID(ctx, tenantID, userID)
+	if getUserDiag.HasErrors() {
+		diag.Append(getUserDiag)
 		return diag
 	}
 	if user == nil {
@@ -334,6 +334,111 @@ func (s *UserService) RemoveClaimFromUser(ctx *appctx.AppContext, tenantID strin
 	removeClaimDiag := s.claimService.RemoveClaimFromUser(ctx, tenantID, userID, claimIdOrSlug)
 	if removeClaimDiag.HasErrors() {
 		diag.Append(removeClaimDiag)
+		return diag
+	}
+
+	return diag
+}
+
+func (s *UserService) GetUserRoles(ctx *appctx.AppContext, tenantID string, userID string, pagination *api_models.PaginationRequest) (*api_models.PaginationResponse[pkg_models.Role], *diagnostics.Diagnostics) {
+	diag := diagnostics.New("get_user_roles")
+	defer diag.Complete()
+
+	var query *filters.QueryBuilder
+	if pagination != nil {
+		query = pagination.ToQueryBuilder()
+	}
+
+	rolesQuery, getUserRolesDiag := s.userStore.GetUserRolesByQuery(ctx, tenantID, userID, query)
+	if getUserRolesDiag.HasErrors() {
+		diag.Append(getUserRolesDiag)
+		return nil, diag
+	}
+
+	roles := mappers.MapRolesToDto(rolesQuery.Items)
+
+	result := api_models.PaginationResponse[pkg_models.Role]{
+		Data:       roles,
+		TotalCount: rolesQuery.Total,
+		Pagination: api_models.Pagination{
+			Page:       rolesQuery.Page,
+			PageSize:   rolesQuery.PageSize,
+			TotalPages: rolesQuery.TotalPages,
+		},
+	}
+
+	return &result, diag
+}
+
+func (s *UserService) AddRoleToUser(ctx *appctx.AppContext, tenantID string, userID string, roleIdOrSlug string) *diagnostics.Diagnostics {
+	diag := diagnostics.New("add_role_to_user")
+	defer diag.Complete()
+
+	user, getUserDiag := s.userStore.GetUserByID(ctx, tenantID, userID)
+	if getUserDiag.HasErrors() {
+		diag.Append(getUserDiag)
+		return diag
+	}
+	if user == nil {
+		diag.AddError("user_not_found", "user not found", "user", map[string]interface{}{
+			"user_id": userID,
+		})
+		return diag
+	}
+
+	role, roleDiag := s.roleService.GetRoleByIDorSlugWithClaims(ctx, tenantID, roleIdOrSlug)
+	if roleDiag.HasErrors() {
+		diag.Append(roleDiag)
+		return diag
+	}
+
+	if role == nil {
+		diag.AddError("role_not_found", "role not found", "role", map[string]interface{}{
+			"role_id": roleIdOrSlug,
+		})
+		return diag
+	}
+
+	addRoleDiag := s.userStore.AddUserToRole(ctx, tenantID, userID, role.ID)
+	if addRoleDiag.HasErrors() {
+		diag.Append(addRoleDiag)
+		return diag
+	}
+
+	return diag
+}
+
+func (s *UserService) RemoveRoleFromUser(ctx *appctx.AppContext, tenantID string, userID string, roleIdOrSlug string) *diagnostics.Diagnostics {
+	diag := diagnostics.New("remove_role_from_user")
+	defer diag.Complete()
+
+	user, getUserDiag := s.userStore.GetUserByID(ctx, tenantID, userID)
+	if getUserDiag.HasErrors() {
+		diag.Append(getUserDiag)
+		return diag
+	}
+	if user == nil {
+		diag.AddError("user_not_found", "user not found", "user", map[string]interface{}{
+			"user_id": userID,
+		})
+		return diag
+	}
+
+	role, roleDiag := s.roleService.GetRoleByIDorSlugWithClaims(ctx, tenantID, roleIdOrSlug)
+	if roleDiag.HasErrors() {
+		diag.Append(roleDiag)
+		return diag
+	}
+	if role == nil {
+		diag.AddError("role_not_found", "role not found", "role", map[string]interface{}{
+			"role_id": roleIdOrSlug,
+		})
+		return diag
+	}
+
+	removeRoleDiag := s.userStore.RemoveUserFromRole(ctx, tenantID, userID, role.ID)
+	if removeRoleDiag.HasErrors() {
+		diag.Append(removeRoleDiag)
 		return diag
 	}
 
