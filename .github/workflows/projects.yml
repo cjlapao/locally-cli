@@ -1,0 +1,23 @@
+name: Assign Projects
+
+on:
+  pull_request:
+    types: [opened, reopened]
+
+jobs:
+  assign-projects:
+    if: ${{ github.event.pull_request.draft == false && !startsWith(github.event.pull_request, 'BUMP') && !startsWith(github.event.pull_request, 'Bump') && !startsWith(github.head_ref, 'release/') && github.event_name == 'pull_request'}}
+    name: Assign Projects
+    env:
+      repo: ${{ github.head_ref }}
+      project: 'Locally CLI Backlog'
+    runs-on: ubuntu-latest
+    steps:
+      - name: git checkout
+        uses: actions/checkout@v4
+
+      - name: Assign Project
+        env:
+          GH_TOKEN: ${{ secrets.BUILD_PAT }}
+        run: |
+          gh pr edit  ${{ env.repo }} --add-project "${{ env.project }}"
