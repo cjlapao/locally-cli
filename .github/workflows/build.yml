@@ -26,163 +26,163 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [ 'go' ]
+        language: ['go']
     steps:
-    - uses: actions/checkout@v2
+      - uses: actions/checkout@v2
 
-    - name: Bump version and push tag
-      if: ${{ inputs.bump_version == true}}
-      id: tag_version
-      uses: mathieudutour/github-tag-action@v5.4
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Bump version and push tag
+        if: ${{ inputs.bump_version == true}}
+        id: tag_version
+        uses: mathieudutour/github-tag-action@v5.4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
 
-    - shell: bash
-      if: ${{ inputs.bump_version == true}}
-      name: Create tag file
-      run: |
-        echo ${{ steps.tag_version.outputs.new_tag }} > tag.txt
-        echo ${{ steps.tag_version.outputs.changelog }} > tag_changelog.txt
+      - shell: bash
+        if: ${{ inputs.bump_version == true}}
+        name: Create tag file
+        run: |
+          echo ${{ steps.tag_version.outputs.new_tag }} > tag.txt
+          echo ${{ steps.tag_version.outputs.changelog }} > tag_changelog.txt
 
-    - shell: bash
-      if: ${{ inputs.bump_version == false}}
-      name: Create tag file
-      run: |
-        echo "0.0.0" > tag.txt
-        echo "No tag generated" > tag_changelog.txt
+      - shell: bash
+        if: ${{ inputs.bump_version == false}}
+        name: Create tag file
+        run: |
+          echo "0.0.0" > tag.txt
+          echo "No tag generated" > tag_changelog.txt
 
-    - name: Upload tag version
-      uses: actions/upload-artifact@v1
-      with:
-        name: tag_version
-        path: ./tag.txt
+      - name: Upload tag version
+        uses: actions/upload-artifact@v1
+        with:
+          name: tag_version
+          path: ./tag.txt
 
-    - name: Upload tag changelog
-      uses: actions/upload-artifact@v1
-      with:
-        name: tag_changelog
-        path: ./tag_changelog.txt
+      - name: Upload tag changelog
+        uses: actions/upload-artifact@v1
+        with:
+          name: tag_changelog
+          path: ./tag_changelog.txt
 
-    - name: Removing tag files
-      run: |
-        rm tag.txt
-        rm tag_changelog.txt
+      - name: Removing tag files
+        run: |
+          rm tag.txt
+          rm tag_changelog.txt
 
-    - name: Set up Go
-      uses: actions/setup-go@v2
-      with:
-        go-version: 1.19
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.22
 
-    - name: Install Helm
-      uses: azure/setup-helm@v1
-      with:
-        version: v3.8.1
+      - name: Install Helm
+        uses: azure/setup-helm@v1
+        with:
+          version: v3.8.1
 
-    - name: Build
-      working-directory: src
-      run: go build -v ./...
+      - name: Build
+        working-directory: src
+        run: go build -v ./...
 
-    - name: Test
-      if: ${{ inputs.run_tests == true}}
-      run: |
-        go install github.com/axw/gocov/gocov@latest
-        go install github.com/AlekSi/gocov-xml@latest
-        go install github.com/matm/gocov-html/cmd/gocov-html@latest
+      - name: Test
+        if: ${{ inputs.run_tests == true}}
+        run: |
+          go install github.com/axw/gocov/gocov@latest
+          go install github.com/AlekSi/gocov-xml@latest
+          go install github.com/matm/gocov-html/cmd/gocov-html@latest
 
-        go test -coverprofile coverage.txt -covermode count -v ./...
-        gocov convert coverage.txt | gocov-xml > cobertura-coverage.xml
+          go test -coverprofile coverage.txt -covermode count -v ./...
+          gocov convert coverage.txt | gocov-xml > cobertura-coverage.xml
 
-    - name: Code Coverage Summary Report
-      if: ${{ inputs.run_tests == true}}
-      uses: irongut/CodeCoverageSummary@v1.3.0
-      with:
-        filename: cobertura-coverage.xml
-        badge: true
-        fail_below_min: false
-        format: markdown
-        hide_branch_rate: false
-        hide_complexity: false
-        indicators: true
-        output: both
-        thresholds: '80 80'
-        
-    - name: Add Coverage PR Comment
-      if: ${{ inputs.run_tests == true}}
-      uses: marocchino/sticky-pull-request-comment@v2
-      with:
-        recreate: true
-        path: code-coverage-results.md
-    
-    - name: Helm Chart Lint
-      if: ${{ inputs.run_tests == true}}
-      run: |
-        helm lint ./charts
+      - name: Code Coverage Summary Report
+        if: ${{ inputs.run_tests == true}}
+        uses: irongut/CodeCoverageSummary@v1.3.0
+        with:
+          filename: cobertura-coverage.xml
+          badge: true
+          fail_below_min: false
+          format: markdown
+          hide_branch_rate: false
+          hide_complexity: false
+          indicators: true
+          output: both
+          thresholds: '80 80'
 
-    - name: Setting GH_TOKEN
-      if:  ${{ inputs.bump_version == true }}
-      env: 
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: echo "GH_TOKEN=${{ secrets.SU_TOKEN }}" >> $GITHUB_ENV
+      - name: Add Coverage PR Comment
+        if: ${{ inputs.run_tests == true}}
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          recreate: true
+          path: code-coverage-results.md
 
-    - name: Checkout for Bumping Version
-      if: ${{ inputs.bump_version == true}}
-      uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-        ref: main
-        token: ${{ secrets.SU_TOKEN }}
+      - name: Helm Chart Lint
+        if: ${{ inputs.run_tests == true}}
+        run: |
+          helm lint ./charts
 
-    - name: Bump package version
-      if: ${{ inputs.bump_version == true }}
-      run: |
-        git config --local user.name github-actions
-        git config --local user.email github-actions@github.com
+      - name: Setting GH_TOKEN
+        if: ${{ inputs.bump_version == true }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "GH_TOKEN=${{ secrets.SU_TOKEN }}" >> $GITHUB_ENV
 
-        NEW_TAG_NAME=$(echo ${{ steps.tag_version.outputs.new_tag }} | sed 's/v//g')
-        sed -i "s/^var ver = \"[[:digit:]]\+\.[[:digit:]]\+\.[[:digit:]]\+\"/var ver = \"$NEW_TAG_NAME\"/g" ./src/main.go
-        sed -i "s/^version: [[:digit:]]\+\.[[:digit:]]\+\.[[:digit:]]\+/version: $NEW_TAG_NAME/g" ./charts/Chart.yaml
-        sed -i "s/^appVersion: \"[[:digit:]]\+\.[[:digit:]]\+\.[[:digit:]]\+\"/appVersion: \"$NEW_TAG_NAME\"/g" ./charts/Chart.yaml
+      - name: Checkout for Bumping Version
+        if: ${{ inputs.bump_version == true}}
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+          ref: main
+          token: ${{ secrets.SU_TOKEN }}
 
-        git add .
-        git commit -m "🖉 Update to version of package"
-        git push
+      - name: Bump package version
+        if: ${{ inputs.bump_version == true }}
+        run: |
+          git config --local user.name github-actions
+          git config --local user.email github-actions@github.com
 
-    - name: Build Linux x64
-      id: build_linux_x64
-      env:
-        GOOS: linux
-        GOARCH: amd64
-      working-directory: src
-      run: go build -o ${{ inputs.name }}
+          NEW_TAG_NAME=$(echo ${{ steps.tag_version.outputs.new_tag }} | sed 's/v//g')
+          sed -i "s/^var ver = \"[[:digit:]]\+\.[[:digit:]]\+\.[[:digit:]]\+\"/var ver = \"$NEW_TAG_NAME\"/g" ./src/main.go
+          sed -i "s/^version: [[:digit:]]\+\.[[:digit:]]\+\.[[:digit:]]\+/version: $NEW_TAG_NAME/g" ./charts/Chart.yaml
+          sed -i "s/^appVersion: \"[[:digit:]]\+\.[[:digit:]]\+\.[[:digit:]]\+\"/appVersion: \"$NEW_TAG_NAME\"/g" ./charts/Chart.yaml
 
-    - name: Zip Linux x64
-      id: zip_linux_x64
-      working-directory: src
-      run: |
-        zip --junk-paths ${{ inputs.name }}_linux_x64 ${{ inputs.name }}
+          git add .
+          git commit -m "🖉 Update to version of package"
+          git push
 
-    - name: Upload linux build
-      uses: actions/upload-artifact@v1
-      with:
-        name: ${{ inputs.name }}_linux_x64
-        path: ./src/${{ inputs.name }}_linux_x64.zip
+      - name: Build Linux x64
+        id: build_linux_x64
+        env:
+          GOOS: linux
+          GOARCH: amd64
+        working-directory: src
+        run: go build -o ${{ inputs.name }}
 
-    - name: Build Windows x64
-      id: build_windows_x64
-      env:
-        GOOS: windows
-        GOARCH: amd64
-      working-directory: src
-      run: go build -o ${{ inputs.name }}.exe
+      - name: Zip Linux x64
+        id: zip_linux_x64
+        working-directory: src
+        run: |
+          zip --junk-paths ${{ inputs.name }}_linux_x64 ${{ inputs.name }}
 
-    - name: Zip Windows x64
-      id: zip_windows_x64
-      working-directory: src
-      run: |
-        zip --junk-paths ${{ inputs.name }}_win_x64 ${{ inputs.name }}.exe
+      - name: Upload linux build
+        uses: actions/upload-artifact@v1
+        with:
+          name: ${{ inputs.name }}_linux_x64
+          path: ./src/${{ inputs.name }}_linux_x64.zip
 
-    - name: Upload windows build
-      uses: actions/upload-artifact@v1
-      with:
-        name: ${{ inputs.name }}_win_x64
-        path: ./src/${{ inputs.name }}_win_x64.zip
+      - name: Build Windows x64
+        id: build_windows_x64
+        env:
+          GOOS: windows
+          GOARCH: amd64
+        working-directory: src
+        run: go build -o ${{ inputs.name }}.exe
+
+      - name: Zip Windows x64
+        id: zip_windows_x64
+        working-directory: src
+        run: |
+          zip --junk-paths ${{ inputs.name }}_win_x64 ${{ inputs.name }}.exe
+
+      - name: Upload windows build
+        uses: actions/upload-artifact@v1
+        with:
+          name: ${{ inputs.name }}_win_x64
+          path: ./src/${{ inputs.name }}_win_x64.zip

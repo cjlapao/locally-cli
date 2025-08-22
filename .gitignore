@@ -11,7 +11,16 @@
 */locally.exe
 **/__debug_bin
 **/*.bck
+<<<<<<< Updated upstream
 *.db
 coverage.*
 
 test-api
+=======
+/coverage
+**/coverage.txt
+**/coverage.html
+**/coverage.xml
+**/security-scan.json
+**/security-scan.html
+>>>>>>> Stashed changes

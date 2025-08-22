@@ -129,7 +129,7 @@ func main() {
 func SetVersion() {
 	versionSvc.Name = "Locally"
 	versionSvc.Author = "Carlos Lapao"
-	versionSvc.License = "MIT"
+	versionSvc.License = "Fair Source License"
 	strVer, err := version.FromString(releaseVersion)
 	if err == nil {
 		versionSvc.Major = strVer.Major
