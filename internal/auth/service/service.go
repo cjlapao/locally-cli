@@ -442,6 +442,10 @@ func (s *AuthService) ValidateApiKey(ctx *appctx.AppContext, tenantID string, ap
 		diag.AddError("validate_api_key", "API key has expired", "")
 		return nil, diag
 	}
+	if dbKey.RevokedAt != nil && dbKey.RevokedAt.Before(time.Now()) {
+		diag.AddError("validate_api_key", "API key is revoked", "")
+		return nil, diag
+	}
 
 	// Verify bcrypt hash
 	if err := encryption.GetInstance().VerifyPassword(apiKey, dbKey.KeyHash); err != nil {

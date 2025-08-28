@@ -53,9 +53,9 @@ func (e *DefaultRootUsersMigrationWorker) Up(ctx *appctx.AppContext) *diagnostic
 	diag := diagnostics.New("default_root_users_migration_up")
 	cfg := config.GetInstance().Get()
 	username := cfg.GetString(config.RootUserUsernameKey, "root")
-	role, err := e.systemService.GetRoleBySecurityLevel(models.SecurityLevelSuperUser)
-	if err != nil {
-		diag.AddError("failed_to_get_super_user_role", "failed to get super user role", "default_root_users_migration", nil)
+	role, getRoleDiag := e.systemService.GetRoleBySecurityLevel(models.SecurityLevelSuperUser)
+	if getRoleDiag.HasErrors() {
+		diag.Append(getRoleDiag)
 		return diag
 	}
 

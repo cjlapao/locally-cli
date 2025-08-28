@@ -7,6 +7,7 @@ import (
 
 	api_models "github.com/cjlapao/locally-cli/internal/api/models"
 	"github.com/cjlapao/locally-cli/internal/appctx"
+	models "github.com/cjlapao/locally-cli/internal/certificates/models"
 	"github.com/cjlapao/locally-cli/internal/database/entities"
 	"github.com/cjlapao/locally-cli/pkg/diagnostics"
 	pkg_models "github.com/cjlapao/locally-cli/pkg/models"
@@ -45,6 +46,8 @@ type CertificateServiceInterface interface {
 	GetCertificates(ctx *appctx.AppContext, tenantID string, pagination *api_models.PaginationRequest) (*api_models.PaginationResponse[pkg_models.Certificate], *diagnostics.Diagnostics)
 	GetCertificatesByType(ctx *appctx.AppContext, tenantID string, certType pkg_types.CertificateType, pagination *api_models.PaginationRequest) (*api_models.PaginationResponse[pkg_models.Certificate], *diagnostics.Diagnostics)
 	GetCertificateBy(ctx *appctx.AppContext, tenantID string, slugOrId string) (*pkg_models.Certificate, *diagnostics.Diagnostics)
-	CreateCertificate(ctx *appctx.AppContext, tenantID string, certType pkg_types.CertificateType, certificateConfig pkg_models.CertificateConfig) (*pkg_models.Certificate, *diagnostics.Diagnostics)
+	CreateCertificate(ctx *appctx.AppContext, tenantID string, request *models.CreateCertificateRequest) (*pkg_models.Certificate, *diagnostics.Diagnostics)
+	CreateCertificateFromConfig(ctx *appctx.AppContext, tenantID string, certType pkg_types.CertificateType, certificateConfig pkg_models.CertificateConfig) (*pkg_models.Certificate, *diagnostics.Diagnostics)
+	DeleteCertificate(ctx *appctx.AppContext, tenantID string, certificateID string) *diagnostics.Diagnostics
 	GetName() string
 }

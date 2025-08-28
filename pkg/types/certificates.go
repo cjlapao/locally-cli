@@ -44,21 +44,21 @@ func (k CertificateKeySize) ToX509KeySize() string {
 	return strconv.Itoa(int(k))
 }
 
-type SignatureAlgorithm int
+type SignatureAlgorithm string
 
 const (
-	SignatureAlgorithmSHA256 SignatureAlgorithm = 4
-	SignatureAlgorithmSHA384 SignatureAlgorithm = 5
-	SignatureAlgorithmSHA512 SignatureAlgorithm = 6
+	SignatureAlgorithmSHA256 SignatureAlgorithm = "SHA256"
+	SignatureAlgorithmSHA384 SignatureAlgorithm = "SHA384"
+	SignatureAlgorithmSHA512 SignatureAlgorithm = "SHA512"
 )
 
 func (s SignatureAlgorithm) ToX509SignatureAlgorithm() x509.SignatureAlgorithm {
 	switch s {
-	case 4:
+	case SignatureAlgorithmSHA256:
 		return x509.SHA256WithRSA
-	case 5:
+	case SignatureAlgorithmSHA384:
 		return x509.SHA384WithRSA
-	case 6:
+	case SignatureAlgorithmSHA512:
 		return x509.SHA512WithRSA
 	default:
 		return x509.SHA256WithRSA
@@ -67,11 +67,11 @@ func (s SignatureAlgorithm) ToX509SignatureAlgorithm() x509.SignatureAlgorithm {
 
 func IntToSignatureAlgorithm(i int) SignatureAlgorithm {
 	switch i {
-	case 4:
+	case 256:
 		return SignatureAlgorithmSHA256
-	case 5:
+	case 384:
 		return SignatureAlgorithmSHA384
-	case 6:
+	case 512:
 		return SignatureAlgorithmSHA512
 	default:
 		return SignatureAlgorithmSHA256

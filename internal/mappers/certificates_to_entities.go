@@ -30,6 +30,7 @@ func MapX509CertificateToEntity(certificate interfaces.X509Certificate) entities
 
 func MapCertificateToEntity(certificate models.Certificate) entities.Certificate {
 	result := entities.Certificate{
+		Type:           certificate.Type,
 		PemCsr:         certificate.Csr,
 		Name:           certificate.Name,
 		PemCertificate: certificate.PemCertificate,

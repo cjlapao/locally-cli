@@ -72,8 +72,8 @@ func InitializeApiKeyDataStore() (ApiKeyStoreInterface, *diagnostics.Diagnostics
 
 		if cfg.Get(config.DatabaseMigrateKey).GetBool() {
 			logging.Info("Running api key migrations")
-			if err := store.Migrate(); err != nil {
-				diag.AddError("failed_to_run_api_key_migrations", "failed to run api key migrations", "api_key_data_store", nil)
+			if migrateDiag := store.Migrate(); migrateDiag.HasErrors() {
+				diag.Append(migrateDiag)
 				return
 			}
 			logging.Info("Api key migrations completed")
@@ -89,6 +89,8 @@ func InitializeApiKeyDataStore() (ApiKeyStoreInterface, *diagnostics.Diagnostics
 // Migrate implements the DataStore interface
 func (s *ApiKeyDataStore) Migrate() *diagnostics.Diagnostics {
 	diag := diagnostics.New("migrate_api_key_data_store")
+	defer diag.Complete()
+
 	if err := s.GetDB().AutoMigrate(&entities.ApiKey{}); err != nil {
 		diag.AddError("failed_to_migrate_api_keys_table", fmt.Sprintf("failed to migrate api_keys table: %v", err), "api_key_data_store")
 		return diag

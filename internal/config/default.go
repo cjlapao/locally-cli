@@ -22,6 +22,10 @@ func DefaultConfig() *Config {
 			{Key: RootUserUsernameKey, Value: "root", EnvName: RootUserUsernameEnvKey, FlagName: FlagRootUserUsername},
 			{Key: RootUserPasswordKey, Value: "root", EnvName: RootUserPasswordEnvKey, FlagName: FlagRootUserPassword},
 
+			// Domain Default Values
+			{Key: DomainNameKey, Value: DefaultLocallyDomain, EnvName: DomainNameEnvKey},
+			{Key: DomainAdminEmailAddressKey, Value: DefaultCertificateAdminEmailAddress, EnvName: DomainAdminEmailAddressEnvKey},
+
 			// Seeding Default Values
 			{Key: SeedDemoDataKey, Value: "false", EnvName: SeedDemoDataEnvKey, FlagName: FlagSeedDemoData},
 

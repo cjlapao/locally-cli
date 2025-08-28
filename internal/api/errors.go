@@ -5,31 +5,11 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/cjlapao/locally-cli/internal/api/models"
 	"github.com/cjlapao/locally-cli/internal/config"
 	"github.com/cjlapao/locally-cli/internal/logging"
 	"github.com/cjlapao/locally-cli/pkg/diagnostics"
 )
-
-// APIError represents a standardized API error response
-type APIError struct {
-	Error     ErrorDetails `json:"error"`
-	Timestamp string       `json:"timestamp"`
-	Path      string       `json:"path,omitempty"`
-}
-
-type ErrorDetailsError struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
-}
-
-// ErrorDetails contains the specific error information
-type ErrorDetails struct {
-	Code        string                   `json:"code"`
-	Message     string                   `json:"message"`
-	Details     string                   `json:"details,omitempty"`
-	Errors      []ErrorDetailsError      `json:"errors,omitempty"`
-	Diagnostics *diagnostics.Diagnostics `json:"diagnostics,omitempty"`
-}
 
 // Predefined error codes
 const (
@@ -97,7 +77,7 @@ func WriteError(w http.ResponseWriter, r *http.Request, statusCode int, errorCod
 		statusCode = http.StatusInternalServerError
 	}
 
-	errorDetails := ErrorDetails{
+	errorDetails := models.ErrorDetails{
 		Code:    errorCode,
 		Message: message,
 	}
@@ -107,7 +87,7 @@ func WriteError(w http.ResponseWriter, r *http.Request, statusCode int, errorCod
 		errorDetails.Details = details[0]
 	}
 
-	apiError := APIError{
+	apiError := models.APIError{
 		Error:     errorDetails,
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 		Path:      r.URL.Path,
@@ -143,7 +123,7 @@ func WriteErrorWithDiagnostics(w http.ResponseWriter, r *http.Request, statusCod
 		statusCode = http.StatusInternalServerError
 	}
 
-	errorDetails := ErrorDetails{
+	errorDetails := models.ErrorDetails{
 		Code:    errorCode,
 		Message: message,
 	}
@@ -153,9 +133,9 @@ func WriteErrorWithDiagnostics(w http.ResponseWriter, r *http.Request, statusCod
 		if cfg.IsDebug() {
 			errorDetails.Diagnostics = diag
 		} else {
-			errorDetails.Errors = make([]ErrorDetailsError, 0)
+			errorDetails.Errors = make([]models.ErrorDetailsError, 0)
 			for _, err := range diag.Errors {
-				errorDetails.Errors = append(errorDetails.Errors, ErrorDetailsError{
+				errorDetails.Errors = append(errorDetails.Errors, models.ErrorDetailsError{
 					Code:    err.Code,
 					Message: err.Message,
 				})
@@ -163,7 +143,7 @@ func WriteErrorWithDiagnostics(w http.ResponseWriter, r *http.Request, statusCod
 		}
 	}
 
-	apiError := APIError{
+	apiError := models.APIError{
 		Error:     errorDetails,
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 		Path:      r.URL.Path,

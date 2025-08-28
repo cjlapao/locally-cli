@@ -352,6 +352,23 @@ func validateBearerToken(ctx *appctx.AppContext, r *http.Request, authService au
 		}
 	}
 
+	// if the user is blocked, we will return an error
+	if currentUser.Blocked {
+		activityService.RecordFailureActivity(ctx, activity_types.ActivityTypeAudit, activity_types.ActivityErrorData{
+			ErrorCode:    "UNAUTHORIZED",
+			ErrorMessage: "user is blocked",
+			StatusCode:   401,
+		}, &activity_types.ActivityRecord{
+			TenantID:  claims.TenantID,
+			ActorID:   claims.UserID,
+			ActorName: claims.Username,
+			Module:    "api",
+			Service:   "auth_middleware",
+			Success:   false,
+		})
+		return false, errors.New("user is blocked")
+	}
+
 	// first we will check if the user has any of the required roles
 	// roles are always a or relation, you just need to have one of the roles
 	if route.SecurityRequirement.Roles != nil {
@@ -451,6 +468,7 @@ func validateBearerToken(ctx *appctx.AppContext, r *http.Request, authService au
 	appCtx = appCtx.WithTenantID(claims.TenantID)
 	appCtx = appCtx.WithUserID(claims.UserID)
 	appCtx = appCtx.WithUsername(claims.Username)
+	appCtx = appCtx.WithUser(currentUser)
 
 	// Add claims to the underlying context for backward compatibility
 	// We need to update the AppContext's underlying context directly

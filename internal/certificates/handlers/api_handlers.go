@@ -5,11 +5,14 @@ import (
 	"encoding/json"
 	"net/http"
 
+	activity_interfaces "github.com/cjlapao/locally-cli/internal/activity/interfaces"
+	activity_types "github.com/cjlapao/locally-cli/internal/activity/types"
 	"github.com/cjlapao/locally-cli/internal/api"
 	api_types "github.com/cjlapao/locally-cli/internal/api/types"
 	"github.com/cjlapao/locally-cli/internal/appctx"
 	"github.com/cjlapao/locally-cli/internal/certificates/errors"
 	"github.com/cjlapao/locally-cli/internal/certificates/interfaces"
+	"github.com/cjlapao/locally-cli/internal/certificates/models"
 	"github.com/cjlapao/locally-cli/internal/config"
 	"github.com/cjlapao/locally-cli/pkg/diagnostics"
 	pkg_models "github.com/cjlapao/locally-cli/pkg/models"
@@ -20,11 +23,15 @@ import (
 
 type CertificatesApiHandlers struct {
 	certificateService interfaces.CertificateServiceInterface
+	activityService    activity_interfaces.ActivityServiceInterface
 }
 
-func NewCertificatesApiHandler(certificateService interfaces.CertificateServiceInterface) *CertificatesApiHandlers {
+func NewCertificatesApiHandler(certificateService interfaces.CertificateServiceInterface,
+	activityService activity_interfaces.ActivityServiceInterface,
+) *CertificatesApiHandlers {
 	return &CertificatesApiHandlers{
 		certificateService: certificateService,
+		activityService:    activityService,
 	}
 }
 
@@ -108,6 +115,19 @@ func (h *CertificatesApiHandlers) Routes() []api_types.Route {
 				},
 			},
 		},
+		{
+			Method:      http.MethodDelete,
+			Path:        "/v1/certificates/{certificate_id}",
+			Handler:     h.HandleDeleteCertificate,
+			Description: "Delete a certificate",
+			SecurityRequirement: &api_types.SecurityRequirement{
+				SecurityLevel: pkg_models.ApiKeySecurityLevelAny,
+				Claims: &api_types.SecurityRequirementClaims{
+					Relation: api_types.SecurityRequirementRelationAnd,
+					Items:    []pkg_models.Claim{{Service: "certificates", Module: "api", Action: pkg_models.AccessLevelWrite}},
+				},
+			},
+		},
 	}
 }
 
@@ -139,12 +159,31 @@ func (h *CertificatesApiHandlers) HandleGetCertificates(w http.ResponseWriter, r
 }
 
 func (h *CertificatesApiHandlers) HandleCreateCertificate(w http.ResponseWriter, r *http.Request) {
-	// diag := diagnostics.New("create_certificate_handler")
+	diag := diagnostics.New("create_certificate_handler")
 	ctx := appctx.FromContext(r.Context())
 	ctx.LogInfo("Creating a certificate")
+	tenantID := ctx.GetTenantID()
+	if tenantID == "" {
+		diag.AddError(errors.ErrorMissingTenantID, "Tenant ID is missing", "certificates_handler", map[string]interface{}{
+			"tenant_id": tenantID,
+		})
+		api.WriteErrorWithDiagnostics(w, r, http.StatusBadRequest, errors.ErrorMissingTenantID, "Tenant ID is missing", diag)
+		return
+	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
+	request, parseDiags := api.ParseAndValidateBody[models.CreateCertificateRequest](r)
+	if parseDiags.HasErrors() {
+		api.WriteErrorWithDiagnostics(w, r, http.StatusBadRequest, "invalid_request", "Invalid request data", parseDiags)
+		return
+	}
+
+	certificate, createDiag := h.certificateService.CreateCertificate(ctx, tenantID, &request)
+	if createDiag.HasErrors() {
+		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, errors.ErrorCreatingCertificate, "Error creating certificate", createDiag)
+		return
+	}
+
+	api.WriteObjectResponse(w, r, certificate)
 
 	ctx.Log().Info("Certificate retrieved successfully")
 }
@@ -304,4 +343,60 @@ func (h *CertificatesApiHandlers) HandleGetIntermediateCertificate(w http.Respon
 	json.NewEncoder(w).Encode(certificate)
 
 	ctx.Log().Info("Root certificate retrieved successfully")
+}
+
+func (h *CertificatesApiHandlers) HandleDeleteCertificate(w http.ResponseWriter, r *http.Request) {
+	diag := diagnostics.New("delete_certificate_handler")
+	ctx := appctx.FromContext(r.Context())
+	ctx.LogInfo("Deleting a certificate")
+	vars := mux.Vars(r)
+	certificateID := vars["certificate_id"]
+	if certificateID == "" {
+		diag.AddError(errors.ErrorMissingCertificateID, "Certificate ID is missing", "certificates_handler", map[string]interface{}{
+			"certificate_id": certificateID,
+		})
+		api.WriteErrorWithDiagnostics(w, r, http.StatusBadRequest, errors.ErrorMissingCertificateID, "Certificate ID is missing", diag)
+		return
+	}
+
+	tenantID := ctx.GetTenantID()
+	if tenantID == "" {
+		diag.AddError(errors.ErrorMissingTenantID, "Tenant ID is missing", "certificates_handler", map[string]interface{}{
+			"tenant_id": tenantID,
+		})
+		api.WriteErrorWithDiagnostics(w, r, http.StatusBadRequest, errors.ErrorMissingTenantID, "Tenant ID is missing", diag)
+		return
+	}
+
+	deleteDiag := h.certificateService.DeleteCertificate(ctx, tenantID, certificateID)
+	if deleteDiag.HasErrors() {
+		diag.Append(deleteDiag)
+		activityDiags := h.activityService.RecordFailureActivity(ctx, activity_types.ActivityTypeDelete, activity_types.ActivityErrorData{
+			ErrorCode: errors.ErrorDeletingCertificate,
+		}, &activity_types.ActivityRecord{
+			Module:        "certificates",
+			Message:       "Error deleting certificate",
+			Service:       "certificates",
+			Success:       false,
+			ActorType:     activity_types.ActorTypeUser,
+			ActivityType:  activity_types.ActivityTypeDelete,
+			ActivityLevel: activity_types.ActivityLevelInfo,
+			Data: &activity_types.ActivityData{
+				Metadata: map[string]interface{}{
+					"certificate_id": certificateID,
+				},
+			},
+		})
+		if activityDiags.HasErrors() {
+			diag.Append(activityDiags)
+		}
+		api.WriteErrorWithDiagnostics(w, r, http.StatusInternalServerError, errors.ErrorDeletingCertificate, "Error deleting certificate", diag)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"message": "Certificate deleted successfully"})
+
+	ctx.Log().Info("Certificate deleted successfully")
 }

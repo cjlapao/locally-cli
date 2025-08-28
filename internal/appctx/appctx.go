@@ -27,6 +27,7 @@ type AppContext struct {
 	tenantID      string
 	userIP        string
 	userAgent     string
+	user          *pkg_models.User
 	securityLevel pkg_models.SecurityLevel
 	startTime     time.Time
 	metadata      map[string]interface{}
@@ -105,6 +106,12 @@ func (c *AppContext) WithUsername(username string) *AppContext {
 	// Add to diagnostics
 	newCtx.diagnostics.AddMetadata("username", username)
 
+	return newCtx
+}
+
+func (c *AppContext) WithUser(user *pkg_models.User) *AppContext {
+	newCtx := c.clone()
+	newCtx.user = user
 	return newCtx
 }
 
@@ -244,6 +251,12 @@ func (c *AppContext) GetUsername() string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.username
+}
+
+func (c *AppContext) GetUser() *pkg_models.User {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.user
 }
 
 // GetTenantID returns the tenant ID from the context
@@ -610,6 +623,7 @@ func (c *AppContext) clone() *AppContext {
 		tenantID:      c.tenantID,
 		userIP:        c.userIP,
 		userAgent:     c.userAgent,
+		user:          c.user,
 		startTime:     c.startTime,
 		metadata:      make(map[string]interface{}),
 		diagnostics:   diagnostics.New("app_context_clone"),
@@ -650,6 +664,8 @@ func (c *AppContext) Value(key interface{}) interface{} {
 			return c.GetAllMetadata()
 		case types.SecurityLevelKey:
 			return c.GetSecurityLevel()
+		case types.UserKey:
+			return c.GetUser()
 		}
 	case string:
 		// Check if it's one of our context keys
@@ -668,6 +684,8 @@ func (c *AppContext) Value(key interface{}) interface{} {
 			return c.GetAllMetadata()
 		case types.SecurityLevelKey:
 			return c.GetSecurityLevel()
+		case types.UserKey:
+			return c.GetUser()
 		}
 
 		// Check if it's a metadata key
@@ -748,6 +766,10 @@ func FromContext(ctx context.Context) *AppContext {
 		appCtx.securityLevel = securityLevel
 	}
 
+	if user, ok := ctx.Value(types.UserKey).(*pkg_models.User); ok {
+		appCtx.user = user
+	}
+
 	return appCtx
 }
 
@@ -761,6 +783,12 @@ func WithRequestID(ctx context.Context, requestID string) *AppContext {
 func WithUserID(ctx context.Context, userID string) *AppContext {
 	appCtx := FromContext(ctx)
 	return appCtx.WithUserID(userID)
+}
+
+// WithUser creates a new AppContext with the given user
+func WithUser(ctx context.Context, user *pkg_models.User) *AppContext {
+	appCtx := FromContext(ctx)
+	return appCtx.WithUser(user)
 }
 
 // WithTenantID creates a new AppContext with the given tenant ID
@@ -850,6 +878,27 @@ func GetUserID(ctx context.Context) string {
 	}
 
 	return ""
+}
+
+// GetUser extracts the user from a context
+
+func GetUser(ctx context.Context) *pkg_models.User {
+	if ctx == nil {
+		return nil
+	}
+
+	// Try to get from AppContext first
+	if appCtx, ok := ctx.(*AppContext); ok {
+		user := appCtx.GetUser()
+		return user
+	}
+
+	// Try to get from standard context
+	if user, ok := ctx.Value(types.UserKey).(*pkg_models.User); ok {
+		return user
+	}
+
+	return nil
 }
 
 // GetTenantID extracts the tenant ID from a context

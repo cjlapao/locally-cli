@@ -1,6 +1,11 @@
 package models
 
-import "time"
+import (
+	"strings"
+	"time"
+
+	"github.com/cjlapao/locally-cli/internal/config"
+)
 
 type User struct {
 	ID                    string    `json:"id" yaml:"id"`
@@ -21,4 +26,22 @@ type User struct {
 	RefreshTokenExpiresAt time.Time `json:"refresh_token_expires_at" yaml:"refresh_token_expires_at"`
 	CreatedAt             time.Time `json:"created_at" yaml:"created_at"`
 	UpdatedAt             time.Time `json:"updated_at" yaml:"updated_at"`
+}
+
+func (u *User) IsSuperUser() bool {
+	for _, role := range u.Roles {
+		if strings.EqualFold(role.Name, config.SuperUserRole) || strings.EqualFold(role.Slug, config.SuperUserRole) {
+			return true
+		}
+	}
+	return false
+}
+
+func (u *User) HasRole(roleIdOrSlug string) bool {
+	for _, role := range u.Roles {
+		if strings.EqualFold(role.Name, roleIdOrSlug) || strings.EqualFold(role.Slug, roleIdOrSlug) || role.ID == roleIdOrSlug {
+			return true
+		}
+	}
+	return false
 }

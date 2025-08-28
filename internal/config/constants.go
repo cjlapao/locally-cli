@@ -25,15 +25,19 @@ const (
 	UserIPHeader                         = "X-User-IP"
 	UsernameHeader                       = "X-Username"
 	StartTimeHeader                      = "X-Start-Time"
-	DefaultCertificateExpiresInYears     = 2
+	DefaultRootCertificateCommonName     = "Locally"
+	DefaultCertificateSubDomain          = "Locally Root CA"
+	DefaultLocallyDomain                 = "locally.local"
+	DefaultCertificateFQDN               = "*.locally.local"
+	DefaultCertificateExpiresInYears     = 10
 	DefaultCertificateKeySize            = 4096
 	DefaultCertificateSignatureAlgorithm = "SHA512"
 	DefaultCertificateCountry            = "UK"
 	DefaultCertificateState              = "London"
 	DefaultCertificateCity               = "London"
 	DefaultCertificateOrganization       = "Locally"
-	DefaultCertificateOrganizationalUnit = "Locally"
-	DefaultCertificateAdminEmailAddress  = "admin@locally.com"
+	DefaultCertificateOrganizationalUnit = "Locally IT"
+	DefaultCertificateAdminEmailAddress  = "admin@locally.local"
 	// UUIDs
 	RoleSuperUserID   = "11111111-1111-1111-1111-111111111111"
 	RoleAdminUserID   = "22222222-2222-2222-2222-222222222222"
@@ -78,6 +82,10 @@ const (
 	SecurityPasswordRequireNumberKey    = "security.password.require_number"
 	SecurityPasswordRequireSpecialKey   = "security.password.require_special"
 	SecurityPasswordRequireUppercaseKey = "security.password.require_uppercase"
+
+	// Domain configuration keys
+	DomainNameKey              = "domain.name"
+	DomainAdminEmailAddressKey = "domain.admin_email_address"
 
 	// Certificate configuration keys
 	CertificateExpiresInYearsKey     = "certificate.expires_in_years"
@@ -160,6 +168,10 @@ const (
 	RootUserPasswordEnvKey = EnvPrefix + "ROOT_USER_PASSWORD"
 	SeedDemoDataEnvKey     = EnvPrefix + "SEED_DEMO_DATA"
 	APIKeyEnvKey           = EnvPrefix + "API_KEY"
+
+	// Domain configuration keys
+	DomainNameEnvKey              = EnvPrefix + "DOMAIN_NAME"
+	DomainAdminEmailAddressEnvKey = EnvPrefix + "DOMAIN_ADMIN_EMAIL_ADDRESS"
 
 	// Security configuration keys
 	SecurityPasswordMinLengthEnvKey        = EnvPrefix + "SECURITY_PASSWORD_MIN_LENGTH"

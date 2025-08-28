@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cjlapao/locally-cli/internal/api/models"
 	"github.com/cjlapao/locally-cli/internal/appctx"
 	"github.com/cjlapao/locally-cli/internal/config"
 	"github.com/cjlapao/locally-cli/internal/logging"
@@ -130,11 +131,22 @@ func (mc *MiddlewareChain) Execute(handler http.HandlerFunc) http.HandlerFunc {
 			defer func() {
 				if err := recover(); err != nil {
 					responseData.PanicError = err
+					responseWriter.Header().Set("Content-Type", "application/json")
 					responseWriter.WriteHeader(http.StatusInternalServerError)
+					responseBody := models.APIError{
+						Error: models.ErrorDetails{
+							Code:    "INTERNAL_SERVER_ERROR",
+							Message: "An internal server error occurred",
+							Details: fmt.Sprintf("%v", err),
+						},
+						Timestamp: time.Now().Format(time.RFC3339),
+						Path:      r.URL.Path,
+					}
 					// Only log if logging is initialized
 					if logging.Logger != nil {
 						logging.WithError(fmt.Errorf("%v", err)).Error("Panic recovered in route handler")
 					}
+					json.NewEncoder(responseWriter).Encode(responseBody)
 				}
 			}()
 			handler(responseWriter, r)

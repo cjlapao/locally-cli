@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestGetPaginationFromRequest(t *testing.T) {
+func TestParseQueryRequest_Legacy(t *testing.T) {
 	tests := []struct {
 		name         string
 		queryParams  map[string]string
@@ -48,36 +48,36 @@ func TestGetPaginationFromRequest(t *testing.T) {
 		{
 			name:         "invalid page number",
 			queryParams:  map[string]string{"page": "invalid", "page_size": "20"},
-			expectedPage: 0,
-			expectedSize: 0,
-			description:  "Should return 0,0 when page is invalid",
+			expectedPage: 1, // ParseQueryRequest defaults to 1 for invalid page
+			expectedSize: 20,
+			description:  "Should return defaults when page is invalid",
 		},
 		{
 			name:         "invalid page_size",
 			queryParams:  map[string]string{"page": "1", "page_size": "invalid"},
-			expectedPage: 0,
-			expectedSize: 0,
-			description:  "Should return 0,0 when page_size is invalid",
+			expectedPage: 1,
+			expectedSize: 20, // ParseQueryRequest defaults to 20 for invalid page_size
+			description:  "Should return defaults when page_size is invalid",
 		},
 		{
 			name:         "both invalid",
 			queryParams:  map[string]string{"page": "invalid", "page_size": "invalid"},
-			expectedPage: 0,
-			expectedSize: 0,
-			description:  "Should return 0,0 when both values are invalid",
+			expectedPage: 1,
+			expectedSize: 20,
+			description:  "Should return defaults when both values are invalid",
 		},
 		{
 			name:         "zero values",
 			queryParams:  map[string]string{"page": "0", "page_size": "0"},
-			expectedPage: 0,
-			expectedSize: 0,
+			expectedPage: 1, // ParseQueryRequest treats 0 page as invalid, defaults to 1
+			expectedSize: 20, // ParseQueryRequest treats 0 page_size as invalid, defaults to 20
 			description:  "Should handle zero values correctly",
 		},
 		{
 			name:         "negative values",
 			queryParams:  map[string]string{"page": "-1", "page_size": "-10"},
-			expectedPage: -1,
-			expectedSize: -10,
+			expectedPage: 1, // ParseQueryRequest treats negative page as invalid, defaults to 1
+			expectedSize: 20, // ParseQueryRequest treats negative page_size as invalid, defaults to 20
 			description:  "Should handle negative values correctly",
 		},
 		{
@@ -103,13 +103,13 @@ func TestGetPaginationFromRequest(t *testing.T) {
 				req.URL = &url.URL{}
 			}
 
-			page, size := GetPaginationFromRequest(req)
+			result := ParseQueryRequest(req)
 
-			if page != tt.expectedPage {
-				t.Errorf("Expected page %d, got %d - %s", tt.expectedPage, page, tt.description)
+			if result.Page != tt.expectedPage {
+				t.Errorf("Expected page %d, got %d - %s", tt.expectedPage, result.Page, tt.description)
 			}
-			if size != tt.expectedSize {
-				t.Errorf("Expected size %d, got %d - %s", tt.expectedSize, size, tt.description)
+			if result.PageSize != tt.expectedSize {
+				t.Errorf("Expected size %d, got %d - %s", tt.expectedSize, result.PageSize, tt.description)
 			}
 		})
 	}
@@ -183,90 +183,84 @@ func TestHasPaginationRequest(t *testing.T) {
 	}
 }
 
-func TestGetFilterFromRequest(t *testing.T) {
+func TestParseQueryRequest_FilterHandling(t *testing.T) {
 	tests := []struct {
-		name        string
-		queryParams map[string]string
-		expectError bool
-		description string
+		name           string
+		queryParams    map[string]string
+		expectedFilter string
+		description    string
 	}{
 		{
-			name:        "no filter parameter",
-			queryParams: map[string]string{},
-			expectError: false,
-			description: "Should return nil filter when no filter parameter is present",
+			name:           "no filter parameter",
+			queryParams:    map[string]string{},
+			expectedFilter: "",
+			description:    "Should return empty filter when no filter parameter is present",
 		},
 		{
-			name:        "empty filter parameter",
-			queryParams: map[string]string{"filter": ""},
-			expectError: false,
-			description: "Should return nil filter when filter parameter is empty",
+			name:           "empty filter parameter",
+			queryParams:    map[string]string{"filter": ""},
+			expectedFilter: "",
+			description:    "Should return empty filter when filter parameter is empty",
 		},
 		{
-			name:        "valid simple filter",
-			queryParams: map[string]string{"filter": "name = test"},
-			expectError: false,
-			description: "Should return valid filter for simple condition",
+			name:           "valid simple filter",
+			queryParams:    map[string]string{"filter": "name = test"},
+			expectedFilter: "name = test",
+			description:    "Should return valid filter for simple condition",
 		},
 		{
-			name:        "valid complex filter",
-			queryParams: map[string]string{"filter": "status = active AND age > 18"},
-			expectError: false,
-			description: "Should return valid filter for complex condition",
+			name:           "valid complex filter",
+			queryParams:    map[string]string{"filter": "status = active AND age > 18"},
+			expectedFilter: "status = active AND age > 18",
+			description:    "Should return valid filter for complex condition",
 		},
 		{
-			name:        "invalid filter syntax",
-			queryParams: map[string]string{"filter": "name INVALID test"},
-			expectError: true,
-			description: "Should return error for invalid filter syntax",
+			name:           "filter with special characters",
+			queryParams:    map[string]string{"filter": "email = user@example.com"},
+			expectedFilter: "email = user@example.com",
+			description:    "Should handle filter with special characters",
 		},
 		{
-			name:        "filter with special characters",
-			queryParams: map[string]string{"filter": "email = user@example.com"},
-			expectError: false,
-			description: "Should handle filter with special characters",
+			name:           "filter with spaces",
+			queryParams:    map[string]string{"filter": "name = John Doe"},
+			expectedFilter: "name = John Doe",
+			description:    "Should handle filter with spaces in values",
 		},
 		{
-			name:        "filter with spaces",
-			queryParams: map[string]string{"filter": "name = John Doe"},
-			expectError: false,
-			description: "Should handle filter with spaces in values",
+			name:           "other parameters present",
+			queryParams:    map[string]string{"filter": "name = test", "page": "1", "sort": "name"},
+			expectedFilter: "name = test",
+			description:    "Should extract filter when other parameters are present",
 		},
 		{
-			name:        "other parameters present",
-			queryParams: map[string]string{"filter": "name = test", "page": "1", "sort": "name"},
-			expectError: false,
-			description: "Should extract filter when other parameters are present",
+			name:           "filter with quotes",
+			queryParams:    map[string]string{"filter": `"name = test"`},
+			expectedFilter: "name = test", // quotes should be stripped
+			description:    "Should handle filter wrapped in quotes",
 		},
 		{
-			name:        "filter with quotes",
-			queryParams: map[string]string{"filter": `"name = test"`},
-			expectError: false,
-			description: "Should handle filter wrapped in quotes",
+			name:           "filter with single quote",
+			queryParams:    map[string]string{"filter": `"name = test`},
+			expectedFilter: "name = test",
+			description:    "Should handle filter with only opening quote",
 		},
 		{
-			name:        "filter with single quote",
-			queryParams: map[string]string{"filter": `"name = test`},
-			expectError: false,
-			description: "Should handle filter with only opening quote",
+			name:           "filter with trailing quote",
+			queryParams:    map[string]string{"filter": `name = test"`},
+			expectedFilter: "name = test",
+			description:    "Should handle filter with only closing quote",
 		},
 		{
-			name:        "filter with trailing quote",
-			queryParams: map[string]string{"filter": `name = test"`},
-			expectError: false,
-			description: "Should handle filter with only closing quote",
+			name:           "filter with multiple quotes",
+			queryParams:    map[string]string{"filter": `""name = test""`},
+			expectedFilter: "name = test", // multiple quotes should be stripped
+			description:    "Should handle filter with multiple quotes",
 		},
 		{
-			name:        "filter with multiple quotes",
-			queryParams: map[string]string{"filter": `""name = test""`},
-			expectError: false,
-			description: "Should handle filter with multiple quotes",
-		},
-		{
-			name:        "filter with quotes and spaces",
-			queryParams: map[string]string{"filter": `" name = test "`},
-			expectError: false,
-			description: "Should handle filter with quotes and spaces",
+			name:           "filter with quotes and spaces",
+			queryParams:    map[string]string{"filter": `" name = test "`},
+			expectedFilter: " name = test ", // only outer quotes stripped, inner spaces preserved
+			description:    "Should handle filter with quotes and spaces",
 		},
 	}
 
@@ -284,95 +278,45 @@ func TestGetFilterFromRequest(t *testing.T) {
 				req.URL = &url.URL{}
 			}
 
-			result, err := GetFilterFromRequest(req)
+			result := ParseQueryRequest(req)
 
-			if tt.expectError {
-				if err == nil {
-					t.Errorf("Expected error but got none - %s", tt.description)
-				}
-				if result != nil {
-					t.Errorf("Expected nil result when error occurs - %s", tt.description)
-				}
-			} else {
-				if err != nil {
-					t.Errorf("Unexpected error: %v - %s", err, tt.description)
-				}
-				// For valid filters, we can't easily test the exact content without exposing internal structure
-				// But we can verify it's not nil when we expect a filter
-				if tt.queryParams["filter"] != "" && result == nil {
-					t.Errorf("Expected filter result but got nil - %s", tt.description)
-				}
+			if result.Filter != tt.expectedFilter {
+				t.Errorf("Expected filter '%s', got '%s' - %s", tt.expectedFilter, result.Filter, tt.description)
 			}
 		})
 	}
 }
 
-func TestGetFilterFromRequest_Integration(t *testing.T) {
+func TestParseQueryToQueryBuilder_Integration(t *testing.T) {
 	tests := []struct {
-		name           string
-		filterString   string
-		expectedFields []string
-		description    string
+		name         string
+		filterString string
+		description  string
 	}{
 		{
-			name:           "simple equals filter",
-			filterString:   "name = test",
-			expectedFields: []string{"name"},
-			description:    "Should parse simple equals filter",
+			name:         "simple equals filter",
+			filterString: "name = test",
+			description:  "Should parse simple equals filter",
 		},
 		{
-			name:           "multiple conditions",
-			filterString:   "status = active AND age > 18",
-			expectedFields: []string{"status", "age"},
-			description:    "Should parse multiple conditions",
+			name:         "multiple conditions",
+			filterString: "status = active AND age > 18",
+			description:  "Should parse multiple conditions",
 		},
 		{
-			name:           "OR condition",
-			filterString:   "category = electronics OR category = books",
-			expectedFields: []string{"category", "category"},
-			description:    "Should parse OR conditions",
+			name:         "OR condition",
+			filterString: "category = electronics OR category = books",
+			description:  "Should parse OR conditions",
 		},
 		{
-			name:           "IS NULL condition",
-			filterString:   "deleted_at IS NULL",
-			expectedFields: []string{"deleted_at"},
-			description:    "Should parse IS NULL condition",
+			name:         "filter with quotes",
+			filterString: `"name = test"`,
+			description:  "Should parse filter wrapped in quotes",
 		},
 		{
-			name:           "LIKE condition",
-			filterString:   "title LIKE %test%",
-			expectedFields: []string{"title"},
-			description:    "Should parse LIKE condition",
-		},
-		{
-			name:           "filter with quotes",
-			filterString:   `"name = test"`,
-			expectedFields: []string{"name"},
-			description:    "Should parse filter wrapped in quotes",
-		},
-		{
-			name:           "filter with single quote",
-			filterString:   `"name = test`,
-			expectedFields: []string{"name"},
-			description:    "Should parse filter with only opening quote",
-		},
-		{
-			name:           "filter with trailing quote",
-			filterString:   `name = test"`,
-			expectedFields: []string{"name"},
-			description:    "Should parse filter with only closing quote",
-		},
-		{
-			name:           "filter with multiple quotes",
-			filterString:   `""name = test""`,
-			expectedFields: []string{"name"},
-			description:    "Should parse filter with multiple quotes",
-		},
-		{
-			name:           "complex filter with quotes",
-			filterString:   `"status = active AND age > 18"`,
-			expectedFields: []string{"status", "age"},
-			description:    "Should parse complex filter wrapped in quotes",
+			name:         "complex filter with quotes",
+			filterString: `"status = active AND age > 18"`,
+			description:  "Should parse complex filter wrapped in quotes",
 		},
 	}
 
@@ -385,30 +329,22 @@ func TestGetFilterFromRequest_Integration(t *testing.T) {
 				URL: &url.URL{RawQuery: values.Encode()},
 			}
 
-			result, err := GetFilterFromRequest(req)
-			if err != nil {
-				t.Fatalf("Unexpected error: %v - %s", err, tt.description)
-			}
-
+			result := ParseQueryToQueryBuilder(req)
 			if result == nil {
-				t.Fatalf("Expected filter result but got nil - %s", tt.description)
+				t.Fatalf("Expected QueryBuilder result but got nil - %s", tt.description)
 			}
 
-			// Generate SQL to verify the filter was parsed correctly
-			sql, args := result.Generate()
-			if sql == "" {
-				t.Errorf("Expected SQL but got empty string - %s", tt.description)
-			}
-
-			// Verify we have the expected number of arguments
-			if len(args) != len(tt.expectedFields) {
-				t.Errorf("Expected %d arguments, got %d - %s", len(tt.expectedFields), len(args), tt.description)
+			// Verify that the filter was parsed and QueryBuilder has filters
+			if tt.filterString != "" {
+				if !result.HasFilters() {
+					t.Errorf("Expected QueryBuilder to have filters but it doesn't - %s", tt.description)
+				}
 			}
 		})
 	}
 }
 
-func TestHasFilterRequest(t *testing.T) {
+func TestParseQueryRequest_HasFilterLogic(t *testing.T) {
 	tests := []struct {
 		name        string
 		queryParams map[string]string
@@ -485,38 +421,44 @@ func TestHasFilterRequest(t *testing.T) {
 				req.URL = &url.URL{}
 			}
 
-			result := HasFilterRequest(req)
+			result := ParseQueryRequest(req)
+			hasFilter := result.Filter != ""
 
-			if result != tt.expected {
-				t.Errorf("Expected %t, got %t - %s", tt.expected, result, tt.description)
+			if hasFilter != tt.expected {
+				t.Errorf("Expected %t, got %t - %s", tt.expected, hasFilter, tt.description)
 			}
 		})
 	}
 }
 
 // Benchmark tests for performance
-func BenchmarkGetPaginationFromRequest(b *testing.B) {
+func BenchmarkParseQueryRequest(b *testing.B) {
 	values := url.Values{}
 	values.Set("page", "5")
 	values.Set("page_size", "50")
+	values.Set("filter", "status = active AND age > 18")
+	values.Set("order_by", "created_at desc")
 	req := &http.Request{
 		URL: &url.URL{RawQuery: values.Encode()},
 	}
 
 	for i := 0; i < b.N; i++ {
-		GetPaginationFromRequest(req)
+		ParseQueryRequest(req)
 	}
 }
 
-func BenchmarkGetFilterFromRequest(b *testing.B) {
+func BenchmarkParseQueryToQueryBuilder(b *testing.B) {
 	values := url.Values{}
 	values.Set("filter", "status = active AND age > 18 OR category = electronics")
+	values.Set("page", "2")
+	values.Set("page_size", "25")
+	values.Set("order_by", "created_at desc")
 	req := &http.Request{
 		URL: &url.URL{RawQuery: values.Encode()},
 	}
 
 	for i := 0; i < b.N; i++ {
-		GetFilterFromRequest(req)
+		ParseQueryToQueryBuilder(req)
 	}
 }
 

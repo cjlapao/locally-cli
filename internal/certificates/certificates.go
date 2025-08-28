@@ -13,8 +13,9 @@ import (
 func Initialize(certificatesStore stores.CertificatesDataStoreInterface,
 	tenantStore stores.TenantDataStoreInterface,
 	activityService activity_interfaces.ActivityServiceInterface,
+	userStore stores.UserDataStoreInterface,
 ) interfaces.CertificateServiceInterface {
-	return service.Initialize(certificatesStore, tenantStore, activityService)
+	return service.Initialize(certificatesStore, tenantStore, activityService, userStore)
 }
 
 // GetInstance returns the claim service instance
@@ -28,6 +29,8 @@ func Reset() {
 }
 
 // NewApiHandler creates a new claims API handler
-func NewApiHandler(certificateService interfaces.CertificateServiceInterface) *handlers.CertificatesApiHandlers {
-	return handlers.NewCertificatesApiHandler(certificateService)
+func NewApiHandler(certificateService interfaces.CertificateServiceInterface,
+	activityService activity_interfaces.ActivityServiceInterface,
+) *handlers.CertificatesApiHandlers {
+	return handlers.NewCertificatesApiHandler(certificateService, activityService)
 }

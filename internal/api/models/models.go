@@ -6,11 +6,33 @@ import (
 	"strconv"
 
 	"github.com/cjlapao/locally-cli/internal/database/filters"
+	"github.com/cjlapao/locally-cli/pkg/diagnostics"
 )
 
 // Handler represents the main API handler
 // This can be used for general API functionality that doesn't belong to specific domains
 type Handler struct{}
+
+// APIError represents a standardized API error response
+type APIError struct {
+	Error     ErrorDetails `json:"error"`
+	Timestamp string       `json:"timestamp"`
+	Path      string       `json:"path,omitempty"`
+}
+
+type ErrorDetailsError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+// ErrorDetails contains the specific error information
+type ErrorDetails struct {
+	Code        string                   `json:"code"`
+	Message     string                   `json:"message"`
+	Details     string                   `json:"details,omitempty"`
+	Errors      []ErrorDetailsError      `json:"errors,omitempty"`
+	Diagnostics *diagnostics.Diagnostics `json:"diagnostics,omitempty"`
+}
 
 type PaginationRequest struct {
 	Page     int    `json:"page,omitempty"`
@@ -54,7 +76,7 @@ func (pr *PaginationRequest) ToQueryBuilder() *filters.QueryBuilder {
 	// Combine into query string format
 	var queryString string
 	if len(queryParts) > 0 {
-		queryString = "?" + fmt.Sprintf("%s", joinStrings(queryParts, "&"))
+		queryString = "?" + joinStrings(queryParts, "&")
 	}
 
 	return filters.NewQueryBuilder(queryString)

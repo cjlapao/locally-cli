@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/cjlapao/locally-cli/internal/api"
+	"github.com/cjlapao/locally-cli/internal/api/models"
 )
 
 // TestResponse represents a generic API response for testing
@@ -110,7 +111,7 @@ func TestHandlerErrorHandling(t *testing.T) {
 	}
 
 	// Parse error response
-	var errorResponse api.APIError
+	var errorResponse models.APIError
 	if err := json.NewDecoder(resp.Body).Decode(&errorResponse); err != nil {
 		t.Fatalf("Failed to decode error response: %v", err)
 	}
@@ -153,7 +154,7 @@ func TestHandlerMethodNotAllowed(t *testing.T) {
 	}
 
 	// Parse error response
-	var errorResponse api.APIError
+	var errorResponse models.APIError
 	if err := json.NewDecoder(resp.Body).Decode(&errorResponse); err != nil {
 		t.Fatalf("Failed to decode error response: %v", err)
 	}

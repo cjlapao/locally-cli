@@ -8,13 +8,15 @@ import (
 	activity_types "github.com/cjlapao/locally-cli/internal/activity/types"
 	api_models "github.com/cjlapao/locally-cli/internal/api/models"
 	"github.com/cjlapao/locally-cli/internal/appctx"
+	"github.com/cjlapao/locally-cli/internal/certificates/errors"
 	"github.com/cjlapao/locally-cli/internal/certificates/interfaces"
+	"github.com/cjlapao/locally-cli/internal/certificates/models"
 	"github.com/cjlapao/locally-cli/internal/config"
 	"github.com/cjlapao/locally-cli/internal/database/filters"
 	"github.com/cjlapao/locally-cli/internal/database/stores"
 	"github.com/cjlapao/locally-cli/internal/mappers"
 	"github.com/cjlapao/locally-cli/pkg/diagnostics"
-	"github.com/cjlapao/locally-cli/pkg/models"
+	pkg_models "github.com/cjlapao/locally-cli/pkg/models"
 	pkg_types "github.com/cjlapao/locally-cli/pkg/types"
 )
 
@@ -32,17 +34,19 @@ type CertificateService struct {
 	certificatesStore stores.CertificatesDataStoreInterface
 	tenantStore       stores.TenantDataStoreInterface
 	activityService   activity_interfaces.ActivityServiceInterface
+	userStore         stores.UserDataStoreInterface
 }
 
 func Initialize(certificatesStore stores.CertificatesDataStoreInterface,
 	tenantStore stores.TenantDataStoreInterface,
 	activityService activity_interfaces.ActivityServiceInterface,
+	userStore stores.UserDataStoreInterface,
 ) interfaces.CertificateServiceInterface {
 	certificateServiceMutex.Lock()
 	defer certificateServiceMutex.Unlock()
 
 	certificateServiceOnce.Do(func() {
-		globalCertificateService = newService(certificatesStore, tenantStore)
+		globalCertificateService = newService(certificatesStore, tenantStore, activityService, userStore)
 	})
 	return globalCertificateService
 }
@@ -64,10 +68,14 @@ func Reset() {
 
 func newService(certificatesStore stores.CertificatesDataStoreInterface,
 	tenantStore stores.TenantDataStoreInterface,
+	activityService activity_interfaces.ActivityServiceInterface,
+	userStore stores.UserDataStoreInterface,
 ) *CertificateService {
 	return &CertificateService{
 		certificatesStore: certificatesStore,
 		tenantStore:       tenantStore,
+		activityService:   activityService,
+		userStore:         userStore,
 	}
 }
 
@@ -78,19 +86,19 @@ func (s *CertificateService) GetName() string {
 func (s *CertificateService) GenerateX509RootCertificate(ctx *appctx.AppContext) (interfaces.X509Certificate, *diagnostics.Diagnostics) {
 	diag := diagnostics.New("generate_certificate")
 
-	rootCA := NewX509RootCertificate("root", models.CertificateConfig{
+	rootCA := NewX509RootCertificate("root", pkg_models.CertificateConfig{
 		CertificateType:    pkg_types.CertificateTypeRoot,
 		CertificateID:      config.GlobalRootCertificateID,
-		CommonName:         "Locally Root CA",
-		Country:            "UK",
-		State:              "London",
-		City:               "London",
-		Organization:       "Locally",
-		OrganizationalUnit: "Locally",
-		ExpiresInYears:     10,
+		CommonName:         config.DefaultRootCertificateCommonName,
+		Country:            config.DefaultCertificateCountry,
+		State:              config.DefaultCertificateState,
+		City:               config.DefaultCertificateCity,
+		Organization:       config.DefaultCertificateOrganization,
+		OrganizationalUnit: config.DefaultCertificateOrganizationalUnit,
+		ExpiresInYears:     config.DefaultCertificateExpiresInYears,
 		FQDNs:              []string{},
 		IpAddresses:        []string{},
-		AdminEmailAddress:  "admin@locally.com",
+		AdminEmailAddress:  config.DefaultCertificateAdminEmailAddress,
 		KeySize:            pkg_types.CertificateKeySize2048,
 		SignatureAlgorithm: pkg_types.SignatureAlgorithmSHA512,
 	})
@@ -114,8 +122,8 @@ func (s *CertificateService) GenerateX509RootCertificate(ctx *appctx.AppContext)
 func (s *CertificateService) GenerateX509IntermediateCertificate(ctx *appctx.AppContext, tenantId string) (interfaces.X509Certificate, *diagnostics.Diagnostics) {
 	diag := diagnostics.New("generate_certificate")
 	cfg := config.GetInstance().Get()
-	tenant, err := s.tenantStore.GetTenantByIdOrSlug(ctx, tenantId)
-	if err != nil {
+	tenant, getTenantDiag := s.tenantStore.GetTenantByIdOrSlug(ctx, tenantId)
+	if getTenantDiag.HasErrors() {
 		diag.AddError("tenant_not_found", "tenant not found", CertificateModuleKey, nil)
 		return nil, diag
 	}
@@ -168,7 +176,7 @@ func (s *CertificateService) GenerateX509IntermediateCertificate(ctx *appctx.App
 	keySize := pkg_types.IntToCertificateKeySize(tenantKeySize)
 	signatureAlgorithm := pkg_types.StringToSignatureAlgorithm(tenantSignatureAlgorithm)
 
-	intermediateCA := NewX509IntermediateCertificate("intermediate", rootCA, models.CertificateConfig{
+	intermediateCA := NewX509IntermediateCertificate("intermediate", rootCA, pkg_models.CertificateConfig{
 		CertificateType:    pkg_types.CertificateTypeIntermediate,
 		RootCertificateID:  rootCADb.ID,
 		CommonName:         commonName,
@@ -193,11 +201,11 @@ func (s *CertificateService) GenerateX509IntermediateCertificate(ctx *appctx.App
 	return certificate, diag
 }
 
-func (s *CertificateService) GenerateX509Certificate(ctx *appctx.AppContext, tenantId string, config models.CertificateConfig) (interfaces.X509Certificate, *diagnostics.Diagnostics) {
+func (s *CertificateService) GenerateX509Certificate(ctx *appctx.AppContext, tenantId string, config pkg_models.CertificateConfig) (interfaces.X509Certificate, *diagnostics.Diagnostics) {
 	diag := diagnostics.New("generate_certificate")
 	ctx.Log().Infof("Generating certificate for tenant %s with config %v", tenantId, config)
-	tenant, err := s.tenantStore.GetTenantByIdOrSlug(ctx, tenantId)
-	if err != nil {
+	tenant, getTenantDiag := s.tenantStore.GetTenantByIdOrSlug(ctx, tenantId)
+	if getTenantDiag.HasErrors() {
 		diag.AddError("tenant_not_found", "tenant not found", CertificateModuleKey, nil)
 		return nil, diag
 	}
@@ -236,9 +244,13 @@ func (s *CertificateService) GenerateX509Certificate(ctx *appctx.AppContext, ten
 		return nil, diag
 	}
 	rootCA := CertificateFromDto(ctx, rootCertificate)
+	if rootCA == nil {
+		diag.AddError("root_certificate_not_found", "root certificate not found", CertificateModuleKey, nil)
+		return nil, diag
+	}
 
 	// Getting the intermediate certificate
-	intermediateCertificate, intermediateCertificateDiag := s.GetIntermediateCertificate(ctx, tenantId, "default")
+	intermediateCertificate, intermediateCertificateDiag := s.GetIntermediateCertificate(ctx, tenantId, "intermediate")
 	if intermediateCertificateDiag.HasErrors() {
 		diag.Append(intermediateCertificateDiag)
 		return nil, intermediateCertificateDiag
@@ -248,6 +260,10 @@ func (s *CertificateService) GenerateX509Certificate(ctx *appctx.AppContext, ten
 		return nil, diag
 	}
 	intermediateCA := CertificateFromDto(ctx, intermediateCertificate)
+	if intermediateCA == nil {
+		diag.AddError("intermediate_certificate_not_found", "intermediate certificate not found", CertificateModuleKey, nil)
+		return nil, diag
+	}
 
 	certGenSvc := NewX509ServerCertificate(config.CommonName, rootCA, intermediateCA, config)
 	cert, certDiag := certGenSvc.Generate(ctx)
@@ -273,7 +289,7 @@ func (s *CertificateService) GetX509Certificate(ctx *appctx.AppContext, tenantId
 	return cert, diag
 }
 
-func (s *CertificateService) GetCertificates(ctx *appctx.AppContext, tenantId string, pagination *api_models.PaginationRequest) (*api_models.PaginationResponse[models.Certificate], *diagnostics.Diagnostics) {
+func (s *CertificateService) GetCertificates(ctx *appctx.AppContext, tenantId string, pagination *api_models.PaginationRequest) (*api_models.PaginationResponse[pkg_models.Certificate], *diagnostics.Diagnostics) {
 	diag := diagnostics.New("get_certificates")
 	var query *filters.QueryBuilder
 	if pagination != nil {
@@ -285,12 +301,12 @@ func (s *CertificateService) GetCertificates(ctx *appctx.AppContext, tenantId st
 		return nil, certificatesDiag
 	}
 
-	certs := make([]models.Certificate, len(certificates.Items))
+	certs := make([]pkg_models.Certificate, len(certificates.Items))
 	for i, cert := range certificates.Items {
 		certs[i] = mappers.MapCertificateToDto(cert)
 	}
 
-	return &api_models.PaginationResponse[models.Certificate]{
+	return &api_models.PaginationResponse[pkg_models.Certificate]{
 		TotalCount: certificates.Total,
 		Pagination: api_models.Pagination{
 			Page:       certificates.Page,
@@ -301,7 +317,7 @@ func (s *CertificateService) GetCertificates(ctx *appctx.AppContext, tenantId st
 	}, diag
 }
 
-func (s *CertificateService) GetCertificateBy(ctx *appctx.AppContext, tenantId string, slugOrId string) (*models.Certificate, *diagnostics.Diagnostics) {
+func (s *CertificateService) GetCertificateBy(ctx *appctx.AppContext, tenantId string, slugOrId string) (*pkg_models.Certificate, *diagnostics.Diagnostics) {
 	diag := diagnostics.New("get_certificate_by")
 	certificate, certificateDiag := s.certificatesStore.GetCertificateBy(ctx, tenantId, slugOrId)
 	if certificateDiag.HasErrors() {
@@ -316,7 +332,7 @@ func (s *CertificateService) GetCertificateBy(ctx *appctx.AppContext, tenantId s
 	return &cert, diag
 }
 
-func (s *CertificateService) GetCertificatesByType(ctx *appctx.AppContext, tenantId string, certType pkg_types.CertificateType, pagination *api_models.PaginationRequest) (*api_models.PaginationResponse[models.Certificate], *diagnostics.Diagnostics) {
+func (s *CertificateService) GetCertificatesByType(ctx *appctx.AppContext, tenantId string, certType pkg_types.CertificateType, pagination *api_models.PaginationRequest) (*api_models.PaginationResponse[pkg_models.Certificate], *diagnostics.Diagnostics) {
 	diag := diagnostics.New("get_certificates_by_type")
 	var query *filters.QueryBuilder
 	if pagination != nil {
@@ -329,12 +345,12 @@ func (s *CertificateService) GetCertificatesByType(ctx *appctx.AppContext, tenan
 		return nil, certificatesDiag
 	}
 
-	certs := make([]models.Certificate, len(certificates.Items))
+	certs := make([]pkg_models.Certificate, len(certificates.Items))
 	for i, cert := range certificates.Items {
 		certs[i] = mappers.MapCertificateToDto(cert)
 	}
 
-	return &api_models.PaginationResponse[models.Certificate]{
+	return &api_models.PaginationResponse[pkg_models.Certificate]{
 		TotalCount: certificates.Total,
 		Pagination: api_models.Pagination{
 			Page:       certificates.Page,
@@ -345,7 +361,7 @@ func (s *CertificateService) GetCertificatesByType(ctx *appctx.AppContext, tenan
 	}, diag
 }
 
-func (s *CertificateService) CreateCertificate(ctx *appctx.AppContext, tenantId string, certType pkg_types.CertificateType, certificateConfig models.CertificateConfig) (*models.Certificate, *diagnostics.Diagnostics) {
+func (s *CertificateService) CreateCertificateFromConfig(ctx *appctx.AppContext, tenantId string, certType pkg_types.CertificateType, certificateConfig pkg_models.CertificateConfig) (*pkg_models.Certificate, *diagnostics.Diagnostics) {
 	diag := diagnostics.New("create_certificate")
 	validationDiags := certificateConfig.Validate()
 	if validationDiags.HasErrors() {
@@ -422,7 +438,7 @@ func (s *CertificateService) CreateCertificate(ctx *appctx.AppContext, tenantId 
 	return &response, diag
 }
 
-func (s *CertificateService) GetRootCertificate(ctx *appctx.AppContext) (*models.Certificate, *diagnostics.Diagnostics) {
+func (s *CertificateService) GetRootCertificate(ctx *appctx.AppContext) (*pkg_models.Certificate, *diagnostics.Diagnostics) {
 	diag := diagnostics.New("get_root_certificate")
 	rootCertificate, rootCertificateDiag := s.certificatesStore.GetRootCertificate(ctx)
 	if rootCertificateDiag.HasErrors() {
@@ -433,7 +449,7 @@ func (s *CertificateService) GetRootCertificate(ctx *appctx.AppContext) (*models
 	return &cert, diag
 }
 
-func (s *CertificateService) GetTenantIntermediateCertificate(ctx *appctx.AppContext, tenantId string) (*models.Certificate, *diagnostics.Diagnostics) {
+func (s *CertificateService) GetTenantIntermediateCertificate(ctx *appctx.AppContext, tenantId string) (*pkg_models.Certificate, *diagnostics.Diagnostics) {
 	diag := diagnostics.New("get_tenant_intermediate_certificate")
 	intermediateCertificate, intermediateCertificateDiag := s.certificatesStore.GetTenantIntermediateCertificate(ctx, tenantId)
 	if intermediateCertificateDiag.HasErrors() {
@@ -444,27 +460,209 @@ func (s *CertificateService) GetTenantIntermediateCertificate(ctx *appctx.AppCon
 	return &cert, diag
 }
 
-func (s *CertificateService) GetIntermediateCertificate(ctx *appctx.AppContext, tenantId string, slug string) (*models.Certificate, *diagnostics.Diagnostics) {
+func (s *CertificateService) GetIntermediateCertificate(ctx *appctx.AppContext, tenantId string, slug string) (*pkg_models.Certificate, *diagnostics.Diagnostics) {
 	diag := diagnostics.New("get_intermediate_certificate")
 	if slug == "" {
-		slug = "default"
+		slug = "intermediate"
 	}
 
-	intermediateCertificates, intermediateCertificateDiag := s.certificatesStore.GetCertificateByType(ctx, tenantId, pkg_types.CertificateTypeIntermediate, slug)
+	intermediateCertificate, intermediateCertificateDiag := s.certificatesStore.GetCertificateByType(ctx, tenantId, pkg_types.CertificateTypeIntermediate, slug)
 	if intermediateCertificateDiag.HasErrors() {
 		diag.Append(intermediateCertificateDiag)
 		return nil, intermediateCertificateDiag
 	}
 
-	cert := mappers.MapCertificateToDto(*intermediateCertificates)
+	if intermediateCertificate == nil {
+		diag.AddError(errors.ErrorMissingIntermediateCertificate, "Intermediate certificate not found", "certificates_handler")
+		return nil, diag
+	}
+
+	cert := mappers.MapCertificateToDto(*intermediateCertificate)
 	return &cert, diag
 }
 
-// ******************* fixing this later
-func (s *CertificateService) GetCertificate(ctx *appctx.AppContext, tenantId string, slugOrId string) (interfaces.X509Certificate, *diagnostics.Diagnostics) {
-	return nil, nil
+func (s *CertificateService) CreateCertificate(ctx *appctx.AppContext, tenantId string, request *models.CreateCertificateRequest) (*pkg_models.Certificate, *diagnostics.Diagnostics) {
+	diag := diagnostics.New("create_certificate")
+
+	userId := ctx.GetUserID()
+	if userId == "" {
+		diag.AddError(errors.ErrorMissingUserID, "User ID is missing", "certificates_handler")
+		return nil, diag
+	}
+
+	user, userDiag := s.userStore.GetUserByID(ctx, tenantId, userId)
+	if userDiag.HasErrors() {
+		diag.Append(userDiag)
+		return nil, userDiag
+	}
+	if user == nil {
+		diag.AddError(errors.ErrorMissingUser, "User is missing", "certificates_handler")
+		return nil, diag
+	}
+
+	userDto := mappers.MapUserToDto(user)
+
+	if len(request.FQDNs) == 0 {
+		if request.SubDomain == "" {
+			diag.AddError(errors.ErrorMissingSubDomain, "Sub domain is missing", "certificates_handler", map[string]interface{}{
+				"sub_domain": request.SubDomain,
+			})
+			return nil, diag
+		}
+		request.FQDNs = []string{request.SubDomain + "." + config.DefaultLocallyDomain}
+	}
+
+	// getting the root certificate
+	rootCertificate, rootCertificateDiag := s.GetRootCertificate(ctx)
+	if rootCertificateDiag.HasErrors() {
+		diag.Append(rootCertificateDiag)
+		return nil, rootCertificateDiag
+	}
+	if rootCertificate == nil {
+		diag.AddError(errors.ErrorMissingRootCertificate, "Root certificate is missing", "certificates_handler", map[string]interface{}{
+			"root_certificate": rootCertificate,
+		})
+		return nil, diag
+	}
+
+	// getting the intermediate certificate
+	intermediateCertificate, intermediateCertificateDiag := s.GetIntermediateCertificate(ctx, tenantId, "intermediate")
+	if intermediateCertificateDiag.HasErrors() {
+		diag.Append(intermediateCertificateDiag)
+		return nil, intermediateCertificateDiag
+	}
+	if intermediateCertificate == nil {
+		diag.AddError(errors.ErrorMissingIntermediateCertificate, "Intermediate certificate is missing", "certificates_handler", map[string]interface{}{
+			"intermediate_certificate": intermediateCertificate,
+		})
+		return nil, diag
+	}
+
+	certConfig := pkg_models.CertificateConfig{
+		AdminEmailAddress:         request.AdminEmailAddress,
+		ExpiresInYears:            request.ExpiresInYears,
+		KeySize:                   request.KeySize,
+		SignatureAlgorithm:        request.SignatureAlgorithm,
+		Password:                  request.Password,
+		RootCertificateID:         rootCertificate.ID,
+		IntermediateCertificateID: intermediateCertificate.ID,
+	}
+	if userDto.IsSuperUser() {
+		certConfig.CertificateType = request.CertificateType
+		certConfig.Country = request.Country
+		if request.Country == "" {
+			certConfig.Country = config.DefaultCertificateCountry
+		}
+		certConfig.State = request.State
+		if request.State == "" {
+			certConfig.State = config.DefaultCertificateState
+		}
+		certConfig.Organization = request.Organization
+		if request.Organization == "" {
+			certConfig.Organization = config.DefaultCertificateOrganization
+		}
+		certConfig.CommonName = request.CommonName
+		if request.City == "" {
+			certConfig.City = config.DefaultCertificateCity
+		}
+		if len(request.FQDNs) == 0 {
+			certConfig.FQDNs = []string{request.SubDomain + "." + config.DefaultLocallyDomain}
+		} else {
+			certConfig.FQDNs = request.FQDNs
+		}
+		if len(request.IpAddresses) == 0 {
+			certConfig.IpAddresses = []string{}
+		} else {
+			certConfig.IpAddresses = request.IpAddresses
+		}
+		if request.OrganizationalUnit == "" {
+			certConfig.OrganizationalUnit = config.DefaultCertificateOrganizationalUnit
+		} else {
+			certConfig.OrganizationalUnit = request.OrganizationalUnit
+		}
+	} else {
+		if request.SubDomain == "" {
+			diag.AddError(errors.ErrorMissingSubDomain, "Sub domain is missing", "certificates_handler", map[string]interface{}{
+				"sub_domain": request.SubDomain,
+			})
+			return nil, diag
+		}
+		certConfig.CertificateType = pkg_types.CertificateTypeCertificate
+		certConfig.Country = config.DefaultCertificateCountry
+		certConfig.State = config.DefaultCertificateState
+		certConfig.Organization = config.DefaultCertificateOrganization
+		certConfig.CommonName = request.SubDomain
+		certConfig.City = config.DefaultCertificateCity
+		certConfig.FQDNs = []string{request.SubDomain + "." + config.DefaultLocallyDomain}
+	}
+
+	certificate, createDiag := s.CreateCertificateFromConfig(ctx, tenantId, certConfig.CertificateType, certConfig)
+	if createDiag.HasErrors() {
+		diag.Append(createDiag)
+		return nil, createDiag
+	}
+
+	return certificate, diag
 }
 
-func (s *CertificateService) DeleteCertificate(ctx *appctx.AppContext, tenantId string, slugOrId string) *diagnostics.Diagnostics {
-	return nil
+func (s *CertificateService) DeleteCertificate(ctx *appctx.AppContext, tenantId string, certificateId string) *diagnostics.Diagnostics {
+	diag := diagnostics.New("delete_certificate")
+
+	// checking if the certificate exists
+	certificate, getCertificateDiag := s.certificatesStore.GetCertificateBy(ctx, tenantId, certificateId)
+	if getCertificateDiag.HasErrors() {
+		diag.Append(getCertificateDiag)
+		return diag
+	}
+	if certificate == nil {
+		diag.AddError(errors.ErrorGettingCertificate, "Certificate not found", "certificates_handler", map[string]interface{}{
+			"tenant_id":      tenantId,
+			"certificate_id": certificateId,
+		})
+		return diag
+	}
+
+	if certificate.Type == pkg_types.CertificateTypeRoot {
+		diag.AddError(errors.ErrorDeletingRootCertificate, "Cannot delete root certificate", "certificates_handler", map[string]interface{}{
+			"tenant_id":      tenantId,
+			"certificate_id": certificateId,
+		})
+		return diag
+	}
+
+	if certificate.Type == pkg_types.CertificateTypeIntermediate {
+		diag.AddError(errors.ErrorDeletingIntermediateCertificate, "Cannot delete intermediate certificate", "certificates_handler", map[string]interface{}{
+			"tenant_id":      tenantId,
+			"certificate_id": certificateId,
+		})
+		return diag
+	}
+
+	// deleting the certificate
+	deleteDiag := s.certificatesStore.DeleteCertificate(ctx, tenantId, certificateId)
+	if deleteDiag.HasErrors() {
+		diag.Append(deleteDiag)
+		return diag
+	}
+
+	// creating the activity
+	activityDiags := s.activityService.RecordSuccessActivity(ctx, "delete_certificate", &activity_types.ActivityRecord{
+		Module:        CertificateModuleKey,
+		Message:       "Certificate deleted successfully",
+		Service:       "certificates",
+		Success:       true,
+		ActorType:     activity_types.ActorTypeUser,
+		ActivityType:  activity_types.ActivityTypeDelete,
+		ActivityLevel: activity_types.ActivityLevelInfo,
+		Data: &activity_types.ActivityData{
+			Metadata: map[string]interface{}{
+				"certificate_id": certificateId,
+			},
+		},
+	})
+	if activityDiags.HasErrors() {
+		diag.Append(activityDiags)
+	}
+
+	return diag
 }

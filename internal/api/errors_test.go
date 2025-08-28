@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/cjlapao/locally-cli/internal/api/models"
 )
 
 func TestWriteError(t *testing.T) {
@@ -16,7 +18,7 @@ func TestWriteError(t *testing.T) {
 		message        string
 		details        []string
 		expectedStatus int
-		expectedError  APIError
+		expectedError  models.APIError
 	}{
 		{
 			name:           "Basic error",
@@ -24,8 +26,8 @@ func TestWriteError(t *testing.T) {
 			errorCode:      ErrorCodeBadRequest,
 			message:        "Test error",
 			expectedStatus: http.StatusBadRequest,
-			expectedError: APIError{
-				Error: ErrorDetails{
+			expectedError: models.APIError{
+				Error: models.ErrorDetails{
 					Code:    ErrorCodeBadRequest,
 					Message: "Test error",
 				},
@@ -38,8 +40,8 @@ func TestWriteError(t *testing.T) {
 			message:        "Not found",
 			details:        []string{"Resource ID: 123"},
 			expectedStatus: http.StatusNotFound,
-			expectedError: APIError{
-				Error: ErrorDetails{
+			expectedError: models.APIError{
+				Error: models.ErrorDetails{
 					Code:    ErrorCodeNotFound,
 					Message: "Not found",
 					Details: "Resource ID: 123",
@@ -52,8 +54,8 @@ func TestWriteError(t *testing.T) {
 			errorCode:      "",
 			message:        "Server error",
 			expectedStatus: http.StatusInternalServerError,
-			expectedError: APIError{
-				Error: ErrorDetails{
+			expectedError: models.APIError{
+				Error: models.ErrorDetails{
 					Code:    ErrorCodeInternalError,
 					Message: "Server error",
 				},
@@ -76,7 +78,7 @@ func TestWriteError(t *testing.T) {
 			}
 
 			// Parse response
-			var response APIError
+			var response models.APIError
 			err := json.NewDecoder(w.Body).Decode(&response)
 			if err != nil {
 				t.Fatalf("failed to decode response: %v", err)
@@ -200,7 +202,7 @@ func TestHelperErrorFunctions(t *testing.T) {
 			}
 
 			// Parse response
-			var response APIError
+			var response models.APIError
 			err := json.NewDecoder(w.Body).Decode(&response)
 			if err != nil {
 				t.Fatalf("failed to decode response: %v", err)
@@ -307,7 +309,7 @@ func TestDefaultMessages(t *testing.T) {
 			}
 
 			// Parse response
-			var response APIError
+			var response models.APIError
 			err := json.NewDecoder(w.Body).Decode(&response)
 			if err != nil {
 				t.Fatalf("failed to decode response: %v", err)

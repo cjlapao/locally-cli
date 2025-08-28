@@ -13,4 +13,5 @@ const (
 	StartTimeKey     AppContextKey = "X-Start-Time"
 	MetadataKey      AppContextKey = "X-Metadata"
 	SecurityLevelKey AppContextKey = "X-Security-Level"
+	UserKey          AppContextKey = "X-User"
 )

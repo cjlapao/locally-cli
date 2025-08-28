@@ -83,7 +83,7 @@ func (c *CertificateConfig) Validate() *diagnostics.Diagnostics {
 	if c.KeySize == 0 {
 		diag.AddError("key_size_required", "key size is required", moduleName, nil)
 	}
-	if c.SignatureAlgorithm == 0 {
+	if c.SignatureAlgorithm == "" {
 		diag.AddError("signature_algorithm_required", "signature algorithm is required", moduleName, nil)
 	}
 	if c.ExpiresInYears == 0 {

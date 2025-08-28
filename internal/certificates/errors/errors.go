@@ -20,16 +20,34 @@ const (
 	// Tenant errors
 	ErrorMissingTenantID = "CRT012"
 
+	// User errors
+	ErrorMissingUser = "CRT013"
+
 	// Root certificate errors
-	ErrorGettingRootCertificate = "CRT013"
+	ErrorGettingRootCertificate = "CRT014"
 
 	// Intermediate certificate errors
-	ErrorGettingIntermediateCertificate = "CRT014"
+	ErrorGettingIntermediateCertificate = "CRT015"
 
 	// Certificate type errors
-	ErrorMissingCertificateType    = "CRT015"
-	ErrorGettingCertificateByType  = "CRT016"
-	ErrorGettingCertificatesByType = "CRT017"
-	ErrorMissingCertificateID      = "CRT018"
-	ErrorGettingCertificate        = "CRT019"
+	ErrorMissingCertificateType         = "CRT016"
+	ErrorGettingCertificateByType       = "CRT017"
+	ErrorGettingCertificatesByType      = "CRT018"
+	ErrorMissingCertificateID           = "CRT019"
+	ErrorGettingCertificate             = "CRT020"
+	ErrorMissingRootCertificate         = "CRT021"
+	ErrorMissingIntermediateCertificate = "CRT022"
+
+	// Sub domain errors
+	ErrorMissingSubDomain = "CRT023"
+
+	// FQDN errors
+	ErrorMissingFQDNs = "CRT024"
+
+	// User ID errors
+	ErrorMissingUserID = "CRT025"
+
+	// Access errors
+	ErrorDeletingRootCertificate         = "CRT026"
+	ErrorDeletingIntermediateCertificate = "CRT027"
 )

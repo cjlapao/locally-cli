@@ -167,6 +167,8 @@ func (s *TenantService) CreateTenant(ctx *appctx.AppContext, request *tenant_mod
 		return nil, diag
 	}
 
+	ctx = ctx.WithTenantID(createdTenant.ID)
+
 	// creating the default claims for the tenant
 	claims := s.systemService.GenerateSystemClaims()
 	for _, claim := range claims {
@@ -246,7 +248,7 @@ func (s *TenantService) CreateTenant(ctx *appctx.AppContext, request *tenant_mod
 	}
 	certConfig := *intermediateCert.GetConfiguration()
 
-	_, createCertDiag := s.certificateService.CreateCertificate(ctx, createdTenant.ID, pkg_types.CertificateTypeIntermediate, certConfig)
+	_, createCertDiag := s.certificateService.CreateCertificateFromConfig(ctx, createdTenant.ID, pkg_types.CertificateTypeIntermediate, certConfig)
 	if createCertDiag.HasErrors() {
 		diag.Append(createCertDiag)
 		// reverting the tenant creation

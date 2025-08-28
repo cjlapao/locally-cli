@@ -389,9 +389,10 @@ func initializeAuthService(cfg *config.Config,
 func initializeCertificateService(store stores.CertificatesDataStoreInterface,
 	tenantStore stores.TenantDataStoreInterface,
 	activityService activity_interfaces.ActivityServiceInterface,
+	userStore stores.UserDataStoreInterface,
 ) certificates_interfaces.CertificateServiceInterface {
 	logging.Info("Initializing certificate service...")
-	certificateService := certificates.Initialize(store, tenantStore, activityService)
+	certificateService := certificates.Initialize(store, tenantStore, activityService, userStore)
 	if certificateService == nil {
 		logging.Error("Certificate service not initialized")
 		panic("Certificate service not initialized")
@@ -680,7 +681,7 @@ func run() error {
 	}
 
 	// initialize certificate service
-	certificateService := initializeCertificateService(certificatesStore, tenantStore, activityService)
+	certificateService := initializeCertificateService(certificatesStore, tenantStore, activityService, userStore)
 	// initialize claim service
 	claimService := initializeClaimService(claimStore)
 	// initialize role service
@@ -711,7 +712,7 @@ func run() error {
 	// Register environment routes
 	apiServer.RegisterRoutes(environment.NewApiHandler(environmentService))
 	// Register certificate routes
-	apiServer.RegisterRoutes(certificates.NewApiHandler(certificateService))
+	apiServer.RegisterRoutes(certificates.NewApiHandler(certificateService, activityService))
 	// Register tenant routes
 	apiServer.RegisterRoutes(tenant.NewApiHandler(tenantService))
 	// Register user routes
