@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/cjlapao/locally-cli/internal/environment/interfaces"
 	"github.com/cjlapao/locally-cli/internal/notifications"
 	"github.com/cjlapao/locally-cli/pkg/diagnostics"
-	"github.com/cjlapao/locally-cli/pkg/interfaces"
 
 	cryptorand "github.com/cjlapao/common-go-cryptorand"
 )

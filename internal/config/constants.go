@@ -46,6 +46,9 @@ const (
 	RoleAuditorUserID = "55555555-5555-5555-5555-555555555555"
 	RoleGuestUserID   = "66666666-6666-6666-6666-666666666666"
 	RoleNoneUserID    = "77777777-7777-7777-7777-777777777777"
+	// Templater and Variables
+	VariablesPrefix string = "${{"
+	VariablesSuffix string = "}}"
 )
 
 const (

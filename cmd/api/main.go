@@ -31,6 +31,7 @@ import (
 	"github.com/cjlapao/locally-cli/internal/database/types"
 	"github.com/cjlapao/locally-cli/internal/encryption"
 	"github.com/cjlapao/locally-cli/internal/environment"
+	environment_interfaces "github.com/cjlapao/locally-cli/internal/environment/interfaces"
 	"github.com/cjlapao/locally-cli/internal/events"
 	"github.com/cjlapao/locally-cli/internal/logging"
 	"github.com/cjlapao/locally-cli/internal/role"
@@ -42,10 +43,8 @@ import (
 	"github.com/cjlapao/locally-cli/internal/user"
 	user_interfaces "github.com/cjlapao/locally-cli/internal/user/interfaces"
 	"github.com/cjlapao/locally-cli/internal/validation"
-	"github.com/cjlapao/locally-cli/internal/vaults/configvault"
 	"github.com/cjlapao/locally-cli/internal/workers"
 	"github.com/cjlapao/locally-cli/pkg/diagnostics"
-	"github.com/cjlapao/locally-cli/pkg/interfaces"
 )
 
 // @title           Locally API
@@ -270,6 +269,19 @@ func initializeCertificatesStore() (stores.CertificatesDataStoreInterface, *diag
 	return certificatesStore, diag
 }
 
+// initializeEnvironmentStore initializes the environment store
+func initializeEnvironmentStore(ctx *appctx.AppContext) (stores.EnvironmentDataStoreInterface, *diagnostics.Diagnostics) {
+	ctx.Log().Info("Initializing environment store...")
+	diag := diagnostics.New("initialize_environment_store")
+	environmentStore, initDiag := stores.InitializeEnvironmentDataStore()
+	if initDiag.HasErrors() {
+		diag.Append(initDiag)
+		return nil, diag
+	}
+	ctx.Log().Info("Environment store initialized successfully")
+	return environmentStore, diag
+}
+
 // initializeTenantStore initializes the tenant store
 func initializeTenantStore() (stores.TenantDataStoreInterface, *diagnostics.Diagnostics) {
 	logging.Info("Initializing tenant store...")
@@ -487,16 +499,11 @@ func startEventService(ctx *appctx.AppContext, eventService *events.EventService
 	return nil
 }
 
-func initializeEnvironmentService(ctx *appctx.AppContext, vaults []interfaces.EnvironmentVault) *environment.Environment {
-	logging.Info("Initializing environment service...")
-	environmentService := environment.Initialize()
-	for _, vault := range vaults {
-		diag := environmentService.RegisterVault(ctx, vault)
-		if diag.HasErrors() {
-			logging.Errorf("Error registering vault: %v", diag.GetSummary())
-		}
-	}
-	logging.Info("Environment service initialized successfully")
+func initializeEnvironmentService(ctx *appctx.AppContext, environmentStore stores.EnvironmentDataStoreInterface) environment_interfaces.EnvironmentServiceInterface {
+	ctx.Log().Info("Initializing environment service...")
+	environmentService := environment.Initialize(environmentStore)
+
+	ctx.Log().Info("Environment service initialized successfully")
 	return environmentService
 }
 
@@ -650,17 +657,16 @@ func run() error {
 		return fmt.Errorf("failed to initialize activity store: %s", activityStoreDiag.GetSummary())
 	}
 
-	// initialize environment service
-	vaults := make([]interfaces.EnvironmentVault, 0)
-
-	// Add config vault
-	configVault := configvault.New()
-	vaults = append(vaults, configVault)
+	// Initialize environment store
+	environmentStore, environmentStoreDiag := initializeEnvironmentStore(ctx)
+	if environmentStoreDiag.HasErrors() {
+		return fmt.Errorf("failed to initialize environment store: %s", environmentStoreDiag.GetSummary())
+	}
 
 	// Initializing Services
 
 	// initialize environment service
-	environmentService := initializeEnvironmentService(ctx, vaults)
+	environmentService := initializeEnvironmentService(ctx, environmentStore)
 	// initializing validation service
 	initializeValidationService()
 	// initializing event service

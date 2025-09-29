@@ -11,7 +11,6 @@ import (
 	"github.com/cjlapao/locally-cli/internal/database"
 	"github.com/cjlapao/locally-cli/internal/database/entities"
 	"github.com/cjlapao/locally-cli/internal/database/filters"
-	"github.com/cjlapao/locally-cli/internal/database/utils"
 	db_utils "github.com/cjlapao/locally-cli/internal/database/utils"
 	"github.com/cjlapao/locally-cli/internal/encryption"
 	"github.com/cjlapao/locally-cli/internal/logging"
@@ -294,7 +293,7 @@ func (s *UserDataStore) UpdateUser(ctx *appctx.AppContext, tenantID string, user
 		user.Slug = pkg_utils.Slugify(user.Username)
 	}
 
-	updates := utils.PartialUpdateMap(currentUser, user, "updated_at", "slug")
+	updates := db_utils.PartialUpdateMap(currentUser, user, "updated_at", "slug")
 	if err := s.GetDB().Model(&entities.User{}).Where("id = ?", user.ID).Updates(updates).Error; err != nil {
 		diag.AddError("failed_to_update_user", fmt.Sprintf("failed to update user: %s", err.Error()), "user_data_store", nil)
 		return diag
@@ -326,7 +325,7 @@ func (s *UserDataStore) UpdateUserPassword(ctx *appctx.AppContext, tenantID stri
 	}
 
 	// Use PartialUpdateMap to only update the password and updated_at fields
-	updates := utils.PartialUpdateMap(user, updatedUser, "updated_at")
+	updates := db_utils.PartialUpdateMap(user, updatedUser, "updated_at")
 	if err := s.GetDB().Model(&entities.User{}).Where("id = ?", user.ID).Updates(updates).Error; err != nil {
 		diag.AddError("failed_to_update_user_password", fmt.Sprintf("failed to update user password: %s", err.Error()), "user_data_store", nil)
 		return diag
@@ -352,7 +351,7 @@ func (s *UserDataStore) BlockUser(ctx *appctx.AppContext, tenantID string, id st
 	}
 
 	// Use PartialUpdateMap to only update the blocked and updated_at fields
-	updates := utils.PartialUpdateMap(user, updatedUser, "updated_at")
+	updates := db_utils.PartialUpdateMap(user, updatedUser, "updated_at")
 	if err := s.GetDB().Model(&entities.User{}).Where("id = ?", user.ID).Updates(updates).Error; err != nil {
 		diag.AddError("failed_to_block_user", fmt.Sprintf("failed to block user: %s", err.Error()), "user_data_store", nil)
 		return diag
@@ -379,7 +378,7 @@ func (s *UserDataStore) SetRefreshToken(ctx *appctx.AppContext, tenantID string,
 	}
 
 	// Use PartialUpdateMap to only update the refresh token fields and updated_at
-	updates := utils.PartialUpdateMap(user, updatedUser, "updated_at")
+	updates := db_utils.PartialUpdateMap(user, updatedUser, "updated_at")
 	if err := s.GetDB().Model(&entities.User{}).Where("id = ?", user.ID).Updates(updates).Error; err != nil {
 		diag.AddError("failed_to_set_refresh_token", fmt.Sprintf("failed to set refresh token: %s", err.Error()), "user_data_store", nil)
 		return diag

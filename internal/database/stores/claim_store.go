@@ -704,9 +704,9 @@ func (s *ClaimDataStore) AddClaimToRole(ctx *appctx.AppContext, tenantID string,
 	}
 
 	// check if the claim exists
-	existingClaim, err := s.GetClaimBySlugOrID(ctx, tenantID, claimID)
-	if err != nil {
-		diag.AddError("failed_to_get_claim", "failed to get claim", "claim_data_store", nil)
+	existingClaim, existingClaimDiag := s.GetClaimBySlugOrID(ctx, tenantID, claimID)
+	if existingClaimDiag.HasErrors() {
+		diag.Append(existingClaimDiag)
 		return diag
 	}
 	if existingClaim == nil {
@@ -759,13 +759,14 @@ func (s *ClaimDataStore) RemoveClaimFromRole(ctx *appctx.AppContext, tenantID st
 	}
 
 	// check if the claim exists
-	existingClaim, err := s.GetClaimBySlugOrID(ctx, tenantID, claimID)
-	if err != nil {
-		diag.AddError("failed_to_get_claim", "failed to get claim", "claim_data_store", nil)
+	existingClaim, existingClaimDiag := s.GetClaimBySlugOrID(ctx, tenantID, claimID)
+	if existingClaimDiag.HasErrors() {
+		diag.Append(existingClaimDiag)
 		return diag
 	}
 	if existingClaim == nil {
 		diag.AddError("claim_not_found", "claim not found", "claim_data_store", nil)
+		return diag
 	}
 
 	// check if the claim is assigned to the role

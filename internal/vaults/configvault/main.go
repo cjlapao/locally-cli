@@ -6,17 +6,26 @@ import (
 	"strings"
 
 	"github.com/cjlapao/locally-cli/internal/config"
+	"github.com/cjlapao/locally-cli/internal/environment/interfaces"
 	"github.com/cjlapao/locally-cli/internal/logging"
 	"github.com/cjlapao/locally-cli/pkg/diagnostics"
+	"github.com/cjlapao/locally-cli/pkg/models"
+	"github.com/cjlapao/locally-cli/pkg/types"
 )
 
 type ConfigVault struct {
-	name string
+	name    string
+	enabled bool
+	synced  bool
+	items   []interfaces.EnvironmentVaultItem
 }
 
 func New() *ConfigVault {
 	result := ConfigVault{
-		name: "config",
+		name:    "config",
+		enabled: true,
+		synced:  false,
+		items:   make([]interfaces.EnvironmentVaultItem, 0),
 	}
 
 	return &result
@@ -26,7 +35,7 @@ func (c ConfigVault) Name() string {
 	return c.name
 }
 
-func (c ConfigVault) Sync() (map[string]interface{}, *diagnostics.Diagnostics) {
+func (c ConfigVault) Sync() ([]interfaces.EnvironmentVaultItem, *diagnostics.Diagnostics) {
 	diag := diagnostics.New("config_vault_sync")
 	defer diag.Complete()
 
@@ -34,15 +43,13 @@ func (c ConfigVault) Sync() (map[string]interface{}, *diagnostics.Diagnostics) {
 		"vault_name": c.name,
 	})
 
-	result := make(map[string]interface{})
-
 	// Get the config service instance
 	configInstance := config.GetInstance()
 	if configInstance == nil {
 		diag.AddError("CONFIG_SERVICE_NOT_INITIALIZED", "Config service not initialized", "config_vault", map[string]interface{}{
 			"vault_name": c.name,
 		})
-		return result, diag
+		return c.items, diag
 	}
 
 	// Get the current configuration
@@ -51,7 +58,7 @@ func (c ConfigVault) Sync() (map[string]interface{}, *diagnostics.Diagnostics) {
 		diag.AddError("CONFIG_NOT_AVAILABLE", "Configuration not available", "config_vault", map[string]interface{}{
 			"vault_name": c.name,
 		})
-		return result, diag
+		return c.items, diag
 	}
 
 	// Automatically import all configuration items
@@ -59,7 +66,14 @@ func (c ConfigVault) Sync() (map[string]interface{}, *diagnostics.Diagnostics) {
 		if item.IsSet() {
 			// Convert the key to lowercase for consistency with other vaults
 			key := strings.ToLower(item.Key)
-			result[key] = item.Value
+			envItem := models.EnvironmentVaultItem{
+				Key:       key,
+				Value:     item.Value,
+				Encrypted: false,
+				Secret:    false,
+				ValueType: types.EnvironmentVaultItemTypeString,
+			}
+			c.items = append(c.items, envItem)
 
 			logging.Debugf("Config vault: synced %s = %s", key, item.Value)
 		}
@@ -67,11 +81,12 @@ func (c ConfigVault) Sync() (map[string]interface{}, *diagnostics.Diagnostics) {
 
 	diag.AddPathEntry("sync_completed", "config_vault", map[string]interface{}{
 		"vault_name":      c.name,
-		"variables_count": len(result),
+		"variables_count": len(c.items),
 	})
 
-	logging.Infof("Config vault synced with %d variables", len(result))
-	return result, diag
+	logging.Infof("Config vault synced with %d variables", len(c.items))
+	c.synced = true
+	return c.items, diag
 }
 
 func (c ConfigVault) Get(key string) (interface{}, bool) {
@@ -193,4 +208,20 @@ func (c ConfigVault) Remove(key string) *diagnostics.Diagnostics {
 
 	logging.Infof("Config vault: removed %s", key)
 	return diag
+}
+
+func (c ConfigVault) GetItems() []interfaces.EnvironmentVaultItem {
+	return c.items
+}
+
+func (c ConfigVault) IsEnabled() bool {
+	return c.enabled
+}
+
+func (c ConfigVault) IsSynced() bool {
+	return c.synced
+}
+
+func (c ConfigVault) GetMetadata() map[string]interface{} {
+	return make(map[string]interface{})
 }

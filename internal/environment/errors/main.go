@@ -1,9 +1,5 @@
-// Package environment provides a generic environment variable management system
-package environment
-
-import "github.com/cjlapao/locally-cli/internal/notifications"
-
-var notify = notifications.Get()
+// Package errors provides a generic environment variable management system
+package errors
 
 const (
 	ErrorCodeVaultNotFound           = "VAULT_NOT_FOUND"
