@@ -12,7 +12,7 @@ require (
 	github.com/cjlapao/common-go v0.0.37
 	github.com/cjlapao/common-go-cryptorand v0.0.4
 	github.com/cjlapao/common-go-restapi v0.0.4
-	github.com/go-git/go-git/v5 v5.17.1
+	github.com/go-git/go-git/v5 v5.18.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.0
 	github.com/microsoft/go-mssqldb v0.20.0
